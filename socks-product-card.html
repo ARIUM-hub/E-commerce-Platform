@@ -5,32 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>袜子商品卡片</title>
   <style>
+    :root {
+      --bg-start: #f6f6f6;
+      --bg-end: #ececec;
+      --surface: #ffffff;
+      --text-main: #111111;
+      --text-subtle: #666666;
+      --line: #d9d9d9;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+      --radius-card: 28px;
+      --radius-pill: 999px;
+      --radius-button: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background: #f2f2f2;
+      padding: 24px;
+      background: linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
       font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text-main);
     }
 
     .product-card {
       width: min(100%, 360px);
-      background: #fff;
-      border-radius: 24px;
-      padding: 24px;
-      box-sizing: border-box;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid #ededed;
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow);
+    }
+
+    .product-card__media {
+      position: relative;
+      min-height: 252px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e7e7e7 100%);
+    }
+
+    .product-card__badge {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      margin: 0;
+      padding: 8px 12px;
+      border-radius: var(--radius-pill);
+      background: #111111;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .product-card__sock {
+      width: 168px;
+      height: 168px;
+      border-radius: 32px;
+      background: radial-gradient(circle at 35% 30%, #ffffff 0%, #d9d9d9 52%, #b8b8b8 100%);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+
+    .product-card__content {
+      padding: 22px;
+    }
+
+    .product-card__eyebrow {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .product-card__title {
+      margin: 0 0 10px;
+      font-size: 28px;
+      line-height: 1.15;
+    }
+
+    .product-card__description {
+      margin: 0 0 18px;
+      color: var(--text-subtle);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .product-card__price {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .product-card__price-current {
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .product-card__price-original {
+      color: #8a8a8a;
+      font-size: 15px;
+      text-decoration: line-through;
     }
 
     .product-card__sizes {
       display: flex;
       gap: 10px;
-      margin: 16px 0;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .product-card__size,
+    .product-card__button {
+      font: inherit;
     }
 
     .product-card__size {
       border: 1px solid #cfcfcf;
-      border-radius: 999px;
+      border-radius: var(--radius-pill);
       padding: 10px 14px;
       background: #fff;
     }
@@ -44,24 +147,40 @@
     .product-card__button {
       width: 100%;
       border: 0;
-      border-radius: 16px;
-      padding: 14px 16px;
+      border-radius: var(--radius-button);
+      padding: 15px 16px;
       background: #111;
       color: #fff;
       font-size: 16px;
+      font-weight: 700;
     }
   </style>
 </head>
 <body>
   <article class="product-card">
-    <p>Cotton Daily</p>
-    <h1>极简中筒袜</h1>
-    <div class="product-card__sizes">
-      <button class="product-card__size is-selected" type="button" aria-pressed="true">35-38</button>
-      <button class="product-card__size" type="button" aria-pressed="false">39-42</button>
-      <button class="product-card__size" type="button" aria-pressed="false">43-45</button>
+    <div class="product-card__media">
+      <p class="product-card__badge">32% OFF</p>
+      <div class="product-card__sock" aria-hidden="true">SOCKS</div>
     </div>
-    <button class="product-card__button" type="button">加入购物车</button>
+
+    <div class="product-card__content">
+      <p class="product-card__eyebrow">Cotton Daily</p>
+      <h1 class="product-card__title">极简中筒袜</h1>
+      <p class="product-card__description">柔软透气面料，适合日常通勤与居家穿着，黑白灰三色基础百搭。</p>
+
+      <div class="product-card__price">
+        <span class="product-card__price-current">¥39</span>
+        <span class="product-card__price-original">¥59</span>
+      </div>
+
+      <div class="product-card__sizes">
+        <button class="product-card__size is-selected" type="button" aria-pressed="true">35-38</button>
+        <button class="product-card__size" type="button" aria-pressed="false">39-42</button>
+        <button class="product-card__size" type="button" aria-pressed="false">43-45</button>
+      </div>
+
+      <button class="product-card__button" type="button">加入购物车</button>
+    </div>
   </article>
 </body>
 </html>

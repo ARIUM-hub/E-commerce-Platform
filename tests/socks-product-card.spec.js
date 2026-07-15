@@ -22,3 +22,16 @@ test("renders the base product card shell with a default size", async ({ page })
   await expect(largeSize).not.toHaveClass(/is-selected/);
   await expect(page.getByRole("button", { name: "加入购物车" })).toBeVisible();
 });
+
+test("shows an image-first layout with sale and pricing details", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  await expect(page.locator(".product-card__media")).toBeVisible();
+  await expect(page.locator(".product-card__badge")).toHaveText("32% OFF");
+  await expect(page.locator(".product-card__price-current")).toHaveText("¥39");
+  await expect(page.locator(".product-card__price-original")).toHaveText("¥59");
+  await expect(page.locator(".product-card__description")).toContainText("柔软透气面料");
+
+  const mediaHeight = await page.locator(".product-card__media").evaluate((node) => node.getBoundingClientRect().height);
+  expect(mediaHeight).toBeGreaterThan(220);
+});
