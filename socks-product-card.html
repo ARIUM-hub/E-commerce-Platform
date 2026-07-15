@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>袜子商品卡片</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f2f2f2;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .product-card {
+      width: min(100%, 360px);
+      background: #fff;
+      border-radius: 24px;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .product-card__sizes {
+      display: flex;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .product-card__size {
+      border: 1px solid #cfcfcf;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: #fff;
+    }
+
+    .product-card__size.is-selected {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+
+    .product-card__button {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 16px;
+      background: #111;
+      color: #fff;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <article class="product-card">
+    <p>Cotton Daily</p>
+    <h1>极简中筒袜</h1>
+    <div class="product-card__sizes">
+      <button class="product-card__size is-selected" type="button" aria-pressed="true">35-38</button>
+      <button class="product-card__size" type="button" aria-pressed="false">39-42</button>
+      <button class="product-card__size" type="button" aria-pressed="false">43-45</button>
+    </div>
+    <button class="product-card__button" type="button">加入购物车</button>
+  </article>
+</body>
+</html>
