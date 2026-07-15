@@ -30,9 +30,12 @@ test("shows an image-first layout with sale and pricing details", async ({ page 
   const content = page.locator(".product-card__content");
   const currentPrice = page.locator(".product-card__price-current");
   const originalPrice = page.locator(".product-card__price-original");
+  const stackedTolerance = 2;
 
   await expect(media).toBeVisible();
   await expect(page.locator(".product-card__badge")).toHaveText("32% OFF");
+  await expect(currentPrice).toBeVisible();
+  await expect(originalPrice).toBeVisible();
   await expect(currentPrice).toHaveText("¥39");
   await expect(originalPrice).toHaveText("¥59");
   await expect(page.locator(".product-card__description")).toContainText("柔软透气面料");
@@ -41,7 +44,8 @@ test("shows an image-first layout with sale and pricing details", async ({ page 
   const contentBox = await content.boundingBox();
   expect(mediaBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
-  expect(mediaBox.y).toBeLessThan(contentBox.y);
+  expect(mediaBox.y).toBeLessThanOrEqual(contentBox.y);
+  expect(mediaBox.y + mediaBox.height).toBeLessThanOrEqual(contentBox.y + stackedTolerance);
 
   const currentPriceStyles = await currentPrice.evaluate((node) => {
     const styles = window.getComputedStyle(node);
