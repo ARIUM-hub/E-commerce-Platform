@@ -93,14 +93,24 @@ test("switches the selected size with single-select behavior", async ({ page }) 
 });
 
 test("changes the cart button text after click and restores it", async ({ page }) => {
+  await page.clock.install();
   await page.goto(previewUrl);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
 
-  const cartButton = page.getByRole("button", { name: "加入购物车" });
+  const cartButton = page.locator(".product-card__button");
   await cartButton.click();
 
   await expect(cartButton).toHaveText("已加入购物车");
-  await page.waitForTimeout(1700);
-  await expect(page.locator(".product-card__button")).toHaveText("加入购物车");
+  await page.clock.runFor(1000);
+
+  await cartButton.click();
+  await expect(cartButton).toHaveText("已加入购物车");
+
+  await page.clock.runFor(1499);
+  await expect(cartButton).toHaveText("已加入购物车");
+
+  await page.clock.runFor(1);
+  await expect(cartButton).toHaveText("加入购物车");
 });
 
 test("applies hover motion to the card and product image", async ({ page }) => {
@@ -108,15 +118,39 @@ test("applies hover motion to the card and product image", async ({ page }) => {
 
   const card = page.locator(".product-card");
   const sock = page.locator(".product-card__sock");
+  const sizeButton = page.getByRole("button", { name: "39-42" });
+  const cartButton = page.locator(".product-card__button");
 
   const beforeCardTransform = await card.evaluate((node) => getComputedStyle(node).transform);
   const beforeSockTransform = await sock.evaluate((node) => getComputedStyle(node).transform);
+  const beforeSizeBorderColor = await sizeButton.evaluate((node) => getComputedStyle(node).borderTopColor);
+  const beforeCartButtonBackground = await cartButton.evaluate((node) => getComputedStyle(node).backgroundColor);
 
   await card.hover();
 
-  const afterCardTransform = await card.evaluate((node) => getComputedStyle(node).transform);
-  const afterSockTransform = await sock.evaluate((node) => getComputedStyle(node).transform);
+  await expect.poll(async () => {
+    return card.evaluate((node) => getComputedStyle(node).transform);
+  }).not.toBe(beforeCardTransform);
+  await expect.poll(async () => {
+    return sock.evaluate((node) => getComputedStyle(node).transform);
+  }).not.toBe(beforeSockTransform);
 
-  expect(afterCardTransform).not.toBe(beforeCardTransform);
-  expect(afterSockTransform).not.toBe(beforeSockTransform);
+  await sizeButton.hover();
+  await expect.poll(async () => {
+    return sizeButton.evaluate((node) => getComputedStyle(node).borderTopColor);
+  }).not.toBe(beforeSizeBorderColor);
+
+  await cartButton.hover();
+  await expect.poll(async () => {
+    return cartButton.evaluate((node) => getComputedStyle(node).backgroundColor);
+  }).not.toBe(beforeCartButtonBackground);
+
+  await page.mouse.down();
+  await expect.poll(async () => {
+    return cartButton.evaluate((node) => getComputedStyle(node).transform);
+  }).not.toBe("none");
+  await page.mouse.up();
+  await expect.poll(async () => {
+    return cartButton.evaluate((node) => getComputedStyle(node).transform);
+  }).toBe("none");
 });
