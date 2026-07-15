@@ -76,10 +76,18 @@ test("switches the selected size with single-select behavior", async ({ page }) 
 
   const sizeOne = page.getByRole("button", { name: "35-38" });
   const sizeTwo = page.getByRole("button", { name: "39-42" });
+  const sizeThree = page.getByRole("button", { name: "43-45" });
+  const selectedSizes = page.locator(".product-card__size.is-selected");
+  const pressedSizes = page.locator('.product-card__size[aria-pressed="true"]');
 
   await sizeTwo.click();
 
   await expect(sizeOne).toHaveAttribute("aria-pressed", "false");
+  await expect(sizeOne).not.toHaveClass(/is-selected/);
   await expect(sizeTwo).toHaveAttribute("aria-pressed", "true");
   await expect(sizeTwo).toHaveClass(/is-selected/);
+  await expect(sizeThree).toHaveAttribute("aria-pressed", "false");
+  await expect(sizeThree).not.toHaveClass(/is-selected/);
+  await expect(selectedSizes).toHaveCount(1);
+  await expect(pressedSizes).toHaveCount(1);
 });
