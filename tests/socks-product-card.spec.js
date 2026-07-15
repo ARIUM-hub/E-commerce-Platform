@@ -70,3 +70,16 @@ test("shows an image-first layout with sale and pricing details", async ({ page 
   const mediaHeight = await media.evaluate((node) => node.getBoundingClientRect().height);
   expect(mediaHeight).toBeGreaterThan(220);
 });
+
+test("switches the selected size with single-select behavior", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const sizeOne = page.getByRole("button", { name: "35-38" });
+  const sizeTwo = page.getByRole("button", { name: "39-42" });
+
+  await sizeTwo.click();
+
+  await expect(sizeOne).toHaveAttribute("aria-pressed", "false");
+  await expect(sizeTwo).toHaveAttribute("aria-pressed", "true");
+  await expect(sizeTwo).toHaveClass(/is-selected/);
+});

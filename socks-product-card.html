@@ -173,13 +173,29 @@
       </div>
 
       <div class="product-card__sizes">
-        <button class="product-card__size is-selected" type="button" aria-pressed="true">35-38</button>
-        <button class="product-card__size" type="button" aria-pressed="false">39-42</button>
-        <button class="product-card__size" type="button" aria-pressed="false">43-45</button>
+        <button class="product-card__size is-selected" type="button" aria-pressed="true" data-size>35-38</button>
+        <button class="product-card__size" type="button" aria-pressed="false" data-size>39-42</button>
+        <button class="product-card__size" type="button" aria-pressed="false" data-size>43-45</button>
       </div>
 
       <button class="product-card__button" type="button">加入购物车</button>
     </div>
   </article>
+
+  <script>
+    const sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
+
+    sizeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        sizeButtons.forEach((item) => {
+          item.classList.remove("is-selected");
+          item.setAttribute("aria-pressed", "false");
+        });
+
+        button.classList.add("is-selected");
+        button.setAttribute("aria-pressed", "true");
+      });
+    });
+  </script>
 </body>
 </html>
