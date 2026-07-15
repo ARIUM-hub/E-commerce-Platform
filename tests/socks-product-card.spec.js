@@ -26,12 +26,43 @@ test("renders the base product card shell with a default size", async ({ page })
 test("shows an image-first layout with sale and pricing details", async ({ page }) => {
   await page.goto(previewUrl);
 
-  await expect(page.locator(".product-card__media")).toBeVisible();
+  const media = page.locator(".product-card__media");
+  const content = page.locator(".product-card__content");
+  const currentPrice = page.locator(".product-card__price-current");
+  const originalPrice = page.locator(".product-card__price-original");
+
+  await expect(media).toBeVisible();
   await expect(page.locator(".product-card__badge")).toHaveText("32% OFF");
-  await expect(page.locator(".product-card__price-current")).toHaveText("¥39");
-  await expect(page.locator(".product-card__price-original")).toHaveText("¥59");
+  await expect(currentPrice).toHaveText("¥39");
+  await expect(originalPrice).toHaveText("¥59");
   await expect(page.locator(".product-card__description")).toContainText("柔软透气面料");
 
-  const mediaHeight = await page.locator(".product-card__media").evaluate((node) => node.getBoundingClientRect().height);
+  const mediaBox = await media.boundingBox();
+  const contentBox = await content.boundingBox();
+  expect(mediaBox).not.toBeNull();
+  expect(contentBox).not.toBeNull();
+  expect(mediaBox.y).toBeLessThan(contentBox.y);
+
+  const currentPriceStyles = await currentPrice.evaluate((node) => {
+    const styles = window.getComputedStyle(node);
+    return {
+      fontSize: Number.parseFloat(styles.fontSize),
+      fontWeight: Number.parseInt(styles.fontWeight, 10),
+    };
+  });
+  const originalPriceStyles = await originalPrice.evaluate((node) => {
+    const styles = window.getComputedStyle(node);
+    return {
+      fontSize: Number.parseFloat(styles.fontSize),
+      fontWeight: Number.parseInt(styles.fontWeight, 10),
+      textDecorationLine: styles.textDecorationLine,
+    };
+  });
+
+  expect(currentPriceStyles.fontSize).toBeGreaterThan(originalPriceStyles.fontSize);
+  expect(currentPriceStyles.fontWeight).toBeGreaterThanOrEqual(originalPriceStyles.fontWeight);
+  expect(originalPriceStyles.textDecorationLine).toContain("line-through");
+
+  const mediaHeight = await media.evaluate((node) => node.getBoundingClientRect().height);
   expect(mediaHeight).toBeGreaterThan(220);
 });
