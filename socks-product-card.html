@@ -39,6 +39,12 @@
       border: 1px solid #ededed;
       border-radius: var(--radius-card);
       box-shadow: var(--shadow);
+      transition: transform 220ms ease, box-shadow 220ms ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12);
     }
 
     .product-card__media {
@@ -72,6 +78,11 @@
       place-items: center;
       font-weight: 700;
       letter-spacing: 0.12em;
+      transition: transform 220ms ease;
+    }
+
+    .product-card:hover .product-card__sock {
+      transform: scale(1.05);
     }
 
     .product-card__content {
@@ -135,6 +146,12 @@
       border-radius: var(--radius-pill);
       padding: 10px 14px;
       background: #fff;
+      cursor: pointer;
+      transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+    }
+
+    .product-card__size:hover {
+      border-color: #111111;
     }
 
     .product-card__size.is-selected {
@@ -152,6 +169,16 @@
       color: #fff;
       font-size: 16px;
       font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
+    }
+
+    .product-card__button:hover {
+      background: #222222;
+    }
+
+    .product-card__button:active {
+      transform: translateY(1px) scale(0.99);
     }
   </style>
 </head>
@@ -178,12 +205,14 @@
         <button class="product-card__size" type="button" aria-pressed="false" data-size>43-45</button>
       </div>
 
-      <button class="product-card__button" type="button">加入购物车</button>
+      <button class="product-card__button" type="button" data-cart-button>加入购物车</button>
     </div>
   </article>
 
   <script>
     const sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
+    const cartButton = document.querySelector("[data-cart-button]");
+    let cartTimerId = null;
 
     sizeButtons.forEach((button) => {
       button.addEventListener("click", () => {
@@ -195,6 +224,19 @@
         button.classList.add("is-selected");
         button.setAttribute("aria-pressed", "true");
       });
+    });
+
+    cartButton.addEventListener("click", () => {
+      cartButton.textContent = "已加入购物车";
+
+      if (cartTimerId !== null) {
+        clearTimeout(cartTimerId);
+      }
+
+      cartTimerId = window.setTimeout(() => {
+        cartButton.textContent = "加入购物车";
+        cartTimerId = null;
+      }, 1500);
     });
   </script>
 </body>

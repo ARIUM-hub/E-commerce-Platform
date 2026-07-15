@@ -91,3 +91,32 @@ test("switches the selected size with single-select behavior", async ({ page }) 
   await expect(selectedSizes).toHaveCount(1);
   await expect(pressedSizes).toHaveCount(1);
 });
+
+test("changes the cart button text after click and restores it", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const cartButton = page.getByRole("button", { name: "加入购物车" });
+  await cartButton.click();
+
+  await expect(cartButton).toHaveText("已加入购物车");
+  await page.waitForTimeout(1700);
+  await expect(page.locator(".product-card__button")).toHaveText("加入购物车");
+});
+
+test("applies hover motion to the card and product image", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const card = page.locator(".product-card");
+  const sock = page.locator(".product-card__sock");
+
+  const beforeCardTransform = await card.evaluate((node) => getComputedStyle(node).transform);
+  const beforeSockTransform = await sock.evaluate((node) => getComputedStyle(node).transform);
+
+  await card.hover();
+
+  const afterCardTransform = await card.evaluate((node) => getComputedStyle(node).transform);
+  const afterSockTransform = await sock.evaluate((node) => getComputedStyle(node).transform);
+
+  expect(afterCardTransform).not.toBe(beforeCardTransform);
+  expect(afterSockTransform).not.toBe(beforeSockTransform);
+});
