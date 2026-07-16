@@ -497,6 +497,24 @@
       return payload.items;
     }
 
+    async function addCartItem(productId, size) {
+      const response = await fetch("/api/cart/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId,
+          size,
+          quantity: 1
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add cart item");
+      }
+
+      return response.json();
+    }
+
     function showLoadFailureState() {
       productGrid.classList.add("is-empty");
       productGrid.innerHTML = '<div class="empty-state" data-empty-state>商品加载失败，请稍后重试</div>';
@@ -537,19 +555,26 @@
           });
         });
 
-        cartButton.addEventListener("click", () => {
-          cartButton.textContent = "已加入购物车";
+        cartButton.addEventListener("click", async () => {
+          const selectedSize = card.querySelector('[data-size][aria-pressed="true"]').textContent.trim();
 
-          if (cartFeedbackTimers.has(productId)) {
-            window.clearTimeout(cartFeedbackTimers.get(productId));
-          }
+          try {
+            await addCartItem(productId, selectedSize);
+            cartButton.textContent = "已加入购物车";
 
-          const timerId = window.setTimeout(() => {
+            if (cartFeedbackTimers.has(productId)) {
+              window.clearTimeout(cartFeedbackTimers.get(productId));
+            }
+
+            const timerId = window.setTimeout(() => {
+              cartButton.textContent = "加入购物车";
+              cartFeedbackTimers.delete(productId);
+            }, 1500);
+
+            cartFeedbackTimers.set(productId, timerId);
+          } catch (error) {
             cartButton.textContent = "加入购物车";
-            cartFeedbackTimers.delete(productId);
-          }, 1500);
-
-          cartFeedbackTimers.set(productId, timerId);
+          }
         });
       });
     }

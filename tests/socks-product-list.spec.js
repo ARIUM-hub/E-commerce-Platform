@@ -1,6 +1,14 @@
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 
+const cartFile = path.join(__dirname, "fixtures", "test-data", "cart.json");
+
 test.use({ viewport: { width: 1280, height: 960 } });
+
+test.beforeEach(async () => {
+  await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
+});
 
 test("renders the socks category page shell", async ({ page }) => {
   await page.goto("/socks-product-list.html");
@@ -150,6 +158,27 @@ test("shows cart feedback per card and restores it after the timer", async ({ pa
 
   await page.clock.runFor(1500);
   await expect(secondButton).toHaveText("加入购物车");
+});
+
+test("posts the selected size to the backend cart api", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  const firstCard = page.locator("[data-product-card]").first();
+  await firstCard.getByRole("button", { name: "43-45" }).click();
+
+  const responsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+
+  await firstCard.locator("[data-cart-button]").click();
+  const response = await responsePromise;
+
+  expect(response.ok()).toBe(true);
+  expect(JSON.parse(response.request().postData())).toEqual({
+    productId: "sock-01",
+    size: "43-45",
+    quantity: 1
+  });
 });
 
 test("shows an empty state when a filter has no products", async ({ page }) => {

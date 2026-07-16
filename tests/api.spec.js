@@ -1,4 +1,12 @@
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const { test, expect } = require("@playwright/test");
+
+const cartFile = path.join(__dirname, "fixtures", "test-data", "cart.json");
+
+test.beforeEach(async () => {
+  await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
+});
 
 test("returns products with default filter and recommended sort", async ({ request }) => {
   const response = await request.get("/api/products");
@@ -44,4 +52,46 @@ test("falls back to default filter and recommended sort for invalid query values
     "轻压运动袜",
     "通勤罗口袜"
   ]);
+});
+
+test("returns an empty anonymous cart by default", async ({ request }) => {
+  const response = await request.get("/api/cart");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload).toEqual({
+    items: [],
+    meta: { itemCount: 0 }
+  });
+});
+
+test("adds an item to the cart and persists quantity merges", async ({ request }) => {
+  const firstAdd = await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+  });
+  expect(firstAdd.ok()).toBe(true);
+
+  const secondAdd = await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+  });
+  expect(secondAdd.ok()).toBe(true);
+
+  const cartResponse = await request.get("/api/cart");
+  expect(cartResponse.ok()).toBe(true);
+
+  const cartPayload = await cartResponse.json();
+  expect(cartPayload.items).toEqual([
+    { productId: "sock-02", size: "43-45", quantity: 2 }
+  ]);
+  expect(cartPayload.meta.itemCount).toBe(1);
+});
+
+test("rejects invalid cart size values", async ({ request }) => {
+  const response = await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "35-38", quantity: 1 }
+  });
+  expect(response.status()).toBe(400);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("INVALID_SIZE");
 });
