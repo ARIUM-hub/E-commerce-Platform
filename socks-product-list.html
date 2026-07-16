@@ -301,11 +301,18 @@
     <section class="toolbar" data-toolbar>
       <div class="toolbar__group">
         <span class="toolbar__label">分类</span>
-        <button class="toolbar__chip is-active" type="button" data-filter="全部">全部</button>
+        <button class="toolbar__chip is-active" type="button" data-filter="all">全部</button>
+        <button class="toolbar__chip" type="button" data-filter="sport">运动袜</button>
+        <button class="toolbar__chip" type="button" data-filter="daily">日常袜</button>
+        <button class="toolbar__chip" type="button" data-filter="crew">中筒袜</button>
+        <button class="toolbar__chip" type="button" data-filter="no-show">船袜</button>
       </div>
       <div class="toolbar__group">
         <span class="toolbar__label">排序</span>
-        <button class="toolbar__chip is-active" type="button" data-sort="推荐">推荐</button>
+        <button class="toolbar__chip is-active" type="button" data-sort="recommended">推荐</button>
+        <button class="toolbar__chip" type="button" data-sort="price-asc">价格从低到高</button>
+        <button class="toolbar__chip" type="button" data-sort="price-desc">价格从高到低</button>
+        <button class="toolbar__chip" type="button" data-sort="newest">最新上架</button>
       </div>
       <p class="toolbar__result" data-result-count></p>
     </section>
@@ -314,12 +321,28 @@
   </main>
 
   <script>
+    const FILTER_KEY = {
+      ALL: "all",
+      SPORT: "sport",
+      DAILY: "daily",
+      CREW: "crew",
+      NO_SHOW: "no-show"
+    };
+
+    const SORT_KEY = {
+      RECOMMENDED: "recommended",
+      PRICE_ASC: "price-asc",
+      PRICE_DESC: "price-desc",
+      NEWEST: "newest"
+    };
+
     const products = [
       {
         id: "sock-01",
         series: "Cotton Daily",
         title: "极简中筒袜",
-        category: "中筒袜",
+        categoryKey: FILTER_KEY.CREW,
+        categoryLabel: "中筒袜",
         price: 39,
         originalPrice: 59,
         discount: "32% OFF",
@@ -332,7 +355,8 @@
         id: "sock-02",
         series: "Active Base",
         title: "轻压运动袜",
-        category: "运动袜",
+        categoryKey: FILTER_KEY.SPORT,
+        categoryLabel: "运动袜",
         price: 49,
         originalPrice: 69,
         discount: "29% OFF",
@@ -345,7 +369,8 @@
         id: "sock-03",
         series: "Daily Soft",
         title: "柔棉短袜",
-        category: "日常袜",
+        categoryKey: FILTER_KEY.DAILY,
+        categoryLabel: "日常袜",
         price: 25,
         originalPrice: 39,
         discount: "36% OFF",
@@ -358,7 +383,8 @@
         id: "sock-04",
         series: "Motion Fit",
         title: "速干训练袜",
-        category: "运动袜",
+        categoryKey: FILTER_KEY.SPORT,
+        categoryLabel: "运动袜",
         price: 45,
         originalPrice: 58,
         discount: "22% OFF",
@@ -371,7 +397,8 @@
         id: "sock-05",
         series: "City Basic",
         title: "通勤罗口袜",
-        category: "日常袜",
+        categoryKey: FILTER_KEY.DAILY,
+        categoryLabel: "日常袜",
         price: 35,
         originalPrice: 49,
         discount: "29% OFF",
@@ -384,7 +411,8 @@
         id: "sock-06",
         series: "Lite Step",
         title: "云感船袜",
-        category: "船袜",
+        categoryKey: FILTER_KEY.NO_SHOW,
+        categoryLabel: "船袜",
         price: 29,
         originalPrice: 42,
         discount: "31% OFF",
@@ -397,6 +425,10 @@
 
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
+    const filterButtons = Array.from(document.querySelectorAll("[data-filter]"));
+    const sortButtons = Array.from(document.querySelectorAll("[data-sort]"));
+    let activeFilter = FILTER_KEY.ALL;
+    let activeSort = SORT_KEY.RECOMMENDED;
 
     function createCardMarkup(product) {
       const sizeButtons = product.sizes
@@ -408,7 +440,7 @@
 
       const recommendationTag = product.isRecommended
         ? '<span class="product-card__tag">推荐</span>'
-        : `<span class="product-card__tag">${product.category}</span>`;
+        : `<span class="product-card__tag">${product.categoryLabel}</span>`;
 
       return `
         <article class="product-card" data-product-card data-product-id="${product.id}">
@@ -421,7 +453,7 @@
             <div>
               <p class="product-card__series">${product.series}</p>
               <h2 class="product-card__title">${product.title}</h2>
-              <p class="product-card__name">${product.category}</p>
+              <p class="product-card__name">${product.categoryLabel}</p>
             </div>
             <p class="product-card__description">${product.description}</p>
             <div class="product-card__price">
@@ -440,10 +472,61 @@
       `;
     }
 
-    function renderProducts() {
-      productGrid.innerHTML = products.map(createCardMarkup).join("");
-      resultCount.textContent = `共 ${products.length} 件商品`;
+    function getVisibleProducts() {
+      const filteredProducts = activeFilter === FILTER_KEY.ALL
+        ? [...products]
+        : products.filter((product) => product.categoryKey === activeFilter);
+
+      if (activeSort === SORT_KEY.RECOMMENDED) {
+        filteredProducts.sort((left, right) => {
+          if (left.isRecommended !== right.isRecommended) {
+            return Number(right.isRecommended) - Number(left.isRecommended);
+          }
+
+          return right.releaseDate.localeCompare(left.releaseDate);
+        });
+      } else if (activeSort === SORT_KEY.PRICE_ASC) {
+        filteredProducts.sort((left, right) => left.price - right.price);
+      } else if (activeSort === SORT_KEY.PRICE_DESC) {
+        filteredProducts.sort((left, right) => right.price - left.price);
+      } else if (activeSort === SORT_KEY.NEWEST) {
+        filteredProducts.sort((left, right) => right.releaseDate.localeCompare(left.releaseDate));
+      }
+
+      return filteredProducts;
     }
+
+    function syncToolbarState() {
+      filterButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.filter === activeFilter);
+      });
+
+      sortButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.sort === activeSort);
+      });
+    }
+
+    function renderProducts() {
+      const visibleProducts = getVisibleProducts();
+
+      productGrid.innerHTML = visibleProducts.map(createCardMarkup).join("");
+      resultCount.textContent = `共 ${visibleProducts.length} 件商品`;
+      syncToolbarState();
+    }
+
+    filterButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        renderProducts();
+      });
+    });
+
+    sortButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        activeSort = button.dataset.sort;
+        renderProducts();
+      });
+    });
 
     renderProducts();
   </script>

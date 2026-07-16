@@ -12,8 +12,8 @@ test("renders the socks category page shell", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "袜子专区" })).toBeVisible();
   await expect(page.locator("[data-toolbar]")).toBeVisible();
-  await expect(page.locator("[data-filter='全部']")).toBeVisible();
-  await expect(page.locator("[data-sort='推荐']")).toBeVisible();
+  await expect(page.getByRole("button", { name: "全部" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "推荐" })).toBeVisible();
   await expect(page.locator("[data-result-count]")).toBeVisible();
   await expect(page.locator("[data-result-count]")).toHaveText("共 6 件商品");
   await expect(page.locator("[data-product-grid]")).toBeVisible();
@@ -40,4 +40,57 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
   });
 
   expect(gridColumns).toBe(3);
+});
+
+test("filters the list by category and updates the result count", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  await page.getByRole("button", { name: "运动袜" }).click();
+
+  await expect(page.locator("[data-product-card]")).toHaveCount(2);
+  await expect(page.locator("[data-result-count]")).toHaveText("共 2 件商品");
+  await expect(page.getByText("轻压运动袜")).toBeVisible();
+  await expect(page.getByText("速干训练袜")).toBeVisible();
+});
+
+test("sorts the visible products by price from low to high", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  await page.getByRole("button", { name: "价格从低到高" }).click();
+
+  await expect(page.locator("[data-product-card]").first().getByText("柔棉短袜")).toBeVisible();
+});
+
+test("keeps recommended products first in the default view and inside filtered results", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const allProductTitles = await page.locator(".product-card__title").allTextContents();
+  expect(allProductTitles.slice(0, 3)).toEqual(["极简中筒袜", "轻压运动袜", "通勤罗口袜"]);
+
+  await page.getByRole("button", { name: "日常袜" }).click();
+  await expect(page.locator("[data-product-card]").first().getByText("通勤罗口袜")).toBeVisible();
+});
+
+test("sorts products by price descending and newest with full visible order", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  await page.getByRole("button", { name: "价格从高到低" }).click();
+  await expect(page.locator(".product-card__title")).toHaveText([
+    "轻压运动袜",
+    "速干训练袜",
+    "极简中筒袜",
+    "通勤罗口袜",
+    "云感船袜",
+    "柔棉短袜"
+  ]);
+
+  await page.getByRole("button", { name: "最新上架" }).click();
+  await expect(page.locator(".product-card__title")).toHaveText([
+    "极简中筒袜",
+    "轻压运动袜",
+    "速干训练袜",
+    "通勤罗口袜",
+    "云感船袜",
+    "柔棉短袜"
+  ]);
 });
