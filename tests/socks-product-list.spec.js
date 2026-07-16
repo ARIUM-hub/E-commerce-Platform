@@ -28,7 +28,9 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
   const firstCard = productCards.first();
 
   await expect(firstCard.locator(".product-card__media")).toBeVisible();
+  await expect(firstCard.locator(".product-card__illustration")).toBeVisible();
   await expect(firstCard.locator(".product-card__sock")).toBeVisible();
+  await expect(firstCard.locator(".product-card__media")).not.toContainText("SOCKS");
   await expect(firstCard.locator(".product-card__badge")).toHaveText("32% OFF");
   await expect(firstCard.getByText("极简中筒袜")).toBeVisible();
   await expect(firstCard.locator(".product-card__price-original")).toHaveText("¥59");
