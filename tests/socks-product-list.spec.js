@@ -15,6 +15,18 @@ test("renders the socks category page shell", async ({ page }) => {
   await expect(page.locator("[data-product-card]").first()).toBeVisible();
 });
 
+test("loads products from the backend response instead of inline seed markup", async ({ page }) => {
+  const [productsResponse] = await Promise.all([
+    page.waitForResponse((response) => {
+      return response.url().includes("/api/products") && response.request().method() === "GET";
+    }),
+    page.goto("/socks-product-list.html")
+  ]);
+
+  expect(productsResponse.ok()).toBe(true);
+  await expect(page.locator("[data-product-card]")).toHaveCount(6);
+});
+
 test("renders multiple socks cards in a three-column desktop grid", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
@@ -42,8 +54,17 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
 test("filters the list by category and updates the result count", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
-  await page.getByRole("button", { name: "运动袜" }).click();
+  const filterResponsePromise = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === "/api/products"
+      && requestUrl.searchParams.get("filter") === "sport"
+      && requestUrl.searchParams.get("sort") === "recommended";
+  });
 
+  await page.getByRole("button", { name: "运动袜" }).click();
+  const filterResponse = await filterResponsePromise;
+
+  expect(filterResponse.ok()).toBe(true);
   await expect(page.locator("[data-product-card]")).toHaveCount(2);
   await expect(page.locator("[data-result-count]")).toHaveText("共 2 件商品");
   await expect(page.getByText("轻压运动袜")).toBeVisible();
@@ -53,8 +74,17 @@ test("filters the list by category and updates the result count", async ({ page 
 test("sorts the visible products by price from low to high", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
-  await page.getByRole("button", { name: "价格从低到高" }).click();
+  const sortResponsePromise = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === "/api/products"
+      && requestUrl.searchParams.get("filter") === "all"
+      && requestUrl.searchParams.get("sort") === "price-asc";
+  });
 
+  await page.getByRole("button", { name: "价格从低到高" }).click();
+  const sortResponse = await sortResponsePromise;
+
+  expect(sortResponse.ok()).toBe(true);
   await expect(page.locator("[data-product-card]").first().getByText("柔棉短袜")).toBeVisible();
 });
 
@@ -123,6 +153,28 @@ test("shows cart feedback per card and restores it after the timer", async ({ pa
 });
 
 test("shows an empty state when a filter has no products", async ({ page }) => {
+  await page.route("**/api/products?*", async (route) => {
+    const requestUrl = new URL(route.request().url());
+
+    if (requestUrl.searchParams.get("filter") === "business") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        body: JSON.stringify({
+          items: [],
+          meta: {
+            filter: "business",
+            sort: requestUrl.searchParams.get("sort") || "recommended",
+            count: 0
+          }
+        })
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
   await page.goto("/socks-product-list.html");
 
   await page.evaluate(() => {
