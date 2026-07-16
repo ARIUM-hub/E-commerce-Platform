@@ -1,14 +1,9 @@
-const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const { test, expect } = require("@playwright/test");
-
-const previewPath = path.resolve(__dirname, "..", "socks-product-list.html");
-const previewUrl = pathToFileURL(previewPath).href;
 
 test.use({ viewport: { width: 1280, height: 960 } });
 
 test("renders the socks category page shell", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   await expect(page.getByRole("heading", { name: "袜子专区" })).toBeVisible();
   await expect(page.locator("[data-toolbar]")).toBeVisible();
@@ -21,7 +16,7 @@ test("renders the socks category page shell", async ({ page }) => {
 });
 
 test("renders multiple socks cards in a three-column desktop grid", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   const productCards = page.locator("[data-product-card]");
   await expect(productCards).toHaveCount(6);
@@ -45,7 +40,7 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
 });
 
 test("filters the list by category and updates the result count", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   await page.getByRole("button", { name: "运动袜" }).click();
 
@@ -56,7 +51,7 @@ test("filters the list by category and updates the result count", async ({ page 
 });
 
 test("sorts the visible products by price from low to high", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   await page.getByRole("button", { name: "价格从低到高" }).click();
 
@@ -64,7 +59,7 @@ test("sorts the visible products by price from low to high", async ({ page }) =>
 });
 
 test("keeps recommended products first in the default view and inside filtered results", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   const allProductTitles = await page.locator(".product-card__title").allTextContents();
   expect(allProductTitles.slice(0, 3)).toEqual(["极简中筒袜", "轻压运动袜", "通勤罗口袜"]);
@@ -74,7 +69,7 @@ test("keeps recommended products first in the default view and inside filtered r
 });
 
 test("sorts products by price descending and newest with full visible order", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   await page.getByRole("button", { name: "价格从高到低" }).click();
   await expect(page.locator(".product-card__title")).toHaveText([
@@ -98,7 +93,7 @@ test("sorts products by price descending and newest with full visible order", as
 });
 
 test("keeps size selection scoped to the clicked product card", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   const firstCard = page.locator("[data-product-card]").first();
   const secondCard = page.locator("[data-product-card]").nth(1);
@@ -112,7 +107,7 @@ test("keeps size selection scoped to the clicked product card", async ({ page })
 
 test("shows cart feedback per card and restores it after the timer", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-07-16T08:00:00") });
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
   await page.clock.pauseAt(new Date("2026-07-16T10:00:00"));
 
   const firstButton = page.locator("[data-product-card]").first().locator("[data-cart-button]");
@@ -128,7 +123,7 @@ test("shows cart feedback per card and restores it after the timer", async ({ pa
 });
 
 test("shows an empty state when a filter has no products", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   await page.evaluate(() => {
     const filterGroups = document.querySelectorAll("[data-toolbar] .toolbar__group");
@@ -147,7 +142,7 @@ test("shows an empty state when a filter has no products", async ({ page }) => {
 });
 
 test("reuses the single-card hover motion for the card media and cart button", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-list.html");
 
   const firstCard = page.locator("[data-product-card]").first();
   const sockVisual = firstCard.locator(".product-card__sock");

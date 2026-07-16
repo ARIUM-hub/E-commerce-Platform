@@ -1,12 +1,59 @@
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
+const { spawnSync } = require("node:child_process");
 const { test, expect } = require("@playwright/test");
 
-const previewPath = path.resolve(__dirname, "..", "socks-product-card.html");
-const previewUrl = pathToFileURL(previewPath).href;
+test("fails to start when DATA_DIR does not contain required JSON files", async () => {
+  const missingDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "socks-missing-data-"));
+
+  const result = spawnSync(process.execPath, ["server.js"], {
+    cwd: path.resolve(__dirname, ".."),
+    env: {
+      ...process.env,
+      DATA_DIR: missingDataDir,
+      PORT: "0"
+    },
+    encoding: "utf8",
+    timeout: 1000
+  });
+
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("products.json");
+  expect(result.stderr).toContain("cart.json");
+});
+
+test("keeps product fixtures identical between app and test datasets", async () => {
+  const appProducts = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "..", "data", "products.json"), "utf8")
+  );
+  const testProducts = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "fixtures", "test-data", "products.json"), "utf8")
+  );
+
+  expect(appProducts).toHaveLength(6);
+  expect(testProducts).toHaveLength(6);
+  expect(testProducts).toEqual(appProducts);
+
+  for (const product of appProducts) {
+    expect(product.visualTone).toBeTruthy();
+    expect(product.visualShadow).toBeTruthy();
+    expect(product.visualAccent).toBeTruthy();
+    expect(product.visualPattern).toBeTruthy();
+  }
+});
+
+test("does not expose internal project files over static hosting", async ({ request }) => {
+  const blockedPaths = ["/data/cart.json", "/package.json", "/tests/socks-product-card.spec.js"];
+
+  for (const blockedPath of blockedPaths) {
+    const response = await request.get(blockedPath);
+    expect(response.status(), blockedPath).toBe(404);
+  }
+});
 
 test("renders the base product card shell with a default size", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-card.html");
 
   const defaultSize = page.getByRole("button", { name: "35-38" });
   const mediumSize = page.getByRole("button", { name: "39-42" });
@@ -24,7 +71,7 @@ test("renders the base product card shell with a default size", async ({ page })
 });
 
 test("shows an image-first layout with sale and pricing details", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-card.html");
 
   const media = page.locator(".product-card__media");
   const content = page.locator(".product-card__content");
@@ -72,7 +119,7 @@ test("shows an image-first layout with sale and pricing details", async ({ page 
 });
 
 test("switches the selected size with single-select behavior", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-card.html");
 
   const sizeOne = page.getByRole("button", { name: "35-38" });
   const sizeTwo = page.getByRole("button", { name: "39-42" });
@@ -94,7 +141,7 @@ test("switches the selected size with single-select behavior", async ({ page }) 
 
 test("changes the cart button text after click and restores it", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-07-16T08:00:00") });
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-card.html");
   await page.clock.pauseAt(new Date("2026-07-16T10:00:00"));
 
   const cartButton = page.locator(".product-card__button");
@@ -114,7 +161,7 @@ test("changes the cart button text after click and restores it", async ({ page }
 });
 
 test("applies hover motion to the card and product image", async ({ page }) => {
-  await page.goto(previewUrl);
+  await page.goto("/socks-product-card.html");
 
   const card = page.locator(".product-card");
   const sock = page.locator(".product-card__sock");

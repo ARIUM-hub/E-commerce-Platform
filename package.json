@@ -2,6 +2,7 @@
   "name": "socks-product-card",
   "private": true,
   "scripts": {
+    "dev": "node server.js",
     "test": "playwright test"
   },
   "devDependencies": {
