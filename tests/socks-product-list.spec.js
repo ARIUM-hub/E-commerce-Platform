@@ -13,5 +13,7 @@ test("renders the socks category page shell", async ({ page }) => {
   await expect(page.locator("[data-filter='全部']")).toBeVisible();
   await expect(page.locator("[data-sort='推荐']")).toBeVisible();
   await expect(page.locator("[data-result-count]")).toBeVisible();
+  await expect(page.locator("[data-result-count]")).toHaveText("共 0 件商品");
   await expect(page.locator("[data-product-grid]")).toBeVisible();
+  await expect(page.locator("[data-product-card]")).toHaveCount(0);
 });
