@@ -94,3 +94,78 @@ test("sorts products by price descending and newest with full visible order", as
     "柔棉短袜"
   ]);
 });
+
+test("keeps size selection scoped to the clicked product card", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const firstCard = page.locator("[data-product-card]").first();
+  const secondCard = page.locator("[data-product-card]").nth(1);
+
+  await secondCard.getByRole("button", { name: "43-45" }).click();
+
+  await expect(secondCard.getByRole("button", { name: "43-45" })).toHaveAttribute("aria-pressed", "true");
+  await expect(secondCard.locator('.product-card__size[aria-pressed="true"]')).toHaveCount(1);
+  await expect(firstCard.getByRole("button", { name: "35-38" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("shows cart feedback per card and restores it after the timer", async ({ page }) => {
+  await page.clock.install();
+  await page.goto(previewUrl);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+
+  const firstButton = page.locator("[data-product-card]").first().locator("[data-cart-button]");
+  const secondButton = page.locator("[data-product-card]").nth(1).locator("[data-cart-button]");
+
+  await secondButton.click();
+
+  await expect(secondButton).toHaveText("已加入购物车");
+  await expect(firstButton).toHaveText("加入购物车");
+
+  await page.clock.runFor(1500);
+  await expect(secondButton).toHaveText("加入购物车");
+});
+
+test("shows an empty state when a filter has no products", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  await page.evaluate(() => {
+    const filterGroups = document.querySelectorAll("[data-toolbar] .toolbar__group");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toolbar__chip";
+    button.dataset.filter = "business";
+    button.textContent = "商务袜";
+    filterGroups[0].appendChild(button);
+  });
+
+  await page.getByRole("button", { name: "商务袜" }).click();
+
+  await expect(page.locator("[data-product-card]")).toHaveCount(0);
+  await expect(page.locator("[data-empty-state]")).toHaveText("当前分类暂无商品");
+});
+
+test("reuses the single-card hover motion for the card media and cart button", async ({ page }) => {
+  await page.goto(previewUrl);
+
+  const firstCard = page.locator("[data-product-card]").first();
+  const sockVisual = firstCard.locator(".product-card__sock");
+  const cartButton = firstCard.locator("[data-cart-button]");
+
+  const initialCardTransform = await firstCard.evaluate((node) => window.getComputedStyle(node).transform);
+  const initialSockTransform = await sockVisual.evaluate((node) => window.getComputedStyle(node).transform);
+
+  await firstCard.hover();
+
+  await expect
+    .poll(async () => firstCard.evaluate((node) => window.getComputedStyle(node).transform))
+    .not.toBe(initialCardTransform);
+  await expect
+    .poll(async () => sockVisual.evaluate((node) => window.getComputedStyle(node).transform))
+    .not.toBe(initialSockTransform);
+
+  const cardHoverButtonBackground = await cartButton.evaluate((node) => window.getComputedStyle(node).backgroundColor);
+  await cartButton.hover();
+  await expect
+    .poll(async () => cartButton.evaluate((node) => window.getComputedStyle(node).backgroundColor))
+    .not.toBe(cardHoverButtonBackground);
+});
