@@ -263,8 +263,13 @@
       padding: 10px 14px;
       background: #ffffff;
       color: #333333;
+      cursor: pointer;
       font: inherit;
       transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+    }
+
+    .product-card__size:hover {
+      border-color: #111111;
     }
 
     .product-card__size.is-selected {
@@ -285,10 +290,6 @@
       font-weight: 700;
       cursor: pointer;
       transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
-    }
-
-    .product-card:hover .product-card__cta {
-      background: #1c1c1c;
     }
 
     .product-card__cta:hover {

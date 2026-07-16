@@ -93,9 +93,9 @@ test("switches the selected size with single-select behavior", async ({ page }) 
 });
 
 test("changes the cart button text after click and restores it", async ({ page }) => {
-  await page.clock.install();
+  await page.clock.install({ time: new Date("2026-07-16T08:00:00") });
   await page.goto(previewUrl);
-  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  await page.clock.pauseAt(new Date("2026-07-16T10:00:00"));
 
   const cartButton = page.locator(".product-card__button");
   await cartButton.click();

@@ -109,9 +109,9 @@ test("keeps size selection scoped to the clicked product card", async ({ page })
 });
 
 test("shows cart feedback per card and restores it after the timer", async ({ page }) => {
-  await page.clock.install();
+  await page.clock.install({ time: new Date("2026-07-16T08:00:00") });
   await page.goto(previewUrl);
-  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  await page.clock.pauseAt(new Date("2026-07-16T10:00:00"));
 
   const firstButton = page.locator("[data-product-card]").first().locator("[data-cart-button]");
   const secondButton = page.locator("[data-product-card]").nth(1).locator("[data-cart-button]");
@@ -149,10 +149,13 @@ test("reuses the single-card hover motion for the card media and cart button", a
 
   const firstCard = page.locator("[data-product-card]").first();
   const sockVisual = firstCard.locator(".product-card__sock");
+  const sizeButton = firstCard.getByRole("button", { name: "39-42" });
   const cartButton = firstCard.locator("[data-cart-button]");
 
   const initialCardTransform = await firstCard.evaluate((node) => window.getComputedStyle(node).transform);
   const initialSockTransform = await sockVisual.evaluate((node) => window.getComputedStyle(node).transform);
+  const initialSizeBorderColor = await sizeButton.evaluate((node) => window.getComputedStyle(node).borderTopColor);
+  await expect(sizeButton).toHaveCSS("cursor", "pointer");
 
   await firstCard.hover();
 
@@ -162,6 +165,11 @@ test("reuses the single-card hover motion for the card media and cart button", a
   await expect
     .poll(async () => sockVisual.evaluate((node) => window.getComputedStyle(node).transform))
     .not.toBe(initialSockTransform);
+
+  await sizeButton.hover();
+  await expect
+    .poll(async () => sizeButton.evaluate((node) => window.getComputedStyle(node).borderTopColor))
+    .not.toBe(initialSizeBorderColor);
 
   const cardHoverButtonBackground = await cartButton.evaluate((node) => window.getComputedStyle(node).backgroundColor);
   await cartButton.hover();
