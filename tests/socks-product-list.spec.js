@@ -130,6 +130,19 @@ test("sorts products by price descending and newest with full visible order", as
   ]);
 });
 
+test("keeps list interactions working while products are served over http api", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await page.getByRole("button", { name: "运动袜" }).click();
+  await expect(page.locator("[data-product-card]")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "价格从高到低" }).click();
+  await expect(page.locator(".product-card__title")).toHaveText([
+    "轻压运动袜",
+    "速干训练袜"
+  ]);
+});
+
 test("keeps size selection scoped to the clicked product card", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
