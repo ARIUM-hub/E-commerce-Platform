@@ -122,6 +122,153 @@
       min-height: 120px;
     }
 
+    .product-card {
+      overflow: hidden;
+      border: 1px solid #e8e8e8;
+      border-radius: 28px;
+      background: var(--surface);
+      box-shadow: 0 16px 36px rgba(17, 17, 17, 0.06);
+    }
+
+    .product-card__media {
+      position: relative;
+      min-height: 232px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e7e7e7 100%);
+    }
+
+    .product-card__badge {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      margin: 0;
+      border-radius: var(--radius-pill);
+      padding: 8px 12px;
+      background: #111111;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .product-card__tag {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d7d7d7;
+      border-radius: var(--radius-pill);
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #555555;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .product-card__sock {
+      width: 168px;
+      height: 168px;
+      border-radius: 32px;
+      background: radial-gradient(circle at 35% 30%, #ffffff 0%, #d9d9d9 52%, #b8b8b8 100%);
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: #4a4a4a;
+      text-transform: uppercase;
+    }
+
+    .product-card__content {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 22px;
+    }
+
+    .product-card__series {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .product-card__title {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .product-card__name {
+      margin: 0;
+      color: #5f5f5f;
+      font-size: 14px;
+    }
+
+    .product-card__description {
+      margin: 0;
+      color: var(--text-subtle);
+      line-height: 1.7;
+    }
+
+    .product-card__price {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .product-card__price-current {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .product-card__price-original {
+      color: #8a8a8a;
+      font-size: 15px;
+      text-decoration: line-through;
+    }
+
+    .product-card__sizes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .product-card__size {
+      min-width: 72px;
+      border: 1px solid #d4d4d4;
+      border-radius: var(--radius-pill);
+      padding: 10px 14px;
+      background: #ffffff;
+      color: #333333;
+      font: inherit;
+    }
+
+    .product-card__size.is-selected {
+      border-color: #111111;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .product-card__cta {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 15px 16px;
+      background: #111111;
+      color: #ffffff;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
     @media (max-width: 960px) {
       .product-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -160,10 +307,145 @@
         <span class="toolbar__label">排序</span>
         <button class="toolbar__chip is-active" type="button" data-sort="推荐">推荐</button>
       </div>
-      <p class="toolbar__result" data-result-count>共 0 件商品</p>
+      <p class="toolbar__result" data-result-count></p>
     </section>
 
     <section class="product-grid" data-product-grid></section>
   </main>
+
+  <script>
+    const products = [
+      {
+        id: "sock-01",
+        series: "Cotton Daily",
+        title: "极简中筒袜",
+        category: "中筒袜",
+        price: 39,
+        originalPrice: 59,
+        discount: "32% OFF",
+        description: "柔软透气面料，适合日常通勤与居家穿着。",
+        sizes: ["35-38", "39-42", "43-45"],
+        isRecommended: true,
+        releaseDate: "2026-07-15"
+      },
+      {
+        id: "sock-02",
+        series: "Active Base",
+        title: "轻压运动袜",
+        category: "运动袜",
+        price: 49,
+        originalPrice: 69,
+        discount: "29% OFF",
+        description: "包裹感更强，适合慢跑和日常训练。",
+        sizes: ["39-42", "43-45"],
+        isRecommended: true,
+        releaseDate: "2026-07-14"
+      },
+      {
+        id: "sock-03",
+        series: "Daily Soft",
+        title: "柔棉短袜",
+        category: "日常袜",
+        price: 25,
+        originalPrice: 39,
+        discount: "36% OFF",
+        description: "低调百搭，适合夏季与日常轻松穿着。",
+        sizes: ["35-38", "39-42"],
+        isRecommended: false,
+        releaseDate: "2026-07-10"
+      },
+      {
+        id: "sock-04",
+        series: "Motion Fit",
+        title: "速干训练袜",
+        category: "运动袜",
+        price: 45,
+        originalPrice: 58,
+        discount: "22% OFF",
+        description: "快干面料帮助维持长时间训练舒适度。",
+        sizes: ["39-42", "43-45"],
+        isRecommended: false,
+        releaseDate: "2026-07-13"
+      },
+      {
+        id: "sock-05",
+        series: "City Basic",
+        title: "通勤罗口袜",
+        category: "日常袜",
+        price: 35,
+        originalPrice: 49,
+        discount: "29% OFF",
+        description: "更适合正装与通勤鞋型的基础搭配。",
+        sizes: ["35-38", "39-42", "43-45"],
+        isRecommended: true,
+        releaseDate: "2026-07-12"
+      },
+      {
+        id: "sock-06",
+        series: "Lite Step",
+        title: "云感船袜",
+        category: "船袜",
+        price: 29,
+        originalPrice: 42,
+        discount: "31% OFF",
+        description: "轻薄贴脚，适合浅口鞋与夏日轻装搭配。",
+        sizes: ["35-38", "39-42"],
+        isRecommended: false,
+        releaseDate: "2026-07-11"
+      }
+    ];
+
+    const productGrid = document.querySelector("[data-product-grid]");
+    const resultCount = document.querySelector("[data-result-count]");
+
+    function createCardMarkup(product) {
+      const sizeButtons = product.sizes
+        .map((size, index) => {
+          const selectedClass = index === 0 ? " is-selected" : "";
+          return `<button class="product-card__size${selectedClass}" type="button">${size}</button>`;
+        })
+        .join("");
+
+      const recommendationTag = product.isRecommended
+        ? '<span class="product-card__tag">推荐</span>'
+        : `<span class="product-card__tag">${product.category}</span>`;
+
+      return `
+        <article class="product-card" data-product-card data-product-id="${product.id}">
+          <div class="product-card__media">
+            <span class="product-card__badge">${product.discount}</span>
+            ${recommendationTag}
+            <div class="product-card__sock" aria-hidden="true">SOCKS</div>
+          </div>
+          <div class="product-card__content">
+            <div>
+              <p class="product-card__series">${product.series}</p>
+              <h2 class="product-card__title">${product.title}</h2>
+              <p class="product-card__name">${product.category}</p>
+            </div>
+            <p class="product-card__description">${product.description}</p>
+            <div class="product-card__price">
+              <span class="product-card__price-current">¥${product.price}</span>
+              <span class="product-card__price-original">¥${product.originalPrice}</span>
+            </div>
+            <div class="product-card__sizes" aria-label="${product.title} 可选尺码">
+              ${sizeButtons}
+            </div>
+            <div class="product-card__footer">
+              <span class="product-card__name">${product.releaseDate}</span>
+            </div>
+            <button class="product-card__cta" type="button" data-cart-button>加入购物车</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderProducts() {
+      productGrid.innerHTML = products.map(createCardMarkup).join("");
+      resultCount.textContent = `共 ${products.length} 件商品`;
+    }
+
+    renderProducts();
+  </script>
 </body>
 </html>
