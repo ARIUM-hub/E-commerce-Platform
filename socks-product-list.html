@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>袜子专区</title>
+  <style>
+    :root {
+      --bg-start: #f6f6f6;
+      --bg-end: #ececec;
+      --surface: #ffffff;
+      --text-main: #111111;
+      --text-subtle: #666666;
+      --line: #dddddd;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+      --radius-panel: 28px;
+      --radius-pill: 999px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 32px 20px 48px;
+      background: linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text-main);
+    }
+
+    .page {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+    }
+
+    .hero {
+      margin-bottom: 20px;
+      padding: 28px;
+      border: 1px solid #ebebeb;
+      border-radius: var(--radius-panel);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: var(--shadow);
+    }
+
+    .hero__eyebrow {
+      margin: 0 0 10px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero__title {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 5vw, 52px);
+      line-height: 1.05;
+    }
+
+    .hero__description {
+      margin: 0;
+      max-width: 620px;
+      color: var(--text-subtle);
+      line-height: 1.7;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 18px 20px;
+      border: 1px solid #ebebeb;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+    }
+
+    .toolbar__group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toolbar__label {
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .toolbar__chip {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      padding: 10px 14px;
+      background: #ffffff;
+      color: #333333;
+      font: inherit;
+    }
+
+    .toolbar__chip.is-active {
+      border-color: #111111;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .toolbar__result {
+      color: #666666;
+      font-size: 14px;
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      min-height: 120px;
+    }
+
+    @media (max-width: 960px) {
+      .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding-inline: 14px;
+      }
+
+      .toolbar {
+        align-items: flex-start;
+      }
+
+      .product-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <p class="hero__eyebrow">Cotton Daily</p>
+      <h1 class="hero__title">袜子专区</h1>
+      <p class="hero__description">精选黑白灰日常袜、运动袜与轻量通勤款，延续简约电商风格，专注舒适穿着与基础百搭感。</p>
+    </section>
+
+    <section class="toolbar" data-toolbar>
+      <div class="toolbar__group">
+        <span class="toolbar__label">分类</span>
+        <button class="toolbar__chip is-active" type="button" data-filter="全部">全部</button>
+      </div>
+      <div class="toolbar__group">
+        <span class="toolbar__label">排序</span>
+        <button class="toolbar__chip is-active" type="button" data-sort="推荐">推荐</button>
+      </div>
+      <p class="toolbar__result" data-result-count>共 0 件商品</p>
+    </section>
+
+    <section class="product-grid" data-product-grid></section>
+  </main>
+</body>
+</html>
