@@ -156,6 +156,32 @@ test("does not show the top rated tag for products that are not top rated", asyn
   await expect(sock05Card.locator("[data-top-rated]")).toHaveCount(0);
 });
 
+test("keeps the rating band readable on a mobile viewport", async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto("/socks-product-list.html");
+
+  const firstCard = page.locator("[data-product-card]").first();
+  const ratingBand = firstCard.locator("[data-rating-band]");
+  await expect(ratingBand).toBeVisible();
+
+  const ratingMetrics = await ratingBand.evaluate((node) => {
+    const styles = window.getComputedStyle(node);
+    return {
+      flexWrap: styles.flexWrap,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight
+    };
+  });
+
+  expect(ratingMetrics.flexWrap).toBe("nowrap");
+  expect(ratingMetrics.scrollWidth).toBeLessThanOrEqual(ratingMetrics.clientWidth + 1);
+  expect(ratingMetrics.scrollHeight).toBeLessThanOrEqual(ratingMetrics.clientHeight + 1);
+
+  await page.close();
+});
+
 test("filters the list by category and updates the result count", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 

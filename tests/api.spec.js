@@ -190,3 +190,18 @@ test("returns rating metadata for every product card", async ({ request }) => {
     expect(typeof product.isTopRated).toBe("boolean");
   });
 });
+
+test("keeps rating metadata in filtered product responses", async ({ request }) => {
+  const response = await request.get("/api/products?filter=daily&sort=recommended");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock05 = payload.items.find((product) => product.id === "sock-05");
+  expect(sock05).toMatchObject({
+    id: "sock-05",
+    title: "通勤罗口袜",
+    ratingValue: 4.6,
+    reviewCount: 973,
+    isTopRated: false
+  });
+});
