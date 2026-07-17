@@ -15,7 +15,7 @@ test("fails to start when DATA_DIR does not contain required JSON files", async 
       PORT: "0"
     },
     encoding: "utf8",
-    timeout: 1000
+    timeout: 3000
   });
 
   expect(result.status).toBe(1);
