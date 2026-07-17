@@ -57,9 +57,9 @@ test("returns rating metadata for every product card", async ({ request }) => {
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  const firstProduct = payload.items[0];
+  const sock01 = payload.items.find((product) => product.id === "sock-01");
 
-  expect(firstProduct).toMatchObject({
+  expect(sock01).toMatchObject({
     id: "sock-01",
     ratingValue: 4.7,
     reviewCount: 1284,
@@ -96,6 +96,8 @@ FAIL because ratingValue/reviewCount/isTopRated are missing from the product pay
 - [ ] **Step 3: Add the minimal rating fields to both product datasets**
 
 Update `data/products.json` and `tests/fixtures/test-data/products.json` so each item includes rating metadata. Use this exact field pattern:
+
+Note: `isTopRated` is intentionally independent from `isRecommended`. Keep `sock-05` recommended but not top rated so later UI tests can catch accidental use of `isRecommended`.
 
 ```json
 [
@@ -197,7 +199,7 @@ Update `data/products.json` and `tests/fixtures/test-data/products.json` so each
     "isRecommended": true,
     "ratingValue": 4.6,
     "reviewCount": 973,
-    "isTopRated": true,
+    "isTopRated": false,
     "releaseDate": "2026-07-12",
     "visualTone": "#d8d8d8",
     "visualShadow": "#b7b7b7",
@@ -442,7 +444,7 @@ test("keeps rating metadata in filtered product responses", async ({ request }) 
     title: "通勤罗口袜",
     ratingValue: 4.6,
     reviewCount: 973,
-    isTopRated: true
+    isTopRated: false
   });
 });
 ```

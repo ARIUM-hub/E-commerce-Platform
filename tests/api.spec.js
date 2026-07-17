@@ -169,3 +169,24 @@ test("removes a single cart item without clearing the rest", async ({ request })
     meta: { itemCount: 1 }
   });
 });
+
+test("returns rating metadata for every product card", async ({ request }) => {
+  const response = await request.get("/api/products");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock01 = payload.items.find((product) => product.id === "sock-01");
+
+  expect(sock01).toMatchObject({
+    id: "sock-01",
+    ratingValue: 4.7,
+    reviewCount: 1284,
+    isTopRated: true
+  });
+
+  payload.items.forEach((product) => {
+    expect(typeof product.ratingValue).toBe("number");
+    expect(Number.isInteger(product.reviewCount)).toBe(true);
+    expect(typeof product.isTopRated).toBe("boolean");
+  });
+});

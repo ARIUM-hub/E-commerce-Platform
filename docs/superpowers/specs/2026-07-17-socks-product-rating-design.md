@@ -180,6 +180,8 @@
 - `ratingValue` 使用数值类型，前端按一位小数展示
 - `reviewCount` 使用整数类型，前端负责格式化为带千分位的文本
 - `isTopRated` 为布尔值，决定是否显示标签
+- `isTopRated` 与 `isRecommended` 是两个独立信号，不能互相推导或直接镜像
+- 示例数据中至少保留一个 `isRecommended: true` 且 `isTopRated: false` 的商品（如 `sock-05`），用于验证实现不会误把推荐标记当成口碑标记
 
 ### 7.3 接口影响
 
