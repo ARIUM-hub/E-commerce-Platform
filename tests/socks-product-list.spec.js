@@ -15,12 +15,88 @@ test("renders the socks category page shell", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "袜子专区" })).toBeVisible();
   await expect(page.locator("[data-toolbar]")).toBeVisible();
+  await expect(page.locator("[data-cart-summary]")).toBeVisible();
   await expect(page.getByRole("button", { name: "全部" })).toBeVisible();
   await expect(page.getByRole("button", { name: "推荐" })).toBeVisible();
   await expect(page.locator("[data-result-count]")).toBeVisible();
   await expect(page.locator("[data-result-count]")).toHaveText("共 6 件商品");
   await expect(page.locator("[data-product-grid]")).toBeVisible();
   await expect(page.locator("[data-product-card]").first()).toBeVisible();
+});
+
+test("loads the persisted cart state from backend on page init", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  const [cartResponse] = await Promise.all([
+    page.waitForResponse((response) => {
+      return response.url().includes("/api/cart") && response.request().method() === "GET";
+    }),
+    page.goto("/socks-product-list.html")
+  ]);
+
+  expect(cartResponse.ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("3");
+  await expect(page.locator("[data-cart-summary]")).toContainText("3 件");
+});
+
+test("opens the cart drawer and shows persisted cart item details", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  await page.goto("/socks-product-list.html");
+  await expect(page.locator("[data-cart-count]")).toHaveText("3");
+
+  await page.getByRole("button", { name: "打开购物车" }).click();
+
+  await expect(page.locator("[data-cart-drawer]")).toHaveAttribute("data-open", "true");
+  await expect(page.getByRole("heading", { name: "购物车明细" })).toBeVisible();
+  await expect(page.locator("[data-cart-item]")).toHaveCount(2);
+  await expect(page.locator("[data-cart-item]").first()).toContainText("轻压运动袜");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("43-45");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("x2");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("¥98");
+  await expect(page.locator("[data-cart-item]").nth(1)).toContainText("通勤罗口袜");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+});
+
+test("closes the cart drawer from the close button", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await page.getByRole("button", { name: "打开购物车" }).click();
+  await expect(page.locator("[data-cart-drawer]")).toHaveAttribute("data-open", "true");
+
+  await page.getByRole("button", { name: "关闭购物车" }).click();
+  await expect(page.locator("[data-cart-drawer]")).toHaveAttribute("data-open", "false");
+});
+
+test("locks body scroll while the cart drawer is open", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await expect.poll(async () => {
+    return page.evaluate(() => window.getComputedStyle(document.body).overflow);
+  }).not.toBe("hidden");
+
+  await page.getByRole("button", { name: "打开购物车" }).click();
+
+  await expect(page.locator("[data-cart-drawer]")).toHaveAttribute("data-open", "true");
+  await expect.poll(async () => {
+    return page.evaluate(() => window.getComputedStyle(document.body).overflow);
+  }).toBe("hidden");
+
+  await page.getByRole("button", { name: "关闭购物车" }).click();
+  await expect(page.locator("[data-cart-drawer]")).toHaveAttribute("data-open", "false");
+  await expect.poll(async () => {
+    return page.evaluate(() => window.getComputedStyle(document.body).overflow);
+  }).not.toBe("hidden");
 });
 
 test("loads products from the backend response instead of inline seed markup", async ({ page }) => {
@@ -192,6 +268,174 @@ test("posts the selected size to the backend cart api", async ({ page }) => {
     size: "43-45",
     quantity: 1
   });
+});
+
+test("updates the visible cart state after repeated add-to-cart actions", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  const firstCard = page.locator("[data-product-card]").first();
+  await firstCard.getByRole("button", { name: "43-45" }).click();
+  await expect(page.locator("[data-cart-count]")).toHaveText("0");
+
+  const firstAddResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await firstCard.locator("[data-cart-button]").click();
+  expect((await firstAddResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+  await expect(page.locator("[data-cart-summary]")).toContainText("1 件");
+
+  const secondAddResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await firstCard.locator("[data-cart-button]").click();
+  expect((await secondAddResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("2");
+  await expect(page.locator("[data-cart-summary]")).toContainText("2 件");
+
+  await page.getByRole("button", { name: "打开购物车" }).click();
+  await expect(page.locator("[data-cart-item]")).toHaveCount(1);
+  await expect(page.locator("[data-cart-item]").first()).toContainText("极简中筒袜");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("43-45");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("x2");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥78");
+});
+
+test("clears the visible cart state and persisted cart data from the page action", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  await page.goto("/socks-product-list.html");
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("3");
+  await page.getByRole("button", { name: "打开购物车" }).click();
+  await expect(page.locator("[data-cart-item]")).toHaveCount(2);
+
+  const clearResponsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/clear") && response.request().method() === "POST";
+  });
+
+  await page.getByRole("button", { name: "清空购物车" }).click();
+  expect((await clearResponsePromise).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("0");
+  await expect(page.locator("[data-cart-summary]")).toContainText("0 件");
+  await expect(page.locator("[data-cart-empty-state]")).toContainText("购物车还是空的");
+
+  const persistedCart = JSON.parse(await fs.readFile(cartFile, "utf8"));
+  expect(persistedCart).toEqual({ items: [] });
+});
+
+test("updates cart item quantity from drawer controls and refreshes totals", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  await page.goto("/socks-product-list.html");
+  await page.getByRole("button", { name: "打开购物车" }).click();
+
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+
+  const increaseResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "PATCH";
+  });
+  await page.getByRole("button", { name: "增加 轻压运动袜 数量" }).click();
+  expect((await increaseResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("4");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("x3");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥182");
+
+  const decreaseResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "PATCH";
+  });
+  await page.getByRole("button", { name: "减少 轻压运动袜 数量" }).click();
+  expect((await decreaseResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("3");
+  await expect(page.locator("[data-cart-item]").first()).toContainText("x2");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+});
+
+test("disables drawer controls while a cart quantity update is pending", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  let releasePatchRequest;
+  await page.route("**/api/cart/items", async (route) => {
+    if (route.request().method() !== "PATCH" || releasePatchRequest) {
+      await route.continue();
+      return;
+    }
+
+    await new Promise((resolve) => {
+      releasePatchRequest = async () => {
+        await route.continue();
+        resolve();
+      };
+    });
+  });
+
+  await page.goto("/socks-product-list.html");
+  await page.getByRole("button", { name: "打开购物车" }).click();
+
+  const increaseButton = page.getByRole("button", { name: "增加 轻压运动袜 数量" });
+  const decreaseButton = page.getByRole("button", { name: "减少 轻压运动袜 数量" });
+  const removeButton = page.getByRole("button", { name: "移除 轻压运动袜" });
+  const clearButton = page.getByRole("button", { name: "清空购物车" });
+
+  const clickPromise = increaseButton.click();
+
+  await expect.poll(() => typeof releasePatchRequest).toBe("function");
+  await expect(increaseButton).toBeDisabled();
+  await expect(decreaseButton).toBeDisabled();
+  await expect(removeButton).toBeDisabled();
+  await expect(clearButton).toBeDisabled();
+
+  await releasePatchRequest();
+  await clickPromise;
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("4");
+  await expect(page.getByRole("button", { name: "增加 轻压运动袜 数量" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "减少 轻压运动袜 数量" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "移除 轻压运动袜" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "清空购物车" })).toBeEnabled();
+});
+
+test("removes a cart item from the drawer without clearing the rest", async ({ page }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [
+      { productId: "sock-02", size: "43-45", quantity: 2 },
+      { productId: "sock-05", size: "39-42", quantity: 1 }
+    ]
+  }, null, 2)}\n`, "utf8");
+
+  await page.goto("/socks-product-list.html");
+  await page.getByRole("button", { name: "打开购物车" }).click();
+
+  const removeResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "DELETE";
+  });
+  await page.getByRole("button", { name: "移除 轻压运动袜" }).click();
+  expect((await removeResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+  await expect(page.locator("[data-cart-item]")).toHaveCount(1);
+  await expect(page.locator("[data-cart-item]").first()).toContainText("通勤罗口袜");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥35");
 });
 
 test("shows an empty state when a filter has no products", async ({ page }) => {

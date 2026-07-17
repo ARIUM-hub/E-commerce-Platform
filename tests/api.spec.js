@@ -95,3 +95,77 @@ test("rejects invalid cart size values", async ({ request }) => {
   const payload = await response.json();
   expect(payload.error.code).toBe("INVALID_SIZE");
 });
+
+test("clears the anonymous cart state", async ({ request }) => {
+  const addResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "35-38", quantity: 1 }
+  });
+  expect(addResponse.ok()).toBe(true);
+
+  const clearResponse = await request.post("/api/cart/clear");
+  expect(clearResponse.ok()).toBe(true);
+
+  const clearPayload = await clearResponse.json();
+  expect(clearPayload).toEqual({
+    ok: true,
+    items: [],
+    meta: { itemCount: 0 }
+  });
+
+  const cartResponse = await request.get("/api/cart");
+  expect(cartResponse.ok()).toBe(true);
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [],
+    meta: { itemCount: 0 }
+  });
+});
+
+test("updates an existing cart item quantity", async ({ request }) => {
+  const addResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+  });
+  expect(addResponse.ok()).toBe(true);
+
+  const updateResponse = await request.fetch("/api/cart/items", {
+    method: "PATCH",
+    data: { productId: "sock-02", size: "43-45", quantity: 3 }
+  });
+  expect(updateResponse.ok()).toBe(true);
+
+  const updatePayload = await updateResponse.json();
+  expect(updatePayload.item).toEqual({
+    productId: "sock-02",
+    size: "43-45",
+    quantity: 3
+  });
+
+  const cartResponse = await request.get("/api/cart");
+  expect(cartResponse.ok()).toBe(true);
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-02", size: "43-45", quantity: 3 }],
+    meta: { itemCount: 1 }
+  });
+});
+
+test("removes a single cart item without clearing the rest", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+  });
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-05", size: "39-42", quantity: 1 }
+  });
+
+  const removeResponse = await request.fetch("/api/cart/items", {
+    method: "DELETE",
+    data: { productId: "sock-02", size: "43-45" }
+  });
+  expect(removeResponse.ok()).toBe(true);
+
+  const removePayload = await removeResponse.json();
+  expect(removePayload).toEqual({
+    ok: true,
+    removedItem: { productId: "sock-02", size: "43-45", quantity: 1 },
+    items: [{ productId: "sock-05", size: "39-42", quantity: 1 }],
+    meta: { itemCount: 1 }
+  });
+});

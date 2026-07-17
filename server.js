@@ -161,6 +161,12 @@ function validateCartItemInput(products, body) {
   return { quantity };
 }
 
+function findCartItemIndex(cart, productId, size) {
+  return cart.items.findIndex((item) => {
+    return item.productId === productId && item.size === size;
+  });
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
 
@@ -231,6 +237,93 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, {
         ok: true,
         item,
+        meta: getCartPayload(cart).meta
+      });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/cart/clear") {
+    try {
+      const emptyCart = { items: [] };
+      await writeJsonFile(cartFile, emptyCart);
+      sendJson(response, 200, {
+        ok: true,
+        items: [],
+        meta: { itemCount: 0 }
+      });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "PATCH" && requestUrl.pathname === "/api/cart/items") {
+    try {
+      const products = await readJsonFile(productsFile);
+      const cart = await readJsonFile(cartFile);
+      const body = await readRequestBody(request);
+      const validation = validateCartItemInput(products, body);
+
+      if (validation.statusCode) {
+        sendError(response, validation.statusCode, validation.code, validation.message);
+        return;
+      }
+
+      const itemIndex = findCartItemIndex(cart, body.productId, body.size);
+      if (itemIndex === -1) {
+        sendError(response, 404, "CART_ITEM_NOT_FOUND", "Cart item was not found.");
+        return;
+      }
+
+      cart.items[itemIndex].quantity = validation.quantity;
+      await writeJsonFile(cartFile, cart);
+
+      sendJson(response, 200, {
+        ok: true,
+        item: cart.items[itemIndex],
+        items: cart.items,
+        meta: getCartPayload(cart).meta
+      });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "DELETE" && requestUrl.pathname === "/api/cart/items") {
+    try {
+      const cart = await readJsonFile(cartFile);
+      const body = await readRequestBody(request);
+      const itemIndex = findCartItemIndex(cart, body.productId, body.size);
+
+      if (itemIndex === -1) {
+        sendError(response, 404, "CART_ITEM_NOT_FOUND", "Cart item was not found.");
+        return;
+      }
+
+      const [removedItem] = cart.items.splice(itemIndex, 1);
+      await writeJsonFile(cartFile, cart);
+
+      sendJson(response, 200, {
+        ok: true,
+        removedItem,
+        items: cart.items,
         meta: getCartPayload(cart).meta
       });
       return;

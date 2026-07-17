@@ -30,6 +30,10 @@
       color: var(--text-main);
     }
 
+    body.is-cart-drawer-open {
+      overflow: hidden;
+    }
+
     .page {
       width: min(1180px, 100%);
       margin: 0 auto;
@@ -113,6 +117,277 @@
     .toolbar__result {
       color: #666666;
       font-size: 14px;
+    }
+
+    .toolbar__cart {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+      padding: 10px 14px;
+      border: 1px solid #e3e3e3;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.96);
+      color: #444444;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      transition: border-color 180ms ease, transform 180ms ease;
+    }
+
+    .toolbar__cart:hover {
+      border-color: #111111;
+      transform: translateY(-1px);
+    }
+
+    .toolbar__cart-label {
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .toolbar__cart-count {
+      min-width: 34px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #111111;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .toolbar__cart-summary {
+      color: #5f5f5f;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .cart-drawer__action {
+      border: 1px solid #d4d4d4;
+      border-radius: var(--radius-pill);
+      padding: 8px 12px;
+      background: #ffffff;
+      color: #333333;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 180ms ease, color 180ms ease, opacity 180ms ease;
+    }
+
+    .cart-drawer__action:hover:not(:disabled) {
+      border-color: #111111;
+      color: #111111;
+    }
+
+    .cart-drawer__action:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .cart-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 17, 17, 0.32);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease;
+    }
+
+    .cart-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(420px, 100vw);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 24px 22px;
+      background: rgba(255, 255, 255, 0.98);
+      border-left: 1px solid #ececec;
+      box-shadow: -24px 0 48px rgba(0, 0, 0, 0.12);
+      transform: translateX(100%);
+      transition: transform 220ms ease;
+      z-index: 20;
+    }
+
+    .cart-drawer[data-open="true"] {
+      transform: translateX(0);
+    }
+
+    .cart-drawer[data-open="true"] + .cart-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .cart-drawer__header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .cart-drawer__eyebrow {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cart-drawer__title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .cart-drawer__meta {
+      margin: 10px 0 0;
+      color: #666666;
+      font-size: 14px;
+    }
+
+    .cart-drawer__close {
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: #f2f2f2;
+      color: #222222;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .cart-drawer__items {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .cart-drawer__item {
+      border: 1px solid #e9e9e9;
+      border-radius: 20px;
+      padding: 16px;
+      background: #ffffff;
+    }
+
+    .cart-drawer__item-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cart-drawer__item-title {
+      margin: 0 0 8px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .cart-drawer__item-detail {
+      margin: 0;
+      color: #5f5f5f;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .cart-drawer__item-subtotal {
+      margin: 12px 0 0;
+      color: #111111;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .cart-drawer__item-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .cart-drawer__qty-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cart-drawer__qty-button {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #d6d6d6;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #222222;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .cart-drawer__qty-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .cart-drawer__qty-value {
+      min-width: 24px;
+      text-align: center;
+      color: #333333;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .cart-drawer__remove {
+      border: 0;
+      background: transparent;
+      color: #7a7a7a;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .cart-drawer__empty {
+      padding: 24px 20px;
+      border: 1px dashed #dadada;
+      border-radius: 22px;
+      background: #fcfcfc;
+      color: #666666;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    .cart-drawer__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding-top: 6px;
+    }
+
+    .cart-drawer__footer-copy {
+      color: #666666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .cart-drawer__footer-total {
+      color: #111111;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
     }
 
     .product-grid {
@@ -354,11 +629,38 @@
         <button class="toolbar__chip" type="button" data-sort="price-desc">价格从高到低</button>
         <button class="toolbar__chip" type="button" data-sort="newest">最新上架</button>
       </div>
+      <button class="toolbar__cart" type="button" data-cart-toggle aria-label="打开购物车" aria-expanded="false" aria-controls="cart-drawer">
+        <span class="toolbar__cart-label">购物车</span>
+        <span class="toolbar__cart-count" data-cart-count>0</span>
+        <span class="toolbar__cart-summary" data-cart-summary>购物车 0 件</span>
+      </button>
       <p class="toolbar__result" data-result-count></p>
     </section>
 
     <section class="product-grid" data-product-grid></section>
   </main>
+
+  <aside class="cart-drawer" id="cart-drawer" data-cart-drawer data-open="false" aria-hidden="true">
+    <div class="cart-drawer__header">
+      <div>
+        <p class="cart-drawer__eyebrow">Cart State</p>
+        <h2 class="cart-drawer__title">购物车明细</h2>
+        <p class="cart-drawer__meta" data-cart-drawer-meta>共 0 件商品</p>
+      </div>
+      <button class="cart-drawer__close" type="button" data-cart-close aria-label="关闭购物车">关闭</button>
+    </div>
+    <div class="cart-drawer__items" data-cart-drawer-items>
+      <div class="cart-drawer__empty" data-cart-empty-state>购物车还是空的</div>
+    </div>
+    <div class="cart-drawer__footer">
+      <div>
+        <p class="cart-drawer__footer-copy">你可以继续加购，抽屉会同步展示当前匿名购物车状态。</p>
+        <p class="cart-drawer__footer-total" data-cart-total>¥0</p>
+      </div>
+      <button class="cart-drawer__action" type="button" data-clear-cart>清空购物车</button>
+    </div>
+  </aside>
+  <div class="cart-backdrop" data-cart-backdrop></div>
 
   <script>
     const FILTER_KEY = {
@@ -379,9 +681,23 @@
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
+    const cartToggleButton = document.querySelector("[data-cart-toggle]");
+    const cartCount = document.querySelector("[data-cart-count]");
+    const cartSummary = document.querySelector("[data-cart-summary]");
+    const cartDrawer = document.querySelector("[data-cart-drawer]");
+    const cartDrawerMeta = document.querySelector("[data-cart-drawer-meta]");
+    const cartDrawerItems = document.querySelector("[data-cart-drawer-items]");
+    const cartDrawerTotal = document.querySelector("[data-cart-total]");
+    const cartCloseButton = document.querySelector("[data-cart-close]");
+    const cartBackdrop = document.querySelector("[data-cart-backdrop]");
+    const clearCartButton = document.querySelector("[data-clear-cart]");
     const cartFeedbackTimers = new Map();
     let activeFilter = FILTER_KEY.ALL;
     let activeSort = SORT_KEY.RECOMMENDED;
+    const productCatalog = new Map();
+    let cartState = { items: [] };
+    let isCartDrawerOpen = false;
+    let isCartMutationPending = false;
 
     function createSockIllustration(product) {
       const patternMarkup = {
@@ -497,22 +813,219 @@
       return payload.items;
     }
 
-    async function addCartItem(productId, size) {
-      const response = await fetch("/api/cart/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          size,
-          quantity: 1
-        })
+    function getCartQuantity(items) {
+      return items.reduce((total, item) => total + item.quantity, 0);
+    }
+
+    function findProduct(productId) {
+      return productCatalog.get(productId) || null;
+    }
+
+    function syncProductCatalog(products) {
+      products.forEach((product) => {
+        productCatalog.set(product.id, product);
       });
+    }
+
+    function createCartItemMarkup(item) {
+      const product = findProduct(item.productId);
+      const title = product ? product.title : "已选商品";
+      const series = product ? product.series : "Anonymous Cart";
+      const sizeText = `尺码 ${item.size}`;
+      const quantityText = `x${item.quantity}`;
+      const unitPrice = product ? product.price : 0;
+      const subtotal = unitPrice * item.quantity;
+
+      return `
+        <article class="cart-drawer__item" data-cart-item>
+          <div class="cart-drawer__item-meta">
+            <span>${series}</span>
+            <span>${quantityText}</span>
+          </div>
+          <h3 class="cart-drawer__item-title">${title}</h3>
+          <p class="cart-drawer__item-detail">${sizeText}</p>
+          <p class="cart-drawer__item-subtotal">¥${subtotal}</p>
+          <div class="cart-drawer__item-actions">
+            <div class="cart-drawer__qty-controls">
+              <button class="cart-drawer__qty-button" type="button" data-cart-decrease data-product-id="${item.productId}" data-size="${item.size}" aria-label="减少 ${title} 数量"${item.quantity <= 1 || isCartMutationPending ? " disabled" : ""}>-</button>
+              <span class="cart-drawer__qty-value">${item.quantity}</span>
+              <button class="cart-drawer__qty-button" type="button" data-cart-increase data-product-id="${item.productId}" data-size="${item.size}" aria-label="增加 ${title} 数量"${isCartMutationPending ? " disabled" : ""}>+</button>
+            </div>
+            <button class="cart-drawer__remove" type="button" data-cart-remove data-product-id="${item.productId}" data-size="${item.size}" aria-label="移除 ${title}"${isCartMutationPending ? " disabled" : ""}>移除</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderCartDrawer() {
+      const quantity = getCartQuantity(cartState.items);
+      const total = cartState.items.reduce((sum, item) => {
+        const product = findProduct(item.productId);
+        return sum + ((product ? product.price : 0) * item.quantity);
+      }, 0);
+
+      cartDrawerMeta.textContent = `共 ${quantity} 件商品`;
+      cartDrawerItems.innerHTML = quantity === 0
+        ? '<div class="cart-drawer__empty" data-cart-empty-state>购物车还是空的</div>'
+        : cartState.items.map(createCartItemMarkup).join("");
+      cartDrawerTotal.textContent = `¥${total}`;
+    }
+
+    function setCartDrawerOpen(nextState) {
+      isCartDrawerOpen = nextState;
+      cartDrawer.dataset.open = nextState ? "true" : "false";
+      cartDrawer.setAttribute("aria-hidden", nextState ? "false" : "true");
+      cartToggleButton.setAttribute("aria-expanded", nextState ? "true" : "false");
+      document.body.classList.toggle("is-cart-drawer-open", nextState);
+    }
+
+    function setCartMutationPending(nextState) {
+      isCartMutationPending = nextState;
+      renderCartState();
+    }
+
+    function renderCartState() {
+      const quantity = getCartQuantity(cartState.items);
+      cartCount.textContent = String(quantity);
+      cartSummary.textContent = `购物车 ${quantity} 件`;
+      clearCartButton.disabled = quantity === 0 || isCartMutationPending;
+      renderCartDrawer();
+    }
+
+    async function fetchCart() {
+      const response = await fetch("/api/cart");
 
       if (!response.ok) {
-        throw new Error("Failed to add cart item");
+        throw new Error("Failed to load cart");
       }
 
-      return response.json();
+      const payload = await response.json();
+      cartState = {
+        items: Array.isArray(payload.items) ? payload.items : []
+      };
+      renderCartState();
+      return payload;
+    }
+
+    function syncCartItem(item) {
+      const existingItem = cartState.items.find((entry) => {
+        return entry.productId === item.productId && entry.size === item.size;
+      });
+
+      if (existingItem) {
+        existingItem.quantity = item.quantity;
+      } else {
+        cartState.items.push({
+          productId: item.productId,
+          size: item.size,
+          quantity: item.quantity
+        });
+      }
+
+      renderCartState();
+    }
+
+    async function addCartItem(productId, size) {
+      setCartMutationPending(true);
+
+      try {
+        const response = await fetch("/api/cart/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            size,
+            quantity: 1
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to add cart item");
+        }
+
+        const payload = await response.json();
+        syncCartItem(payload.item);
+        return payload;
+      } finally {
+        setCartMutationPending(false);
+      }
+    }
+
+    async function updateCartItem(productId, size, quantity) {
+      setCartMutationPending(true);
+
+      try {
+        const response = await fetch("/api/cart/items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            size,
+            quantity
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update cart item");
+        }
+
+        const payload = await response.json();
+        syncCartItem(payload.item);
+        return payload;
+      } finally {
+        setCartMutationPending(false);
+      }
+    }
+
+    async function removeCartItem(productId, size) {
+      setCartMutationPending(true);
+
+      try {
+        const response = await fetch("/api/cart/items", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            size
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to remove cart item");
+        }
+
+        const payload = await response.json();
+        cartState = {
+          items: Array.isArray(payload.items) ? payload.items : []
+        };
+        renderCartState();
+        return payload;
+      } finally {
+        setCartMutationPending(false);
+      }
+    }
+
+    async function clearCart() {
+      setCartMutationPending(true);
+
+      try {
+        const response = await fetch("/api/cart/clear", {
+          method: "POST"
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to clear cart");
+        }
+
+        const payload = await response.json();
+        cartState = {
+          items: Array.isArray(payload.items) ? payload.items : []
+        };
+        renderCartState();
+        return payload;
+      } finally {
+        setCartMutationPending(false);
+      }
     }
 
     function showLoadFailureState() {
@@ -581,6 +1094,7 @@
 
     async function renderProducts() {
       const visibleProducts = await fetchProducts();
+      syncProductCatalog(visibleProducts);
       const isEmpty = visibleProducts.length === 0;
 
       productGrid.classList.toggle("is-empty", isEmpty);
@@ -589,6 +1103,7 @@
         : visibleProducts.map(createCardMarkup).join("");
       resultCount.textContent = `共 ${visibleProducts.length} 件商品`;
       syncToolbarState();
+      renderCartDrawer();
 
       if (!isEmpty) {
         bindCardInteractions();
@@ -596,6 +1111,12 @@
     }
 
     toolbar.addEventListener("click", async (event) => {
+      const cartToggle = event.target.closest("[data-cart-toggle]");
+      if (cartToggle) {
+        setCartDrawerOpen(true);
+        return;
+      }
+
       const filterButton = event.target.closest("[data-filter]");
       if (filterButton) {
         activeFilter = filterButton.dataset.filter;
@@ -618,8 +1139,81 @@
       }
     });
 
+    clearCartButton.addEventListener("click", async () => {
+      try {
+        await clearCart();
+      } catch (error) {
+        renderCartState();
+      }
+    });
+
+    cartCloseButton.addEventListener("click", () => {
+      setCartDrawerOpen(false);
+    });
+
+    cartBackdrop.addEventListener("click", () => {
+      setCartDrawerOpen(false);
+    });
+
+    cartDrawer.addEventListener("click", async (event) => {
+      const increaseButton = event.target.closest("[data-cart-increase]");
+      if (increaseButton) {
+        const productId = increaseButton.dataset.productId;
+        const size = increaseButton.dataset.size;
+        const item = cartState.items.find((entry) => {
+          return entry.productId === productId && entry.size === size;
+        });
+
+        if (!item) {
+          return;
+        }
+
+        try {
+          await updateCartItem(productId, size, item.quantity + 1);
+        } catch (error) {
+          renderCartState();
+        }
+        return;
+      }
+
+      const decreaseButton = event.target.closest("[data-cart-decrease]");
+      if (decreaseButton) {
+        const productId = decreaseButton.dataset.productId;
+        const size = decreaseButton.dataset.size;
+        const item = cartState.items.find((entry) => {
+          return entry.productId === productId && entry.size === size;
+        });
+
+        if (!item || item.quantity <= 1) {
+          return;
+        }
+
+        try {
+          await updateCartItem(productId, size, item.quantity - 1);
+        } catch (error) {
+          renderCartState();
+        }
+        return;
+      }
+
+      const removeButton = event.target.closest("[data-cart-remove]");
+      if (removeButton) {
+        try {
+          await removeCartItem(removeButton.dataset.productId, removeButton.dataset.size);
+        } catch (error) {
+          renderCartState();
+        }
+      }
+    });
+
     renderProducts().catch(() => {
       showLoadFailureState();
+    });
+
+    renderCartState();
+    renderCartDrawer();
+    fetchCart().catch(() => {
+      renderCartState();
     });
   </script>
 </body>
