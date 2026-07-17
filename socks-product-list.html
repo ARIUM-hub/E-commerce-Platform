@@ -524,6 +524,49 @@
       text-decoration: line-through;
     }
 
+    .product-card__rating {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: nowrap;
+      min-width: 0;
+    }
+
+    .product-card__stars {
+      color: #4a4a4a;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .product-card__rating-value {
+      color: #111111;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .product-card__reviews {
+      color: #666666;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .product-card__top-rated {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #dddddd;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #f3f3f3;
+      color: #444444;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
     .product-card__sizes {
       display: flex;
       flex-wrap: wrap;
@@ -754,6 +797,29 @@
       `;
     }
 
+    function formatRatingValue(ratingValue) {
+      return Number(ratingValue).toFixed(1);
+    }
+
+    function formatReviewCount(reviewCount) {
+      return `${reviewCount.toLocaleString("en-US")} reviews`;
+    }
+
+    function createRatingMarkup(product) {
+      const topRatedMarkup = product.isTopRated
+        ? '<span class="product-card__top-rated" data-top-rated>Top rated</span>'
+        : "";
+
+      return `
+        <div class="product-card__rating" data-rating-band>
+          <span class="product-card__stars" data-rating-stars aria-hidden="true">★★★★★</span>
+          <span class="product-card__rating-value" data-rating-value>${formatRatingValue(product.ratingValue)}</span>
+          <span class="product-card__reviews" data-review-count>${formatReviewCount(product.reviewCount)}</span>
+          ${topRatedMarkup}
+        </div>
+      `;
+    }
+
     function createCardMarkup(product) {
       const sizeButtons = product.sizes
         .map((size, index) => {
@@ -780,11 +846,12 @@
               <h2 class="product-card__title">${product.title}</h2>
               <p class="product-card__name">${product.categoryLabel}</p>
             </div>
-            <p class="product-card__description">${product.description}</p>
             <div class="product-card__price">
               <span class="product-card__price-current">¥${product.price}</span>
               <span class="product-card__price-original">¥${product.originalPrice}</span>
             </div>
+            ${createRatingMarkup(product)}
+            <p class="product-card__description">${product.description}</p>
             <div class="product-card__sizes" aria-label="${product.title} 可选尺码">
               ${sizeButtons}
             </div>

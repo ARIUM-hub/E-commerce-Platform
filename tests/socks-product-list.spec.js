@@ -135,6 +135,27 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
   expect(gridColumns).toBe(3);
 });
 
+test("renders rating, review count, and top rated tag inside the first product card", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  const firstCard = page.locator("[data-product-card]").first();
+  await expect(firstCard.locator("[data-rating-band]")).toBeVisible();
+  await expect(firstCard.locator("[data-rating-stars]")).toHaveText("★★★★★");
+  await expect(firstCard.locator("[data-rating-value]")).toHaveText("4.7");
+  await expect(firstCard.locator("[data-review-count]")).toHaveText("1,284 reviews");
+  await expect(firstCard.locator("[data-top-rated]")).toHaveText("Top rated");
+});
+
+test("does not show the top rated tag for products that are not top rated", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  const sock05Card = page.locator('[data-product-card][data-product-id="sock-05"]');
+  await expect(sock05Card.locator("[data-rating-band]")).toBeVisible();
+  await expect(sock05Card.locator("[data-rating-value]")).toHaveText("4.6");
+  await expect(sock05Card.locator("[data-review-count]")).toHaveText("973 reviews");
+  await expect(sock05Card.locator("[data-top-rated]")).toHaveCount(0);
+});
+
 test("filters the list by category and updates the result count", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
