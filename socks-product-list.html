@@ -25,6 +25,9 @@
       margin: 0;
       min-height: 100vh;
       padding: 32px 20px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
       background: linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 100%);
       font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       color: var(--text-main);
@@ -37,6 +40,337 @@
     .page {
       width: min(1180px, 100%);
       margin: 0 auto;
+    }
+
+    .page-shell,
+    .site-header,
+    .site-footer {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .site-header {
+      display: grid;
+      gap: 12px;
+    }
+
+    .site-header__utility,
+    .site-header__main,
+    .site-header__nav,
+    .site-footer {
+      border: 1px solid #e5e5e5;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+    }
+
+    .site-header__utility {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px;
+      border-radius: 24px;
+    }
+
+    .site-header__utility-copy,
+    .site-header__utility-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .site-header__utility-copy {
+      color: #4f4f4f;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .site-header__utility-divider {
+      width: 1px;
+      height: 12px;
+      background: #d8d8d8;
+    }
+
+    .site-header__utility-link {
+      color: #5f5f5f;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .site-header__utility-link:hover {
+      color: #111111;
+    }
+
+    .site-header__main {
+      display: grid;
+      grid-template-columns: minmax(0, 220px) minmax(0, 150px) minmax(0, 1fr) minmax(0, 250px);
+      align-items: center;
+      gap: 16px;
+      padding: 18px 20px;
+      border-radius: 28px;
+    }
+
+    .site-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .site-brand__eyebrow,
+    .site-department__label,
+    .site-action__eyebrow,
+    .site-footer__eyebrow,
+    .storefront-entry-card__eyebrow {
+      color: #7a7a7a;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .site-brand__title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .site-department {
+      display: grid;
+      gap: 4px;
+      padding: 12px 14px;
+      border: 1px solid #ececec;
+      border-radius: 18px;
+      background: #fafafa;
+    }
+
+    .site-department__value {
+      color: #202020;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .site-search {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .site-search__input {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid #d6d6d6;
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: #ffffff;
+      color: #222222;
+      font: inherit;
+      font-size: 14px;
+    }
+
+    .site-search__input:focus {
+      outline: 2px solid #111111;
+      outline-offset: 2px;
+    }
+
+    .site-search__submit {
+      border: 0;
+      border-radius: 18px;
+      padding: 14px 18px;
+      background: #111111;
+      color: #ffffff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .site-search__submit:hover {
+      background: #222222;
+    }
+
+    .site-header__actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .site-action {
+      display: grid;
+      gap: 4px;
+      padding: 12px 14px;
+      border: 1px solid #ececec;
+      border-radius: 18px;
+      background: #fafafa;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .site-action__value {
+      color: #202020;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .site-header__nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      border-radius: 22px;
+    }
+
+    .site-header__nav-link {
+      border: 1px solid #dedede;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: #ffffff;
+      color: #3f3f3f;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+    }
+
+    .site-header__nav-link:hover,
+    .site-header__nav-link.is-active {
+      border-color: #111111;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .site-header__nav-link--ghost {
+      background: #f4f4f4;
+    }
+
+    .locale-switcher {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 16px;
+    }
+
+    .locale-switcher__group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid #e2e2e2;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
+    }
+
+    .locale-switcher__button {
+      min-width: 88px;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: transparent;
+      color: #555555;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+
+    .locale-switcher__button.is-active {
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .site-header .locale-switcher {
+      margin: 0;
+    }
+
+    .site-header .locale-switcher__group {
+      background: #f7f7f7;
+      box-shadow: none;
+    }
+
+    body[data-view="order"] .page {
+      width: min(920px, 100%);
+    }
+
+    body[data-view="detail"] .page {
+      width: min(1040px, 100%);
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .order-view,
+    .detail-view {
+      display: grid;
+      gap: 20px;
+    }
+
+    .storefront-entry-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .storefront-entry-card {
+      display: grid;
+      gap: 10px;
+      min-height: 168px;
+      padding: 20px;
+      border: 1px solid #e8e8e8;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 245, 245, 0.96) 100%);
+      color: inherit;
+      text-decoration: none;
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.05);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .storefront-entry-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.08);
+    }
+
+    .storefront-entry-card__title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+    }
+
+    .storefront-entry-card__copy {
+      margin: 0;
+      color: #5f5f5f;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .storefront-entry-card__cta {
+      margin-top: auto;
+      color: #1f1f1f;
+      font-size: 13px;
+      font-weight: 700;
     }
 
     .hero {
@@ -324,6 +658,26 @@
       gap: 8px;
     }
 
+    .cart-drawer__item-secondary-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .cart-drawer__item-link {
+      color: #3f3f3f;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .cart-drawer__item-link:hover {
+      color: #111111;
+    }
+
     .cart-drawer__qty-button {
       width: 34px;
       height: 34px;
@@ -369,12 +723,126 @@
       line-height: 1.7;
     }
 
+    .cart-drawer__confirmation {
+      padding: 22px 20px;
+      border: 1px solid #e7e7e7;
+      border-radius: 22px;
+      background: #fbfbfb;
+    }
+
+    .cart-drawer__confirmation-eyebrow {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cart-drawer__confirmation-title {
+      margin: 0 0 10px;
+      font-size: 26px;
+      line-height: 1.1;
+    }
+
+    .cart-drawer__confirmation-copy {
+      margin: 0 0 16px;
+      color: #666666;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .cart-drawer__confirmation-grid {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .cart-drawer__confirmation-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      color: #666666;
+      font-size: 13px;
+    }
+
+    .cart-drawer__confirmation-value {
+      color: #111111;
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .cart-drawer__confirmation-action {
+      width: 100%;
+      border: 1px solid #d7d7d7;
+      border-radius: 16px;
+      padding: 13px 14px;
+      background: #ffffff;
+      color: #222222;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 160ms ease, background-color 160ms ease;
+    }
+
+    .cart-drawer__confirmation-action:hover {
+      border-color: #111111;
+      background: #f7f7f7;
+    }
+
     .cart-drawer__footer {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding-top: 6px;
+    }
+
+    .cart-drawer__summary {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px 16px;
+      border: 1px solid #ebebeb;
+      border-radius: 18px;
+      background: #fafafa;
+    }
+
+    .cart-drawer__summary-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
+      color: #666666;
+      font-size: 13px;
+    }
+
+    .cart-drawer__summary-value {
+      color: #1f1f1f;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .cart-drawer__summary-value--savings {
+      color: #444444;
+    }
+
+    .cart-drawer__footer-main {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
       gap: 14px;
-      padding-top: 6px;
+    }
+
+    .cart-drawer__footer-heading {
+      margin: 0 0 6px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     .cart-drawer__footer-copy {
@@ -388,6 +856,101 @@
       font-size: 28px;
       font-weight: 800;
       letter-spacing: -0.04em;
+    }
+
+    .cart-drawer__checkout {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 2px 0;
+    }
+
+    .cart-drawer__delivery-summary {
+      color: #2a2a2a;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .cart-drawer__trust-copy {
+      color: #6c6c6c;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .cart-drawer__checkout-button {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 15px 16px;
+      background: #111111;
+      color: #ffffff;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 160ms ease, opacity 160ms ease, transform 160ms ease;
+    }
+
+    .cart-drawer__checkout-button:hover:not(:disabled) {
+      background: #222222;
+    }
+
+    .cart-drawer__checkout-button:active:not(:disabled) {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .cart-drawer__checkout-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .site-footer {
+      display: grid;
+      gap: 20px;
+      padding: 24px 24px 22px;
+      border-radius: 28px;
+    }
+
+    .site-footer__top {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .site-footer__brand-title {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .site-footer__brand-copy,
+    .site-footer__list {
+      margin: 0;
+      color: #5f5f5f;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .site-footer__column {
+      display: grid;
+      gap: 10px;
+    }
+
+    .site-footer__list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .site-footer__bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-top: 18px;
+      border-top: 1px solid #ececec;
+      color: #6a6a6a;
+      font-size: 13px;
     }
 
     .product-grid {
@@ -505,6 +1068,88 @@
       line-height: 1.7;
     }
 
+    .product-card__commerce {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid #ededed;
+      border-radius: 18px;
+      background: #fafafa;
+    }
+
+    .product-card__shipping {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .product-card__shipping-label {
+      color: #1f1f1f;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .product-card__delivery-estimate {
+      color: #666666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .product-card__stock {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      min-height: 32px;
+      border: 1px solid #e0e0e0;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #f1f1f1;
+      color: #555555;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .product-card__stock[data-low-stock="true"] {
+      border-color: #cfcfcf;
+      background: #e7e7e7;
+      color: #202020;
+    }
+
+    .product-card__social-proof {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .product-card__bestseller {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid #dbdbdb;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #f4f4f4;
+      color: #333333;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .product-card__recently-bought {
+      color: #5f5f5f;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
     .product-card__price {
       display: flex;
       align-items: baseline;
@@ -617,6 +1262,17 @@
       transform: translateY(1px) scale(0.99);
     }
 
+    .product-card__detail-link {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      color: #111111;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
     .empty-state {
       padding: 42px 28px;
       border: 1px dashed #d6d6d6;
@@ -625,6 +1281,623 @@
       color: #5f5f5f;
       text-align: center;
       font-size: 16px;
+    }
+
+    .detail-panel {
+      padding: 24px;
+      border: 1px solid #e6e6e6;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.08);
+    }
+
+    .detail-hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .detail-back-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      border: 1px solid #d5d5d5;
+      border-radius: 16px;
+      padding: 0 18px;
+      background: #ffffff;
+      color: #222222;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .detail-cart {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 0 14px;
+      border: 1px solid #e3e3e3;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.96);
+      color: #444444;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      transition: border-color 180ms ease, transform 180ms ease;
+    }
+
+    .detail-cart:hover {
+      border-color: #111111;
+      transform: translateY(-1px);
+    }
+
+    .detail-cart__label {
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-cart__count {
+      min-width: 34px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #111111;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .detail-cart__summary {
+      color: #5f5f5f;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .detail-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .detail-source {
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px;
+      border: 1px solid #e7e7e7;
+      border-radius: 18px;
+      background: #fafafa;
+    }
+
+    .detail-source--compact {
+      gap: 0;
+    }
+
+    .detail-source__link {
+      color: #222222;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .detail-source__link:hover {
+      color: #111111;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .detail-source__sort {
+      margin: 0;
+      color: #6b6b6b;
+      font-size: 12px;
+    }
+
+    .detail-breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      color: #6b6b6b;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .detail-breadcrumb__link,
+    .detail-breadcrumb__segment {
+      color: inherit;
+    }
+
+    .detail-breadcrumb__link {
+      text-decoration: none;
+    }
+
+    .detail-breadcrumb__link:hover {
+      color: #111111;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .detail-breadcrumb__divider {
+      color: #a2a2a2;
+    }
+
+    .detail-breadcrumb__segment.is-current {
+      color: #111111;
+      font-weight: 700;
+    }
+
+    .detail-visual {
+      position: relative;
+      min-height: 460px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #ececec;
+      border-radius: 28px;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e7e7e7 100%);
+      overflow: hidden;
+    }
+
+    .detail-visual__badge {
+      position: absolute;
+      top: 22px;
+      left: 22px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: #111111;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .detail-visual__tag {
+      position: absolute;
+      top: 22px;
+      right: 22px;
+      border: 1px solid #d7d7d7;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #555555;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .detail-visual__sock {
+      width: 280px;
+      height: 280px;
+      display: grid;
+      place-items: center;
+    }
+
+    .detail-visual__sock .product-card__illustration {
+      width: 280px;
+      height: 280px;
+    }
+
+    .detail-content {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .detail-sections {
+      display: grid;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .detail-section {
+      padding-top: 4px;
+    }
+
+    .detail-section__eyebrow {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-section__title {
+      margin: 0 0 14px;
+      font-size: 26px;
+      line-height: 1.1;
+    }
+
+    .detail-nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .detail-nav__link {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 92px;
+      padding: 16px;
+      border: 1px solid #e4e4e4;
+      border-radius: 22px;
+      background: #ffffff;
+      color: #222222;
+      text-decoration: none;
+      transition: border-color 180ms ease, transform 180ms ease;
+    }
+
+    .detail-nav__link:hover {
+      border-color: #111111;
+      transform: translateY(-1px);
+    }
+
+    .detail-nav__link[aria-disabled="true"] {
+      cursor: not-allowed;
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .detail-nav__direction {
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-nav__title {
+      color: #111111;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .detail-nav__meta {
+      color: #666666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .detail-recommendations {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .detail-recommendation-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 160px;
+      padding: 18px;
+      border: 1px solid #ececec;
+      border-radius: 22px;
+      background: #ffffff;
+      color: inherit;
+      text-decoration: none;
+      transition: transform 180ms ease, border-color 180ms ease;
+    }
+
+    .detail-recommendation-card:hover {
+      border-color: #111111;
+      transform: translateY(-2px);
+    }
+
+    .detail-recommendation-card__series {
+      margin: 0;
+      color: #7a7a7a;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-recommendation-card__title {
+      margin: 0;
+      color: #111111;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .detail-recommendation-card__price {
+      margin: 0;
+      color: #111111;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .detail-recommendation-card__meta {
+      margin: 0;
+      color: #666666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .detail-recommendations__empty {
+      color: #666666;
+      line-height: 1.7;
+    }
+
+    .detail-content__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .detail-content__price {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .detail-content__price-current {
+      color: #111111;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .detail-content__price-original {
+      color: #8a8a8a;
+      font-size: 16px;
+      text-decoration: line-through;
+    }
+
+    .detail-content__release {
+      color: #666666;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .detail-content__cta {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 15px 16px;
+      background: #111111;
+      color: #ffffff;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
+    }
+
+    .detail-content__cta:hover {
+      background: #222222;
+    }
+
+    .detail-content__cta:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .detail-content__cta:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .detail-empty-state {
+      padding: 8px 0;
+      text-align: center;
+    }
+
+    .detail-empty-state__title {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+
+    .detail-empty-state__copy {
+      margin: 0;
+      color: #666666;
+      line-height: 1.7;
+    }
+
+    .order-panel {
+      padding: 24px;
+      border: 1px solid #e6e6e6;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.08);
+    }
+
+    .order-hero__title {
+      font-size: clamp(34px, 6vw, 54px);
+      line-height: 1.02;
+    }
+
+    .order-hero__copy {
+      max-width: 560px;
+    }
+
+    .order-stack {
+      display: grid;
+      gap: 20px;
+    }
+
+    .order-summary {
+      display: grid;
+      gap: 14px;
+    }
+
+    .order-summary__row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 14px 0;
+      border-bottom: 1px solid #ededed;
+      color: #666666;
+      font-size: 14px;
+    }
+
+    .order-summary__row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .order-summary__value {
+      color: #111111;
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .order-panel__eyebrow {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .order-panel__title {
+      margin: 0 0 14px;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .order-source {
+      display: grid;
+      gap: 4px;
+      min-width: 220px;
+      padding: 12px 14px;
+      border: 1px solid #e8e8e8;
+      border-radius: 16px;
+      background: #fafafa;
+    }
+
+    .order-source__title {
+      margin: 0;
+      color: #111111;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .order-source__copy {
+      margin: 0;
+      color: #6b6b6b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .order-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 50px;
+      border-radius: 16px;
+      padding: 0 18px;
+      text-decoration: none;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .order-button--primary {
+      border: 0;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .order-button--secondary {
+      border: 1px solid #d5d5d5;
+      background: #ffffff;
+      color: #222222;
+    }
+
+    .order-button--secondary:hover {
+      border-color: #111111;
+      background: #f7f7f7;
+    }
+
+    .order-empty-state {
+      text-align: center;
+    }
+
+    .order-empty-state__title {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+
+    .order-empty-state__copy {
+      margin: 0;
+      color: #666666;
+      line-height: 1.7;
+    }
+
+    .recommendations {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .recommendation-card {
+      border: 1px solid #ececec;
+      border-radius: 22px;
+      background: #ffffff;
+      padding: 18px;
+    }
+
+    .recommendation-card__series {
+      margin: 0 0 8px;
+      color: #7a7a7a;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .recommendation-card__title {
+      margin: 0 0 10px;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .recommendation-card__price {
+      margin: 0 0 8px;
+      color: #111111;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .recommendation-card__delivery {
+      margin: 0;
+      color: #666666;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .recommendations__empty {
+      color: #666666;
+      line-height: 1.7;
     }
 
     @media (max-width: 960px) {
@@ -645,49 +1918,354 @@
       .product-grid {
         grid-template-columns: 1fr;
       }
+
+      .detail-panel {
+        padding: 20px;
+      }
+
+      .detail-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-nav {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-recommendations {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-visual {
+        min-height: 360px;
+      }
+
+      .detail-visual__sock {
+        width: 220px;
+        height: 220px;
+      }
+
+      .detail-visual__sock .product-card__illustration {
+        width: 220px;
+        height: 220px;
+      }
+
+      .product-card__commerce {
+        gap: 8px;
+        padding: 12px;
+      }
+
+      .product-card__shipping-label,
+      .product-card__delivery-estimate {
+        font-size: 12px;
+      }
+
+      .product-card__stock {
+        min-height: 30px;
+        padding: 5px 9px;
+        font-size: 11px;
+      }
+
+      .product-card__social-proof {
+        gap: 6px;
+      }
+
+      .product-card__bestseller {
+        min-height: 26px;
+        padding: 4px 7px;
+        font-size: 10px;
+      }
+
+      .product-card__recently-bought {
+        font-size: 11px;
+      }
+
+      .cart-drawer__summary {
+        padding: 12px 14px;
+      }
+
+      .cart-drawer__summary-row {
+        font-size: 12px;
+      }
+
+      .cart-drawer__footer-main {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .cart-drawer__delivery-summary {
+        font-size: 12px;
+      }
+
+      .cart-drawer__trust-copy {
+        font-size: 11px;
+      }
+
+      .cart-drawer__confirmation-title {
+        font-size: 22px;
+      }
+
+      .cart-drawer__confirmation-row {
+        font-size: 12px;
+      }
+
+      .order-panel {
+        padding: 20px;
+      }
+
+      .order-summary__row {
+        gap: 14px;
+        font-size: 13px;
+      }
+
+      .order-panel__title {
+        font-size: 24px;
+      }
+
+      .order-actions {
+        flex-direction: column;
+      }
+
+      .order-button {
+        width: 100%;
+      }
+
+      .detail-back-link {
+        width: 100%;
+      }
+
+      .recommendations {
+        grid-template-columns: 1fr;
+      }
+
+      .site-header__utility {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .site-header__main {
+        grid-template-columns: 1fr;
+      }
+
+      .site-header__actions {
+        grid-template-columns: 1fr;
+      }
+
+      .site-search {
+        grid-template-columns: 1fr;
+      }
+
+      .storefront-entry-grid,
+      .site-footer__top {
+        grid-template-columns: 1fr;
+      }
+
+      .site-footer__bottom {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="page">
-    <section class="hero">
-      <p class="hero__eyebrow">Cotton Daily</p>
-      <h1 class="hero__title">袜子专区</h1>
-      <p class="hero__description">精选黑白灰日常袜、运动袜与轻量通勤款，延续简约电商风格，专注舒适穿着与基础百搭感。</p>
-    </section>
-
-    <section class="toolbar" data-toolbar>
-      <div class="toolbar__group">
-        <span class="toolbar__label">分类</span>
-        <button class="toolbar__chip is-active" type="button" data-filter="all">全部</button>
-        <button class="toolbar__chip" type="button" data-filter="sport">运动袜</button>
-        <button class="toolbar__chip" type="button" data-filter="daily">日常袜</button>
-        <button class="toolbar__chip" type="button" data-filter="crew">中筒袜</button>
-        <button class="toolbar__chip" type="button" data-filter="no-show">船袜</button>
+  <header class="site-header" data-site-header>
+    <div class="site-header__utility">
+      <div class="site-header__utility-copy">
+        <span data-site-utility-promo>黑白灰成人袜满 ¥99 包邮</span>
+        <span class="site-header__utility-divider" aria-hidden="true"></span>
+        <span data-site-utility-service>袜子频道演示商城</span>
       </div>
-      <div class="toolbar__group">
-        <span class="toolbar__label">排序</span>
-        <button class="toolbar__chip is-active" type="button" data-sort="recommended">推荐</button>
-        <button class="toolbar__chip" type="button" data-sort="price-asc">价格从低到高</button>
-        <button class="toolbar__chip" type="button" data-sort="price-desc">价格从高到低</button>
-        <button class="toolbar__chip" type="button" data-sort="newest">最新上架</button>
+      <div class="site-header__utility-actions">
+        <a class="site-header__utility-link" href="/socks-product-list.html" data-site-help-link>帮助中心</a>
+        <a class="site-header__utility-link" href="/socks-product-list.html" data-site-returns-link>退换说明</a>
+        <section class="locale-switcher" data-locale-switcher aria-label="Language switcher">
+          <div class="locale-switcher__group" role="group" aria-label="Language switcher">
+            <button class="locale-switcher__button is-active" type="button" data-locale-option="zh-CN" aria-pressed="true">中文</button>
+            <button class="locale-switcher__button" type="button" data-locale-option="en-US" aria-pressed="false">English</button>
+          </div>
+        </section>
       </div>
-      <button class="toolbar__cart" type="button" data-cart-toggle aria-label="打开购物车" aria-expanded="false" aria-controls="cart-drawer">
-        <span class="toolbar__cart-label">购物车</span>
-        <span class="toolbar__cart-count" data-cart-count>0</span>
-        <span class="toolbar__cart-summary" data-cart-summary>购物车 0 件</span>
-      </button>
-      <p class="toolbar__result" data-result-count></p>
-    </section>
+    </div>
 
-    <section class="product-grid" data-product-grid></section>
+    <div class="site-header__main">
+      <a class="site-brand" href="/socks-product-list.html">
+        <span class="site-brand__eyebrow" data-site-brand-eyebrow>SOCKS DEPOT</span>
+        <span class="site-brand__title" data-site-brand-title>袜子专区</span>
+      </a>
+      <div class="site-department" data-site-department>
+        <span class="site-department__label" data-site-department-label>部门</span>
+        <span class="site-department__value" data-site-department-value>成人袜子</span>
+      </div>
+      <form class="site-search" data-site-search-form>
+        <label class="sr-only" for="site-search-input" data-site-search-label>搜索袜子</label>
+        <input
+          id="site-search-input"
+          class="site-search__input"
+          type="search"
+          autocomplete="off"
+          data-site-search-input
+          placeholder="搜索袜子标题、描述或分类"
+        >
+        <button class="site-search__submit" type="submit" data-site-search-submit>搜索</button>
+      </form>
+      <div class="site-header__actions">
+        <a class="site-action" href="/socks-product-list.html" data-site-account-link>
+          <span class="site-action__eyebrow" data-site-account-label>账户</span>
+          <span class="site-action__value" data-site-account-value>匿名访客</span>
+        </a>
+        <a class="site-action" href="/socks-product-list.html?view=order" data-site-orders-link>
+          <span class="site-action__eyebrow" data-site-orders-label>订单</span>
+          <span class="site-action__value" data-site-orders-value>查看记录</span>
+        </a>
+      </div>
+    </div>
+
+    <nav class="site-header__nav" data-site-channel-nav>
+      <a class="site-header__nav-link is-active" href="/socks-product-list.html" data-site-nav-filter="all">全部袜子</a>
+      <a class="site-header__nav-link" href="/socks-product-list.html?filter=sport" data-site-nav-filter="sport">运动训练</a>
+      <a class="site-header__nav-link" href="/socks-product-list.html?filter=daily" data-site-nav-filter="daily">日常补货</a>
+      <a class="site-header__nav-link" href="/socks-product-list.html?filter=crew" data-site-nav-filter="crew">中筒基础</a>
+      <a class="site-header__nav-link" href="/socks-product-list.html?filter=no-show" data-site-nav-filter="no-show">船袜轻装</a>
+      <a class="site-header__nav-link site-header__nav-link--ghost" href="/socks-product-list.html?q=%E9%80%9F%E5%B9%B2" data-site-nav-query="速干">速干训练</a>
+      <a class="site-header__nav-link site-header__nav-link--ghost" href="/socks-product-list.html?q=%E8%88%B9%E8%A2%9C" data-site-nav-query="船袜">船袜搜索</a>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    <div class="page" data-page>
+      <div data-storefront-view>
+        <section class="storefront-entry-grid" data-storefront-entry-grid>
+          <a class="storefront-entry-card" href="/socks-product-list.html?filter=sport" data-entry-filter="sport">
+            <p class="storefront-entry-card__eyebrow" data-entry-sport-eyebrow>训练导购</p>
+            <h2 class="storefront-entry-card__title" data-entry-sport-title>快速进入运动袜</h2>
+            <p class="storefront-entry-card__copy" data-entry-sport-copy>压缩支撑与速干面料集中在同一组结果里，适合直接比较训练场景商品。</p>
+            <span class="storefront-entry-card__cta" data-entry-sport-cta>查看运动分类</span>
+          </a>
+          <a class="storefront-entry-card" href="/socks-product-list.html?filter=daily" data-entry-filter="daily">
+            <p class="storefront-entry-card__eyebrow" data-entry-daily-eyebrow>日常补货</p>
+            <h2 class="storefront-entry-card__title" data-entry-daily-title>聚合通勤与基础款</h2>
+            <p class="storefront-entry-card__copy" data-entry-daily-copy>围绕高频日穿款做快速浏览，适合先看黑白灰基础组合与罗口经典款。</p>
+            <span class="storefront-entry-card__cta" data-entry-daily-cta>查看日常分类</span>
+          </a>
+          <a class="storefront-entry-card" href="/socks-product-list.html?q=%E4%B8%AD%E7%AD%92" data-entry-query="中筒">
+            <p class="storefront-entry-card__eyebrow" data-entry-crew-eyebrow>搜索引导</p>
+            <h2 class="storefront-entry-card__title" data-entry-crew-title>按“中筒”直达相关结果</h2>
+            <p class="storefront-entry-card__copy" data-entry-crew-copy>搜索会真实作用于标题、描述和分类字段，方便模拟商城站内检索体验。</p>
+            <span class="storefront-entry-card__cta" data-entry-crew-cta>执行中筒搜索</span>
+          </a>
+          <a class="storefront-entry-card" href="/socks-product-list.html?q=%E8%88%B9%E8%A2%9C" data-entry-query="船袜">
+            <p class="storefront-entry-card__eyebrow" data-entry-noshow-eyebrow>轻装专区</p>
+            <h2 class="storefront-entry-card__title" data-entry-noshow-title>直达船袜与低帮场景</h2>
+            <p class="storefront-entry-card__copy" data-entry-noshow-copy>把更偏夏季和轻量穿着的结果单独收束，做出更像真实频道入口的层级感。</p>
+            <span class="storefront-entry-card__cta" data-entry-noshow-cta>执行船袜搜索</span>
+          </a>
+        </section>
+
+        <section class="hero">
+        <p class="hero__eyebrow">Cotton Daily</p>
+        <h1 class="hero__title" data-storefront-title>袜子专区</h1>
+        <p class="hero__description" data-storefront-description>精选黑白灰日常袜、运动袜与轻量通勤款，延续简约电商风格，专注舒适穿着与基础百搭感。</p>
+      </section>
+
+      <section class="toolbar" data-toolbar>
+        <div class="toolbar__group">
+          <span class="toolbar__label" data-toolbar-filter-label>分类</span>
+          <button class="toolbar__chip is-active" type="button" data-filter="all">全部</button>
+          <button class="toolbar__chip" type="button" data-filter="sport">运动袜</button>
+          <button class="toolbar__chip" type="button" data-filter="daily">日常袜</button>
+          <button class="toolbar__chip" type="button" data-filter="crew">中筒袜</button>
+          <button class="toolbar__chip" type="button" data-filter="no-show">船袜</button>
+        </div>
+        <div class="toolbar__group">
+          <span class="toolbar__label" data-toolbar-sort-label>排序</span>
+          <button class="toolbar__chip is-active" type="button" data-sort="recommended">推荐</button>
+          <button class="toolbar__chip" type="button" data-sort="price-asc">价格从低到高</button>
+          <button class="toolbar__chip" type="button" data-sort="price-desc">价格从高到低</button>
+          <button class="toolbar__chip" type="button" data-sort="newest">最新上架</button>
+        </div>
+        <button class="toolbar__cart" type="button" data-cart-toggle aria-label="打开购物车" aria-expanded="false" aria-controls="cart-drawer">
+          <span class="toolbar__cart-label" data-cart-label>购物车</span>
+          <span class="toolbar__cart-count" data-cart-count>0</span>
+          <span class="toolbar__cart-summary" data-cart-summary>购物车 0 件</span>
+        </button>
+        <p class="toolbar__result" data-result-count></p>
+      </section>
+
+      <section class="product-grid" data-product-grid></section>
+    </div>
+
+    <div class="detail-view" data-detail-view hidden>
+      <section class="hero">
+        <p class="hero__eyebrow" data-detail-page-series>商品详情</p>
+        <h1 class="hero__title" data-detail-page-title>正在加载商品</h1>
+        <p class="hero__description" data-detail-page-description>正在准备所选商品的详情视图。</p>
+        <div class="detail-hero__actions">
+          <a class="detail-back-link" href="/socks-product-list.html" data-detail-back-link>返回商城</a>
+          <button class="detail-cart" type="button" data-detail-cart-toggle aria-label="打开详情购物车" aria-expanded="false" aria-controls="cart-drawer">
+            <span class="detail-cart__label" data-detail-cart-label>购物车</span>
+            <span class="detail-cart__count" data-detail-cart-count>0</span>
+            <span class="detail-cart__summary" data-detail-cart-summary>购物车 0 件</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="detail-panel" data-detail-page-panel></section>
+    </div>
+
+    <div class="order-view" data-order-view hidden>
+      <section class="hero">
+        <p class="hero__eyebrow" data-order-hero-eyebrow>演示订单</p>
+        <h1 class="hero__title order-hero__title" data-page-title>订单已确认</h1>
+        <p class="hero__description order-hero__copy" data-page-copy>当前浏览器会话中的演示订单已经记录完成。</p>
+      </section>
+
+      <section class="order-panel" data-order-page-panel></section>
+      </div>
+    </div>
   </main>
+
+  <footer class="site-footer" data-site-footer>
+    <div class="site-footer__top">
+      <section>
+        <p class="site-footer__eyebrow" data-site-footer-eyebrow>Storefront</p>
+        <p class="site-footer__brand-title" data-site-footer-title>袜子专区</p>
+        <p class="site-footer__brand-copy" data-site-footer-copy>单一袜子主营类目下的高信息密度商城演示，统一承接列表、详情、购物车和订单流程。</p>
+      </section>
+      <section class="site-footer__column">
+        <p class="site-footer__eyebrow" data-site-footer-help-title>购买帮助</p>
+        <div class="site-footer__list" data-site-footer-help-list>
+          <span>尺码建议</span>
+          <span>面料说明</span>
+          <span>组合搭配</span>
+        </div>
+      </section>
+      <section class="site-footer__column">
+        <p class="site-footer__eyebrow" data-site-footer-delivery-title>配送说明</p>
+        <div class="site-footer__list" data-site-footer-delivery-list>
+          <span>匿名购物车同步</span>
+          <span>预计送达展示</span>
+          <span>包邮与优惠汇总</span>
+        </div>
+      </section>
+      <section class="site-footer__column">
+        <p class="site-footer__eyebrow" data-site-footer-support-title>支持与政策</p>
+        <div class="site-footer__list" data-site-footer-support-list>
+          <span>退换说明</span>
+          <span>订单来源提示</span>
+          <span>中英双语切换</span>
+        </div>
+      </section>
+    </div>
+    <div class="site-footer__bottom">
+      <span data-site-footer-locale-note>当前页面支持中文与英文商城文案切换。</span>
+      <span data-site-footer-copyright>© 2026 Socks Depot Demo</span>
+    </div>
+  </footer>
 
   <aside class="cart-drawer" id="cart-drawer" data-cart-drawer data-open="false" aria-hidden="true">
     <div class="cart-drawer__header">
       <div>
-        <p class="cart-drawer__eyebrow">Cart State</p>
-        <h2 class="cart-drawer__title">购物车明细</h2>
+        <p class="cart-drawer__eyebrow" data-cart-drawer-eyebrow>Cart State</p>
+        <h2 class="cart-drawer__title" data-cart-drawer-title>购物车明细</h2>
         <p class="cart-drawer__meta" data-cart-drawer-meta>共 0 件商品</p>
       </div>
       <button class="cart-drawer__close" type="button" data-cart-close aria-label="关闭购物车">关闭</button>
@@ -696,9 +2274,31 @@
       <div class="cart-drawer__empty" data-cart-empty-state>购物车还是空的</div>
     </div>
     <div class="cart-drawer__footer">
-      <div>
-        <p class="cart-drawer__footer-copy">你可以继续加购，抽屉会同步展示当前匿名购物车状态。</p>
+      <div class="cart-drawer__summary" data-cart-summary-breakdown>
+        <div class="cart-drawer__summary-row">
+          <span data-cart-subtotal-label>原价小计</span>
+          <span class="cart-drawer__summary-value" data-cart-subtotal>¥0</span>
+        </div>
+        <div class="cart-drawer__summary-row">
+          <span data-cart-savings-label>优惠</span>
+          <span class="cart-drawer__summary-value cart-drawer__summary-value--savings" data-cart-savings>¥0</span>
+        </div>
+        <div class="cart-drawer__summary-row">
+          <span data-cart-shipping-label>配送</span>
+          <span class="cart-drawer__summary-value" data-cart-shipping>包邮</span>
+        </div>
+      </div>
+      <div class="cart-drawer__footer-main">
+        <div>
+          <p class="cart-drawer__footer-heading" data-cart-total-label>预计总计</p>
+          <p class="cart-drawer__footer-copy" data-cart-footer-copy>你可以继续加购，抽屉会同步展示当前匿名购物车状态。</p>
+        </div>
         <p class="cart-drawer__footer-total" data-cart-total>¥0</p>
+      </div>
+      <div class="cart-drawer__checkout">
+        <p class="cart-drawer__delivery-summary" data-cart-delivery-summary>加入商品后可查看配送时间</p>
+        <p class="cart-drawer__trust-copy" data-cart-trust-copy>此演示商城使用安全结账流程</p>
+        <button class="cart-drawer__checkout-button" type="button" data-cart-checkout disabled>去结算</button>
       </div>
       <button class="cart-drawer__action" type="button" data-clear-cart>清空购物车</button>
     </div>
@@ -721,26 +2321,566 @@
       NEWEST: "newest"
     };
 
+    const LOCALE_KEY = {
+      ZH_CN: "zh-CN",
+      EN_US: "en-US"
+    };
+
+    const STOREFRONT_PATH = "/socks-product-list.html";
+    const ORDER_VIEW_PATH = "/socks-product-list.html?view=order";
+    const DETAIL_VIEW_KEY = "detail";
+    const ORDER_VIEW_KEY = "order";
+    const LOCALE_STORAGE_KEY = "socks-storefront-locale";
+    const pageRoot = document.querySelector("[data-page]");
+    const siteUtilityPromo = document.querySelector("[data-site-utility-promo]");
+    const siteUtilityService = document.querySelector("[data-site-utility-service]");
+    const siteHelpLink = document.querySelector("[data-site-help-link]");
+    const siteReturnsLink = document.querySelector("[data-site-returns-link]");
+    const siteBrandEyebrow = document.querySelector("[data-site-brand-eyebrow]");
+    const siteBrandTitle = document.querySelector("[data-site-brand-title]");
+    const siteDepartmentLabel = document.querySelector("[data-site-department-label]");
+    const siteDepartmentValue = document.querySelector("[data-site-department-value]");
+    const siteSearchForm = document.querySelector("[data-site-search-form]");
+    const siteSearchLabel = document.querySelector("[data-site-search-label]");
+    const siteSearchInput = document.querySelector("[data-site-search-input]");
+    const siteSearchSubmit = document.querySelector("[data-site-search-submit]");
+    const siteAccountLabel = document.querySelector("[data-site-account-label]");
+    const siteAccountValue = document.querySelector("[data-site-account-value]");
+    const siteOrdersLink = document.querySelector("[data-site-orders-link]");
+    const siteOrdersLabel = document.querySelector("[data-site-orders-label]");
+    const siteOrdersValue = document.querySelector("[data-site-orders-value]");
+    const siteNavFilterLinks = Array.from(document.querySelectorAll("[data-site-nav-filter]"));
+    const siteNavQueryLinks = Array.from(document.querySelectorAll("[data-site-nav-query]"));
+    const storefrontEntryFilterLinks = Array.from(document.querySelectorAll("[data-entry-filter]"));
+    const storefrontEntryQueryLinks = Array.from(document.querySelectorAll("[data-entry-query]"));
+    const siteFooterEyebrow = document.querySelector("[data-site-footer-eyebrow]");
+    const siteFooterTitle = document.querySelector("[data-site-footer-title]");
+    const siteFooterCopy = document.querySelector("[data-site-footer-copy]");
+    const siteFooterHelpTitle = document.querySelector("[data-site-footer-help-title]");
+    const siteFooterDeliveryTitle = document.querySelector("[data-site-footer-delivery-title]");
+    const siteFooterSupportTitle = document.querySelector("[data-site-footer-support-title]");
+    const siteFooterLocaleNote = document.querySelector("[data-site-footer-locale-note]");
+    const siteFooterCopyright = document.querySelector("[data-site-footer-copyright]");
+    const storefrontTitle = document.querySelector("[data-storefront-title]");
+    const storefrontDescription = document.querySelector("[data-storefront-description]");
+    const toolbarFilterLabel = document.querySelector("[data-toolbar-filter-label]");
+    const toolbarSortLabel = document.querySelector("[data-toolbar-sort-label]");
+    const localeButtons = Array.from(document.querySelectorAll("[data-locale-option]"));
+    const storefrontView = document.querySelector("[data-storefront-view]");
+    const detailView = document.querySelector("[data-detail-view]");
+    const orderView = document.querySelector("[data-order-view]");
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
+    const detailPagePanel = document.querySelector("[data-detail-page-panel]");
+    const detailPageSeries = document.querySelector("[data-detail-page-series]");
+    const detailPageTitle = document.querySelector("[data-detail-page-title]");
+    const detailPageDescription = document.querySelector("[data-detail-page-description]");
+    const detailBackLink = document.querySelector("[data-detail-back-link]");
+    const detailCartToggleButton = document.querySelector("[data-detail-cart-toggle]");
+    const detailCartCount = document.querySelector("[data-detail-cart-count]");
+    const detailCartSummary = document.querySelector("[data-detail-cart-summary]");
+    const orderPagePanel = document.querySelector("[data-order-page-panel]");
+    const orderHeroEyebrow = document.querySelector("[data-order-hero-eyebrow]");
+    const orderPageTitle = document.querySelector("[data-page-title]");
+    const orderPageCopy = document.querySelector("[data-page-copy]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
+    const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
     const cartSummary = document.querySelector("[data-cart-summary]");
     const cartDrawer = document.querySelector("[data-cart-drawer]");
+    const cartDrawerEyebrow = document.querySelector("[data-cart-drawer-eyebrow]");
+    const cartDrawerTitle = document.querySelector("[data-cart-drawer-title]");
     const cartDrawerMeta = document.querySelector("[data-cart-drawer-meta]");
     const cartDrawerItems = document.querySelector("[data-cart-drawer-items]");
+    const cartSubtotalLabel = document.querySelector("[data-cart-subtotal-label]");
+    const cartSubtotal = document.querySelector("[data-cart-subtotal]");
+    const cartSavingsLabel = document.querySelector("[data-cart-savings-label]");
+    const cartSavings = document.querySelector("[data-cart-savings]");
+    const cartShippingLabel = document.querySelector("[data-cart-shipping-label]");
+    const cartShipping = document.querySelector("[data-cart-shipping]");
+    const cartTotalLabel = document.querySelector("[data-cart-total-label]");
     const cartDrawerTotal = document.querySelector("[data-cart-total]");
+    const cartDeliverySummary = document.querySelector("[data-cart-delivery-summary]");
+    const cartTrustCopy = document.querySelector("[data-cart-trust-copy]");
+    const cartCheckoutButton = document.querySelector("[data-cart-checkout]");
     const cartCloseButton = document.querySelector("[data-cart-close]");
     const cartBackdrop = document.querySelector("[data-cart-backdrop]");
     const clearCartButton = document.querySelector("[data-clear-cart]");
+    const detailCartLabel = document.querySelector("[data-detail-cart-label]");
+    const cartFooterCopy = document.querySelector("[data-cart-footer-copy]");
     const cartFeedbackTimers = new Map();
+    const ORDER_DATE_STAMP = "20260717";
+    const ORDER_CONFIRMATION_STORAGE_KEY = "demoOrderConfirmation";
+    const NAVIGATION_CONTEXT_STORAGE_KEY = "demoNavigationContext";
     let activeFilter = FILTER_KEY.ALL;
     let activeSort = SORT_KEY.RECOMMENDED;
+    let activeQuery = "";
+    let activeLocale = LOCALE_KEY.ZH_CN;
+    let navigationContext = {
+      storefrontHref: STOREFRONT_PATH,
+      filter: FILTER_KEY.ALL,
+      sort: SORT_KEY.RECOMMENDED,
+      query: ""
+    };
     const productCatalog = new Map();
     let cartState = { items: [] };
     let isCartDrawerOpen = false;
     let isCartMutationPending = false;
+    let orderConfirmationState = null;
+    let orderSequence = 0;
+
+    const translations = {
+      [LOCALE_KEY.ZH_CN]: {
+        storefront: {
+          title: "袜子专区",
+          description: "精选黑白灰日常袜、运动袜与轻量通勤款，延续简约电商风格，专注舒适穿着与基础百搭感。"
+        },
+        shell: {
+          promo: "黑白灰成人袜满 ¥99 包邮",
+          service: "袜子频道演示商城",
+          help: "帮助中心",
+          returns: "退换说明",
+          brandEyebrow: "SOCKS DEPOT",
+          departmentLabel: "部门",
+          departmentValue: "成人袜子",
+          searchLabel: "搜索袜子商品",
+          searchPlaceholder: "搜索袜子标题、描述或分类",
+          searchButton: "搜索",
+          accountLabel: "账户",
+          accountValue: "匿名访客",
+          ordersLabel: "订单",
+          ordersValue: "查看记录"
+        },
+        shellNav: {
+          all: "全部袜子",
+          sport: "运动训练",
+          daily: "日常补货",
+          crew: "中筒基础",
+          "no-show": "船袜轻装",
+          quickDry: "速干训练",
+          noShowSearch: "船袜搜索"
+        },
+        entry: {
+          sportEyebrow: "训练导购",
+          sportTitle: "快速进入运动袜",
+          sportCopy: "压缩支撑与速干面料集中在同一组结果里，适合直接比较训练场景商品。",
+          sportCta: "查看运动分类",
+          dailyEyebrow: "日常补货",
+          dailyTitle: "聚合通勤与基础款",
+          dailyCopy: "围绕高频日穿款做快速浏览，适合先看黑白灰基础组合与罗口经典款。",
+          dailyCta: "查看日常分类",
+          crewEyebrow: "搜索引导",
+          crewTitle: "按“中筒”直达相关结果",
+          crewCopy: "搜索会真实作用于标题、描述和分类字段，方便模拟商城站内检索体验。",
+          crewCta: "执行中筒搜索",
+          noShowEyebrow: "轻装专区",
+          noShowTitle: "直达船袜与低帮场景",
+          noShowCopy: "把更偏夏季和轻量穿着的结果单独收束，做出更像真实频道入口的层级感。",
+          noShowCta: "执行船袜搜索"
+        },
+        footer: {
+          eyebrow: "Storefront",
+          title: "袜子专区",
+          copy: "单一袜子主营类目下的高信息密度商城演示，统一承接列表、详情、购物车和订单流程。",
+          helpTitle: "购买帮助",
+          deliveryTitle: "配送说明",
+          supportTitle: "支持与政策",
+          localeNote: "当前页面支持中文与英文商城文案切换。",
+          copyright: "© 2026 Socks Depot Demo"
+        },
+        toolbar: {
+          filterLabel: "分类",
+          sortLabel: "排序"
+        },
+        filters: {
+          all: "全部",
+          sport: "运动袜",
+          daily: "日常袜",
+          crew: "中筒袜",
+          "no-show": "船袜"
+        },
+        filterLabels: {
+          all: "全部商品",
+          sport: "运动袜",
+          daily: "日常袜",
+          crew: "中筒袜",
+          "no-show": "船袜"
+        },
+        sorts: {
+          recommended: "推荐",
+          "price-asc": "价格从低到高",
+          "price-desc": "价格从高到低",
+          newest: "最新上架"
+        },
+        common: {
+          home: "首页",
+          socksHome: "袜子专区",
+          backToStorefront: "返回商城",
+          orderNumber: "订单号",
+          items: "商品数量",
+          delivery: "配送",
+          estimatedDelivery: "预计送达",
+          subtotal: "原价小计",
+          savings: "优惠",
+          shipping: "配送",
+          estimatedTotal: "预计总计",
+          itemCount: ({ count }) => `${count} ${count === 1 ? "件商品" : "件商品"}`
+        },
+        rating: {
+          reviewCount: ({ count }) => `${count.toLocaleString("zh-CN")} 条评价`,
+          topRated: "高评分"
+        },
+        commerce: {
+          shippingFree: "包邮",
+          stockIn: "现货充足",
+          stockLow: ({ count }) => `仅剩 ${count} 件`,
+          recentlyBought: ({ amount }) => `过去一个月 ${amount} 人购买`,
+          deliveryEstimate: ({ label }) => `预计${label}送达`,
+          addItemsDelivery: "加入商品后可查看配送时间",
+          earliestDelivery: ({ label }) => `最早送达：${label}`,
+          trustCopy: "此演示商城使用安全结账流程"
+        },
+        cart: {
+          label: "购物车",
+          openAria: "打开购物车",
+          detailOpenAria: "打开详情购物车",
+          close: "关闭",
+          closeAria: "关闭购物车",
+          detailsTitle: "购物车明细",
+          clear: "清空购物车",
+          empty: "购物车还是空的",
+          footerCopy: "你可以继续加购，抽屉会同步展示当前匿名购物车状态。",
+          summary: ({ count }) => `购物车 ${count} 件`,
+          drawerMeta: ({ count }) => `共 ${count} 件商品`,
+          orderComplete: "演示订单已完成",
+          addToCart: "加入购物车",
+          addedToCart: "已加入购物车",
+          viewItem: "查看商品",
+          itemFallback: "已选商品",
+          size: ({ size }) => `尺码 ${size}`,
+          increase: ({ title }) => `增加 ${title} 数量`,
+          decrease: ({ title }) => `减少 ${title} 数量`,
+          remove: ({ title }) => `移除 ${title}`,
+          checkout: "去结算",
+          continueShopping: "继续逛逛",
+          viewOrderPage: "查看订单页",
+          confirmationEyebrow: "演示结账",
+          confirmationTitle: "订单已确认",
+          confirmationCopy: "你的演示订单已经提交，购物车已清空，你可以继续浏览商城。"
+        },
+        listing: {
+          resultCount: ({ count }) => `共 ${count} 件商品`,
+          viewDetails: "查看详情",
+          empty: "当前分类暂无商品",
+          loadFailure: "商品加载失败，请稍后重试",
+          recommendedTag: "推荐"
+        },
+        detail: {
+          pageSeries: "商品详情",
+          loadingTitle: "正在加载商品",
+          loadingCopy: "正在准备所选商品的详情视图。",
+          sourceBack: ({ label }) => `返回 ${label} 结果`,
+          currentSort: ({ label }) => `当前排序：${label}`,
+          continueEyebrow: "继续浏览",
+          continueTitle: "看看相邻商品",
+          recommendedEyebrow: "推荐",
+          recommendedTitle: "你可能也喜欢",
+          emptyTitle: "商品不存在",
+          emptyCopy: "暂时找不到所选演示商品。",
+          noRecommendations: "暂时没有可展示的推荐商品。",
+          navNoItemTitle: "暂无商品",
+          navNoItemMeta: "当前视图中没有更多商品"
+        },
+        order: {
+          heroEyebrow: "演示订单",
+          heroTitle: "订单已确认",
+          heroCopy: "当前浏览器会话中的演示订单已经记录完成。",
+          summaryEyebrow: "订单快照",
+          summaryTitle: "订单摘要",
+          continueEyebrow: "继续购物",
+          continueTitle: "你可能也喜欢",
+          sourceTitle: "返回上一轮浏览结果",
+          defaultSourceTitle: "继续在商城中浏览",
+          emptyTitle: "暂无最近的演示订单",
+          emptyCopy: "请先从商城完成一次演示结账。",
+          backToStorefront: "返回商城"
+        }
+      },
+      [LOCALE_KEY.EN_US]: {
+        storefront: {
+          title: "Socks Storefront",
+          description: "A focused edit of black, white, and gray essentials for daily wear, training, and light commuting."
+        },
+        shell: {
+          promo: "Free shipping on black, white, and gray adult socks over ¥99",
+          service: "Demo socks channel storefront",
+          help: "Help center",
+          returns: "Returns",
+          brandEyebrow: "SOCKS DEPOT",
+          departmentLabel: "Department",
+          departmentValue: "Adult Socks",
+          searchLabel: "Search socks products",
+          searchPlaceholder: "Search sock titles, descriptions, or categories",
+          searchButton: "Search",
+          accountLabel: "Account",
+          accountValue: "Guest shopper",
+          ordersLabel: "Orders",
+          ordersValue: "View history"
+        },
+        shellNav: {
+          all: "All socks",
+          sport: "Sport training",
+          daily: "Daily restock",
+          crew: "Crew basics",
+          "no-show": "No-show lightwear",
+          quickDry: "Quick-dry",
+          noShowSearch: "No-show search"
+        },
+        entry: {
+          sportEyebrow: "Training guide",
+          sportTitle: "Jump straight into sport socks",
+          sportCopy: "Compression support and quick-dry styles stay in one result set so training comparisons feel fast.",
+          sportCta: "Browse sport category",
+          dailyEyebrow: "Daily restock",
+          dailyTitle: "Bundle commuting and basics",
+          dailyCopy: "Quickly scan the core black, white, and gray essentials built for high-frequency everyday wear.",
+          dailyCta: "Browse daily category",
+          crewEyebrow: "Search prompt",
+          crewTitle: "Search for crew socks instantly",
+          crewCopy: "Search runs against real title, description, and category fields so the storefront behaves like a live mall page.",
+          crewCta: "Run crew search",
+          noShowEyebrow: "Lightwear focus",
+          noShowTitle: "Go straight to no-show results",
+          noShowCopy: "Pull lighter low-profile products into a dedicated entry point to create a stronger retail channel hierarchy.",
+          noShowCta: "Run no-show search"
+        },
+        footer: {
+          eyebrow: "Storefront",
+          title: "Socks Storefront",
+          copy: "A high-density storefront demo for a single socks department, shared across listing, detail, cart, and order flows.",
+          helpTitle: "Shopping help",
+          deliveryTitle: "Delivery notes",
+          supportTitle: "Support and policy",
+          localeNote: "This page supports both Chinese and English storefront copy.",
+          copyright: "© 2026 Socks Depot Demo"
+        },
+        toolbar: {
+          filterLabel: "Category",
+          sortLabel: "Sort"
+        },
+        filters: {
+          all: "All",
+          sport: "Sport Socks",
+          daily: "Everyday Socks",
+          crew: "Crew Socks",
+          "no-show": "No-Show Socks"
+        },
+        filterLabels: {
+          all: "All products",
+          sport: "Sport Socks",
+          daily: "Everyday Socks",
+          crew: "Crew Socks",
+          "no-show": "No-Show Socks"
+        },
+        sorts: {
+          recommended: "Recommended",
+          "price-asc": "Price low to high",
+          "price-desc": "Price high to low",
+          newest: "Newest arrivals"
+        },
+        common: {
+          home: "Home",
+          socksHome: "Socks",
+          backToStorefront: "Back to storefront",
+          orderNumber: "Order number",
+          items: "Items",
+          delivery: "Delivery",
+          estimatedDelivery: "Estimated delivery",
+          subtotal: "Subtotal",
+          savings: "Savings",
+          shipping: "Shipping",
+          estimatedTotal: "Estimated total",
+          itemCount: ({ count }) => `${count} ${count === 1 ? "item" : "items"}`
+        },
+        rating: {
+          reviewCount: ({ count }) => `${count.toLocaleString("en-US")} reviews`,
+          topRated: "Top rated"
+        },
+        commerce: {
+          shippingFree: "FREE delivery",
+          stockIn: "In stock",
+          stockLow: ({ count }) => `Only ${count} left in stock`,
+          recentlyBought: ({ amount }) => `${amount} bought in past month`,
+          deliveryEstimate: ({ label }) => `Get it by ${label}`,
+          addItemsDelivery: "Add items to see delivery timing",
+          earliestDelivery: ({ label }) => `Earliest delivery: ${label}`,
+          trustCopy: "Secure checkout for this demo storefront"
+        },
+        cart: {
+          label: "Cart",
+          openAria: "Open cart",
+          detailOpenAria: "Open detail cart",
+          close: "Close",
+          closeAria: "Close cart",
+          detailsTitle: "Cart details",
+          clear: "Clear cart",
+          empty: "Your cart is still empty",
+          footerCopy: "Keep browsing and the drawer will stay synced with the current anonymous cart.",
+          summary: ({ count }) => `Cart ${count} items`,
+          drawerMeta: ({ count }) => `${count} items in cart`,
+          orderComplete: "Demo order completed",
+          addToCart: "Add to cart",
+          addedToCart: "Added to cart",
+          viewItem: "View product",
+          itemFallback: "Selected item",
+          size: ({ size }) => `Size ${size}`,
+          increase: ({ title }) => `Increase quantity for ${title}`,
+          decrease: ({ title }) => `Decrease quantity for ${title}`,
+          remove: ({ title }) => `Remove ${title}`,
+          checkout: "Proceed to checkout",
+          continueShopping: "Continue shopping",
+          viewOrderPage: "View order page",
+          confirmationEyebrow: "Demo Checkout",
+          confirmationTitle: "Order confirmed",
+          confirmationCopy: "Your demo order is placed. The cart has been cleared and you can continue browsing the storefront."
+        },
+        listing: {
+          resultCount: ({ count }) => `${count} products`,
+          viewDetails: "View details",
+          empty: "No products are available in this category yet",
+          loadFailure: "Products failed to load. Please try again later.",
+          recommendedTag: "Recommended"
+        },
+        detail: {
+          pageSeries: "Product Detail",
+          loadingTitle: "Loading product",
+          loadingCopy: "Preparing the selected product view.",
+          sourceBack: ({ label }) => `Back to results for ${label}`,
+          currentSort: ({ label }) => `Current sort: ${label}`,
+          continueEyebrow: "Continue Browsing",
+          continueTitle: "Explore nearby products",
+          recommendedEyebrow: "Recommended",
+          recommendedTitle: "You may also like",
+          emptyTitle: "Product not found",
+          emptyCopy: "We couldn't find the selected demo product.",
+          noRecommendations: "No recommendations are available right now.",
+          navNoItemTitle: "No item",
+          navNoItemMeta: "No more products in this view"
+        },
+        order: {
+          heroEyebrow: "Demo Order",
+          heroTitle: "Order confirmed",
+          heroCopy: "Your demo storefront order has been recorded for this browser session.",
+          summaryEyebrow: "Order Snapshot",
+          summaryTitle: "Order summary",
+          continueEyebrow: "Continue Shopping",
+          continueTitle: "You may also like",
+          sourceTitle: "Go back to your last results",
+          defaultSourceTitle: "Continue shopping in storefront",
+          emptyTitle: "No recent demo order found",
+          emptyCopy: "Complete a demo checkout from the storefront first.",
+          backToStorefront: "Back to storefront"
+        }
+      }
+    };
+
+    function normalizeLocale(localeValue) {
+      return Object.values(LOCALE_KEY).includes(localeValue) ? localeValue : LOCALE_KEY.ZH_CN;
+    }
+
+    function readStoredLocale() {
+      return normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY));
+    }
+
+    function saveLocale(localeValue) {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, normalizeLocale(localeValue));
+    }
+
+    function t(key, params = {}) {
+      const segments = key.split(".");
+      const resolveValue = (localeValue) => {
+        return segments.reduce((currentValue, segment) => {
+          return currentValue && typeof currentValue === "object" ? currentValue[segment] : undefined;
+        }, translations[localeValue]);
+      };
+      const resolvedValue = resolveValue(activeLocale) ?? resolveValue(LOCALE_KEY.ZH_CN);
+
+      if (typeof resolvedValue === "function") {
+        return resolvedValue(params);
+      }
+
+      return resolvedValue ?? key;
+    }
+
+    function formatShortDeliveryLabel(date) {
+      if (activeLocale === LOCALE_KEY.EN_US) {
+        return new Intl.DateTimeFormat("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric"
+        }).format(date);
+      }
+
+      const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+      return `${date.getMonth() + 1}月${date.getDate()}日${weekdays[date.getDay()]}`;
+    }
+
+    function getLocalizedShippingLabel(label) {
+      return label === "FREE delivery" ? t("commerce.shippingFree") : label;
+    }
+
+    function getLocalizedDeliveryEstimate(deliveryEstimate) {
+      const parsedDelivery = parseDeliveryEstimate(deliveryEstimate);
+
+      if (!parsedDelivery) {
+        return deliveryEstimate;
+      }
+
+      return t("commerce.deliveryEstimate", {
+        label: formatShortDeliveryLabel(parsedDelivery.date)
+      });
+    }
+
+    function getLocalizedStockLabel(stockLabel) {
+      if (stockLabel === "In stock") {
+        return t("commerce.stockIn");
+      }
+
+      const lowStockMatch = /^Only (\d+) left in stock$/.exec(stockLabel);
+      if (lowStockMatch) {
+        return t("commerce.stockLow", { count: Number(lowStockMatch[1]) });
+      }
+
+      return stockLabel;
+    }
+
+    function getLocalizedRecentlyBoughtLabel(recentlyBoughtLabel) {
+      const boughtMatch = /^(.+) bought in past month$/.exec(recentlyBoughtLabel);
+
+      if (boughtMatch) {
+        return t("commerce.recentlyBought", { amount: boughtMatch[1] });
+      }
+
+      return recentlyBoughtLabel;
+    }
+
+    function getLocalizedProduct(product) {
+      if (!product) {
+        return null;
+      }
+
+      return {
+        ...product,
+        title: product.title,
+        description: product.description,
+        categoryLabel: getFilterLabel(product.categoryKey) || product.categoryLabel,
+        shippingLabel: getLocalizedShippingLabel(product.shippingLabel),
+        deliveryEstimate: getLocalizedDeliveryEstimate(product.deliveryEstimate),
+        stockLabel: getLocalizedStockLabel(product.stockLabel),
+        recentlyBoughtLabel: getLocalizedRecentlyBoughtLabel(product.recentlyBoughtLabel)
+      };
+    }
 
     function createSockIllustration(product) {
       const patternMarkup = {
@@ -802,12 +2942,670 @@
     }
 
     function formatReviewCount(reviewCount) {
-      return `${reviewCount.toLocaleString("en-US")} reviews`;
+      return t("rating.reviewCount", { count: reviewCount });
+    }
+
+    function formatCurrency(amount) {
+      return `¥${amount}`;
+    }
+
+    function formatSavingsValue(amount) {
+      if (amount <= 0) {
+        return "¥0";
+      }
+
+      return `-¥${amount}`;
+    }
+
+    function parseDeliveryEstimate(deliveryEstimate) {
+      const match = /^Get it by ([A-Za-z]+), ([A-Za-z]+) (\d{1,2})$/.exec(deliveryEstimate);
+      if (!match) {
+        return null;
+      }
+
+      const [, weekdayLabel, monthLabel, dayLabel] = match;
+      const parsedDate = new Date(`${monthLabel} ${dayLabel}, 2026 12:00:00`);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return null;
+      }
+
+      return {
+        date: parsedDate,
+        weekdayLabel
+      };
+    }
+
+    function formatAbsoluteDeliveryDate(date) {
+      return new Intl.DateTimeFormat(activeLocale === LOCALE_KEY.EN_US ? "en-US" : "zh-CN", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+      }).format(date);
+    }
+
+    function createOrderNumber() {
+      orderSequence += 1;
+      return `SOCK-${ORDER_DATE_STAMP}-${String(orderSequence).padStart(3, "0")}`;
+    }
+
+    function getSearchParams() {
+      return new URLSearchParams(window.location.search);
+    }
+
+    function normalizeQueryValue(queryValue) {
+      return typeof queryValue === "string" ? queryValue.trim() : "";
+    }
+
+    function isValidFilter(filterValue) {
+      return Object.values(FILTER_KEY).includes(filterValue);
+    }
+
+    function isValidSort(sortValue) {
+      return Object.values(SORT_KEY).includes(sortValue);
+    }
+
+    function getCurrentView() {
+      const params = getSearchParams();
+      const view = params.get("view");
+
+      if (view === DETAIL_VIEW_KEY) {
+        return DETAIL_VIEW_KEY;
+      }
+
+      if (view === ORDER_VIEW_KEY) {
+        return ORDER_VIEW_KEY;
+      }
+
+      return "storefront";
+    }
+
+    function getRequestedFilter() {
+      const params = getSearchParams();
+      const filterValue = params.get("filter");
+      return isValidFilter(filterValue) ? filterValue : FILTER_KEY.ALL;
+    }
+
+    function getRequestedSort() {
+      const params = getSearchParams();
+      const sortValue = params.get("sort");
+      return isValidSort(sortValue) ? sortValue : SORT_KEY.RECOMMENDED;
+    }
+
+    function getRequestedQuery() {
+      return normalizeQueryValue(getSearchParams().get("q"));
+    }
+
+    function getRequestedDetailProductId() {
+      return getSearchParams().get("id") || "";
+    }
+
+    function appendStorefrontQueryParams(params, options = {}) {
+      if (options.filter && options.filter !== FILTER_KEY.ALL) {
+        params.set("filter", options.filter);
+      }
+
+      if (options.sort && options.sort !== SORT_KEY.RECOMMENDED) {
+        params.set("sort", options.sort);
+      }
+
+      if (options.q) {
+        params.set("q", options.q);
+      }
+
+      return params;
+    }
+
+    function getStorefrontHref(
+      filterValue = FILTER_KEY.ALL,
+      sortValue = SORT_KEY.RECOMMENDED,
+      queryValue = ""
+    ) {
+      const params = appendStorefrontQueryParams(new URLSearchParams(), {
+        filter: filterValue,
+        sort: sortValue,
+        q: normalizeQueryValue(queryValue)
+      });
+
+      const search = params.toString();
+      return search ? `${STOREFRONT_PATH}?${search}` : STOREFRONT_PATH;
+    }
+
+    function getFilterLabel(filterValue) {
+      return t(`filterLabels.${filterValue}`) || t("filterLabels.all");
+    }
+
+    function getSortLabel(sortValue) {
+      return t(`sorts.${sortValue}`) || t("sorts.recommended");
+    }
+
+    function hasStorefrontSourceContext() {
+      return navigationContext.filter !== FILTER_KEY.ALL
+        || navigationContext.sort !== SORT_KEY.RECOMMENDED
+        || normalizeQueryValue(navigationContext.query) !== "";
+    }
+
+    function renderShellCopy() {
+      siteUtilityPromo.textContent = t("shell.promo");
+      siteUtilityService.textContent = t("shell.service");
+      siteHelpLink.textContent = t("shell.help");
+      siteReturnsLink.textContent = t("shell.returns");
+      siteBrandEyebrow.textContent = t("shell.brandEyebrow");
+      siteBrandTitle.textContent = t("storefront.title");
+      siteDepartmentLabel.textContent = t("shell.departmentLabel");
+      siteDepartmentValue.textContent = t("shell.departmentValue");
+      siteSearchLabel.textContent = t("shell.searchLabel");
+      siteSearchInput.placeholder = t("shell.searchPlaceholder");
+      siteSearchInput.value = activeQuery;
+      siteSearchSubmit.textContent = t("shell.searchButton");
+      siteAccountLabel.textContent = t("shell.accountLabel");
+      siteAccountValue.textContent = t("shell.accountValue");
+      siteOrdersLabel.textContent = t("shell.ordersLabel");
+      siteOrdersValue.textContent = t("shell.ordersValue");
+      siteFooterEyebrow.textContent = t("footer.eyebrow");
+      siteFooterTitle.textContent = t("footer.title");
+      siteFooterCopy.textContent = t("footer.copy");
+      siteFooterHelpTitle.textContent = t("footer.helpTitle");
+      siteFooterDeliveryTitle.textContent = t("footer.deliveryTitle");
+      siteFooterSupportTitle.textContent = t("footer.supportTitle");
+      siteFooterLocaleNote.textContent = t("footer.localeNote");
+      siteFooterCopyright.textContent = t("footer.copyright");
+
+      siteNavFilterLinks.forEach((link) => {
+        const filterValue = link.dataset.siteNavFilter;
+        link.textContent = t(`shellNav.${filterValue}`);
+        link.href = getStorefrontHref(filterValue, activeSort, activeQuery);
+        link.classList.toggle("is-active", activeFilter === filterValue);
+      });
+
+      if (siteNavQueryLinks[0]) {
+        siteNavQueryLinks[0].textContent = t("shellNav.quickDry");
+        siteNavQueryLinks[0].href = getStorefrontHref(activeFilter, activeSort, "速干");
+      }
+
+      if (siteNavQueryLinks[1]) {
+        siteNavQueryLinks[1].textContent = t("shellNav.noShowSearch");
+        siteNavQueryLinks[1].href = getStorefrontHref(activeFilter, activeSort, activeLocale === LOCALE_KEY.EN_US ? "no-show" : "船袜");
+      }
+
+      storefrontEntryFilterLinks.forEach((link) => {
+        const filterValue = link.dataset.entryFilter;
+        link.href = getStorefrontHref(filterValue, activeSort, activeQuery);
+      });
+
+      storefrontEntryQueryLinks.forEach((link) => {
+        const queryValue = link.dataset.entryQuery || "";
+        const localizedQuery = activeLocale === LOCALE_KEY.EN_US
+          ? (queryValue === "中筒" ? "crew" : "no-show")
+          : queryValue;
+        link.href = getStorefrontHref(activeFilter, activeSort, localizedQuery);
+      });
+
+      const entryCopyMap = {
+        sportEyebrow: document.querySelector("[data-entry-sport-eyebrow]"),
+        sportTitle: document.querySelector("[data-entry-sport-title]"),
+        sportCopy: document.querySelector("[data-entry-sport-copy]"),
+        sportCta: document.querySelector("[data-entry-sport-cta]"),
+        dailyEyebrow: document.querySelector("[data-entry-daily-eyebrow]"),
+        dailyTitle: document.querySelector("[data-entry-daily-title]"),
+        dailyCopy: document.querySelector("[data-entry-daily-copy]"),
+        dailyCta: document.querySelector("[data-entry-daily-cta]"),
+        crewEyebrow: document.querySelector("[data-entry-crew-eyebrow]"),
+        crewTitle: document.querySelector("[data-entry-crew-title]"),
+        crewCopy: document.querySelector("[data-entry-crew-copy]"),
+        crewCta: document.querySelector("[data-entry-crew-cta]"),
+        noShowEyebrow: document.querySelector("[data-entry-noshow-eyebrow]"),
+        noShowTitle: document.querySelector("[data-entry-noshow-title]"),
+        noShowCopy: document.querySelector("[data-entry-noshow-copy]"),
+        noShowCta: document.querySelector("[data-entry-noshow-cta]")
+      };
+
+      Object.entries(entryCopyMap).forEach(([key, node]) => {
+        if (node) {
+          node.textContent = t(`entry.${key}`);
+        }
+      });
+    }
+
+    function renderLocaleControls() {
+      localeButtons.forEach((button) => {
+        const isActive = button.dataset.localeOption === activeLocale;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function renderStaticCopy() {
+      document.documentElement.lang = activeLocale;
+      document.title = t("storefront.title");
+      renderShellCopy();
+      storefrontTitle.textContent = t("storefront.title");
+      storefrontDescription.textContent = t("storefront.description");
+      toolbarFilterLabel.textContent = t("toolbar.filterLabel");
+      toolbarSortLabel.textContent = t("toolbar.sortLabel");
+      cartLabel.textContent = t("cart.label");
+      detailCartLabel.textContent = t("cart.label");
+      detailPageSeries.textContent = t("detail.pageSeries");
+      detailPageTitle.textContent = t("detail.loadingTitle");
+      detailPageDescription.textContent = t("detail.loadingCopy");
+      detailBackLink.textContent = t("common.backToStorefront");
+      cartDrawerTitle.textContent = t("cart.detailsTitle");
+      cartDrawerEyebrow.textContent = activeLocale === LOCALE_KEY.EN_US ? "Cart State" : "购物车状态";
+      cartCloseButton.textContent = t("cart.close");
+      cartCloseButton.setAttribute("aria-label", t("cart.closeAria"));
+      cartToggleButton.setAttribute("aria-label", t("cart.openAria"));
+      detailCartToggleButton.setAttribute("aria-label", t("cart.detailOpenAria"));
+      clearCartButton.textContent = t("cart.clear");
+      orderHeroEyebrow.textContent = t("order.heroEyebrow");
+      orderPageTitle.textContent = t("order.heroTitle");
+      orderPageCopy.textContent = t("order.heroCopy");
+      cartSubtotalLabel.textContent = t("common.subtotal");
+      cartSavingsLabel.textContent = t("common.savings");
+      cartShippingLabel.textContent = t("common.shipping");
+      cartTotalLabel.textContent = t("common.estimatedTotal");
+      cartFooterCopy.textContent = t("cart.footerCopy");
+      cartCheckoutButton.textContent = t("cart.checkout");
+
+      Array.from(document.querySelectorAll("[data-filter]")).forEach((button) => {
+        button.textContent = t(`filters.${button.dataset.filter}`);
+      });
+
+      Array.from(document.querySelectorAll("[data-sort]")).forEach((button) => {
+        button.textContent = t(`sorts.${button.dataset.sort}`);
+      });
+    }
+
+    async function rerenderActiveViewForLocale() {
+      renderLocaleControls();
+      renderStaticCopy();
+
+      if (getCurrentView() === ORDER_VIEW_KEY) {
+        await renderOrderPage();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === DETAIL_VIEW_KEY) {
+        await renderDetailPage();
+        renderCartState();
+        return;
+      }
+
+      try {
+        await renderProducts();
+        renderCartState();
+      } catch (error) {
+        showLoadFailureState();
+        renderCartState();
+      }
+    }
+
+    function createNavigationContextSnapshot(
+      filterValue = FILTER_KEY.ALL,
+      sortValue = SORT_KEY.RECOMMENDED,
+      queryValue = ""
+    ) {
+      const normalizedFilter = isValidFilter(filterValue) ? filterValue : FILTER_KEY.ALL;
+      const normalizedSort = isValidSort(sortValue) ? sortValue : SORT_KEY.RECOMMENDED;
+      const normalizedQuery = normalizeQueryValue(queryValue);
+
+      return {
+        storefrontHref: getStorefrontHref(normalizedFilter, normalizedSort, normalizedQuery),
+        filter: normalizedFilter,
+        sort: normalizedSort,
+        query: normalizedQuery
+      };
+    }
+
+    function readStoredNavigationContext() {
+      const rawValue = window.sessionStorage.getItem(NAVIGATION_CONTEXT_STORAGE_KEY);
+      if (!rawValue) {
+        return null;
+      }
+
+      try {
+        const parsed = JSON.parse(rawValue);
+        if (!parsed || typeof parsed !== "object") {
+          return null;
+        }
+
+        return createNavigationContextSnapshot(parsed.filter, parsed.sort, parsed.query);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function saveNavigationContext(snapshot) {
+      window.sessionStorage.setItem(
+        NAVIGATION_CONTEXT_STORAGE_KEY,
+        JSON.stringify(snapshot)
+      );
+    }
+
+    function hasExplicitStorefrontContextInUrl() {
+      const params = getSearchParams();
+      const hasValidFilter = isValidFilter(params.get("filter"));
+      const hasValidSort = isValidSort(params.get("sort"));
+      const hasQuery = normalizeQueryValue(params.get("q")) !== "";
+      return hasValidFilter || hasValidSort || hasQuery;
+    }
+
+    function syncNavigationContext(
+      filterValue = activeFilter,
+      sortValue = activeSort,
+      queryValue = activeQuery
+    ) {
+      navigationContext = createNavigationContextSnapshot(filterValue, sortValue, queryValue);
+      saveNavigationContext(navigationContext);
+    }
+
+    function initializeNavigationContext() {
+      navigationContext = readStoredNavigationContext()
+        || createNavigationContextSnapshot(FILTER_KEY.ALL, SORT_KEY.RECOMMENDED, "");
+    }
+
+    function getContextualDetailHref(productId, options = {}) {
+      const params = new URLSearchParams({
+        view: DETAIL_VIEW_KEY,
+        id: productId
+      });
+
+      const filterValue = isValidFilter(options.filter)
+        ? options.filter
+        : navigationContext.filter;
+      const sortValue = isValidSort(options.sort)
+        ? options.sort
+        : navigationContext.sort;
+      const queryValue = normalizeQueryValue(options.query ?? navigationContext.query);
+
+      if (filterValue !== FILTER_KEY.ALL) {
+        params.set("filter", filterValue);
+      }
+
+      if (sortValue !== SORT_KEY.RECOMMENDED) {
+        params.set("sort", sortValue);
+      }
+
+      if (queryValue) {
+        params.set("q", queryValue);
+      }
+
+      return `${STOREFRONT_PATH}?${params.toString()}`;
+    }
+
+    function getActiveDetailHref(productId) {
+      return getContextualDetailHref(productId, {
+        filter: activeFilter,
+        sort: activeSort,
+        query: activeQuery
+      });
+    }
+
+    function getContinueShoppingHref() {
+      return navigationContext.storefrontHref || STOREFRONT_PATH;
+    }
+
+    function rememberStorefrontOriginForCheckout() {
+      if (getCurrentView() === "storefront" || hasExplicitStorefrontContextInUrl()) {
+        syncNavigationContext(activeFilter, activeSort, activeQuery);
+      }
+    }
+
+    function readStoredOrderConfirmation() {
+      const rawValue = window.sessionStorage.getItem(ORDER_CONFIRMATION_STORAGE_KEY);
+      if (!rawValue) {
+        return null;
+      }
+
+      try {
+        const parsed = JSON.parse(rawValue);
+        if (!parsed || typeof parsed !== "object") {
+          return null;
+        }
+
+        return parsed;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function clearOrderConfirmationState() {
+      orderConfirmationState = null;
+    }
+
+    function saveOrderConfirmationSnapshot(snapshot) {
+      window.sessionStorage.setItem(
+        ORDER_CONFIRMATION_STORAGE_KEY,
+        JSON.stringify(snapshot)
+      );
+    }
+
+    function clearStoredOrderConfirmationSnapshot() {
+      window.sessionStorage.removeItem(ORDER_CONFIRMATION_STORAGE_KEY);
+    }
+
+    async function fetchProductsForState(
+      filterValue = FILTER_KEY.ALL,
+      sortValue = SORT_KEY.RECOMMENDED,
+      queryValue = ""
+    ) {
+      const params = new URLSearchParams({
+        filter: filterValue,
+        sort: sortValue,
+        locale: activeLocale
+      });
+
+      const normalizedQuery = normalizeQueryValue(queryValue);
+      if (normalizedQuery) {
+        params.set("q", normalizedQuery);
+      }
+
+      const response = await fetch(`/api/products?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to load products");
+      }
+
+      const payload = await response.json();
+      return Array.isArray(payload.items) ? payload.items : [];
+    }
+
+    async function fetchAllProducts() {
+      return fetchProductsForState(FILTER_KEY.ALL, SORT_KEY.RECOMMENDED, "");
+    }
+
+    function createRecommendationCardMarkup(product) {
+      const localizedProduct = getLocalizedProduct(product);
+
+      return `
+        <article class="recommendation-card" data-recommended-card>
+          <p class="recommendation-card__series">${localizedProduct.series}</p>
+          <h3 class="recommendation-card__title">${localizedProduct.title}</h3>
+          <p class="recommendation-card__price">¥${product.price}</p>
+          <p class="recommendation-card__delivery">${localizedProduct.deliveryEstimate}</p>
+        </article>
+      `;
+    }
+
+    function createRecommendationsMarkup(products) {
+      if (!products.length) {
+        return `<p class="recommendations__empty">${t("detail.noRecommendations")}</p>`;
+      }
+
+      return `
+        <div class="recommendations">
+          ${products.map(createRecommendationCardMarkup).join("")}
+        </div>
+      `;
+    }
+
+    function createOrderPageSummaryMarkup(order, recommendationsMarkup) {
+      const continueShoppingHref = getContinueShoppingHref();
+      const orderSourceMarkup = createOrderSourceSummaryMarkup();
+
+      return `
+        <div class="order-stack">
+          <section>
+            <p class="order-panel__eyebrow">${t("order.summaryEyebrow")}</p>
+            <h2 class="order-panel__title">${t("order.summaryTitle")}</h2>
+            <div class="order-summary">
+              <div class="order-summary__row">
+                <span>${t("common.orderNumber")}</span>
+                <span class="order-summary__value" data-order-page-number>${order.orderNumber}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.items")}</span>
+                <span class="order-summary__value" data-order-page-items>${t("common.itemCount", { count: order.itemCount })}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.estimatedDelivery")}</span>
+                <span class="order-summary__value" data-order-page-delivery>${order.estimatedDelivery}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.subtotal")}</span>
+                <span class="order-summary__value" data-order-page-subtotal>${formatCurrency(order.subtotal || 0)}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.savings")}</span>
+                <span class="order-summary__value" data-order-page-savings>-${formatCurrency(order.savings || 0)}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.estimatedTotal")}</span>
+                <span class="order-summary__value" data-order-page-total>${formatCurrency(order.total || 0)}</span>
+              </div>
+            </div>
+          </section>
+          <section>
+            <p class="order-panel__eyebrow">${t("order.continueEyebrow")}</p>
+            <h2 class="order-panel__title">${t("order.continueTitle")}</h2>
+            ${recommendationsMarkup}
+          </section>
+          <div class="order-actions">
+            ${orderSourceMarkup}
+            <a
+              class="order-button order-button--secondary"
+              href="${continueShoppingHref}"
+              data-order-continue-shopping
+            >
+              ${t("cart.continueShopping")}
+            </a>
+            <a class="order-button order-button--primary" href="${STOREFRONT_PATH}">${t("order.backToStorefront")}</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function createOrderPageEmptyStateMarkup() {
+      const continueShoppingHref = getContinueShoppingHref();
+
+      return `
+        <div class="order-empty-state">
+          <h2 class="order-empty-state__title">${t("order.emptyTitle")}</h2>
+          <p class="order-empty-state__copy">${t("order.emptyCopy")}</p>
+          ${createOrderSourceSummaryMarkup()}
+          <div class="order-actions">
+            <a
+              class="order-button order-button--secondary"
+              href="${continueShoppingHref}"
+              data-order-continue-shopping
+            >
+              ${t("cart.continueShopping")}
+            </a>
+            <a class="order-button order-button--primary" href="${STOREFRONT_PATH}">${t("order.backToStorefront")}</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function createOrderSourceSummaryMarkup() {
+      const hasSource = hasStorefrontSourceContext();
+      const title = hasSource ? t("order.sourceTitle") : t("order.defaultSourceTitle");
+      const parts = [t("common.socksHome")];
+
+      if (hasSource && navigationContext.filter !== FILTER_KEY.ALL) {
+        parts.push(getFilterLabel(navigationContext.filter));
+      } else if (!hasSource) {
+        parts.push(getFilterLabel(FILTER_KEY.ALL));
+      }
+
+      if (hasSource && navigationContext.sort !== SORT_KEY.RECOMMENDED) {
+        parts.push(getSortLabel(navigationContext.sort));
+      }
+
+      if (hasSource && navigationContext.query) {
+        parts.push(navigationContext.query);
+      }
+
+      return `
+        <div class="order-source" data-order-source>
+          <p class="order-source__title" data-order-source-title>${title}</p>
+          <p class="order-source__copy" data-order-source-copy>${parts.join(" / ")}</p>
+        </div>
+      `;
+    }
+
+    async function fetchRecommendedProducts(order) {
+      const response = await fetch(`/api/products?${new URLSearchParams({
+        filter: FILTER_KEY.ALL,
+        sort: SORT_KEY.RECOMMENDED,
+        locale: activeLocale
+      }).toString()}`);
+      if (!response.ok) {
+        return [];
+      }
+
+      const payload = await response.json();
+      const purchasedProductIds = Array.isArray(order.purchasedProductIds)
+        ? order.purchasedProductIds
+        : [];
+
+      return payload.items
+        .filter((product) => !purchasedProductIds.includes(product.id))
+        .slice(0, 3);
+    }
+
+    async function renderOrderPage() {
+      if (hasExplicitStorefrontContextInUrl()) {
+        syncNavigationContext(activeFilter, activeSort, activeQuery);
+      }
+
+      const storedOrder = readStoredOrderConfirmation();
+
+      if (!storedOrder) {
+        orderPageTitle.textContent = t("order.emptyTitle");
+        orderPageCopy.textContent = t("order.emptyCopy");
+        orderPagePanel.innerHTML = createOrderPageEmptyStateMarkup();
+        return;
+      }
+
+      const recommendedProducts = await fetchRecommendedProducts(storedOrder);
+      orderPageTitle.textContent = t("order.heroTitle");
+      orderPageCopy.textContent = t("order.heroCopy");
+      orderPagePanel.innerHTML = createOrderPageSummaryMarkup(
+        storedOrder,
+        createRecommendationsMarkup(recommendedProducts)
+      );
+    }
+
+    function renderOrderPageFallback() {
+      orderPageTitle.textContent = t("order.heroTitle");
+      orderPageCopy.textContent = t("order.heroCopy");
+      orderPagePanel.innerHTML = createOrderPageSummaryMarkup(
+        readStoredOrderConfirmation() || {
+          orderNumber: "Unavailable",
+          itemCount: 0,
+          estimatedDelivery: "Not available",
+          subtotal: 0,
+          savings: 0,
+          total: 0
+        },
+        `<p class="recommendations__empty">${t("detail.noRecommendations")}</p>`
+      );
     }
 
     function createRatingMarkup(product) {
       const topRatedMarkup = product.isTopRated
-        ? '<span class="product-card__top-rated" data-top-rated>Top rated</span>'
+        ? `<span class="product-card__top-rated" data-top-rated>${t("rating.topRated")}</span>`
         : "";
 
       return `
@@ -820,18 +3618,229 @@
       `;
     }
 
-    function createCardMarkup(product) {
-      const sizeButtons = product.sizes
-        .map((size, index) => {
-          const selectedClass = index === 0 ? " is-selected" : "";
-          const pressedState = index === 0 ? "true" : "false";
-          return `<button class="product-card__size${selectedClass}" type="button" aria-pressed="${pressedState}" data-size>${size}</button>`;
+    function createCommerceMarkup(product) {
+      const localizedProduct = getLocalizedProduct(product);
+      const bestsellerMarkup = product.isBestSeller
+        ? `<span class="product-card__bestseller" data-bestseller-badge>${activeLocale === LOCALE_KEY.EN_US ? "Best seller" : "热卖"}</span>`
+        : "";
+
+      return `
+        <div class="product-card__commerce" data-commerce-info>
+          <div class="product-card__shipping">
+            <span class="product-card__shipping-label" data-shipping-label>${localizedProduct.shippingLabel}</span>
+            <span class="product-card__delivery-estimate" data-delivery-estimate>${localizedProduct.deliveryEstimate}</span>
+          </div>
+          <span class="product-card__stock" data-stock-label data-low-stock="${product.isLowStock ? "true" : "false"}">${localizedProduct.stockLabel}</span>
+          <div class="product-card__social-proof" data-social-proof>
+            ${bestsellerMarkup}
+            <span class="product-card__recently-bought" data-recently-bought>${localizedProduct.recentlyBoughtLabel}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function createSizeButtonsMarkup(product, options = {}) {
+      const dataAttribute = options.dataAttribute || "data-size";
+      const selectedSize = options.selectedSize || product.sizes[0];
+
+      return product.sizes
+        .map((size) => {
+          const isSelected = size === selectedSize;
+          const selectedClass = isSelected ? " is-selected" : "";
+          const pressedState = isSelected ? "true" : "false";
+          return `<button class="product-card__size${selectedClass}" type="button" aria-pressed="${pressedState}" ${dataAttribute}>${size}</button>`;
         })
         .join("");
+    }
+
+    function createDetailRecommendationsMarkup(products) {
+      if (!products.length) {
+        return `<p class="detail-recommendations__empty">${t("detail.noRecommendations")}</p>`;
+      }
+
+      return `
+        <div class="detail-recommendations">
+          ${products.map((product) => {
+            const localizedProduct = getLocalizedProduct(product);
+            return `
+              <a
+                class="detail-recommendation-card"
+                href="${getContextualDetailHref(product.id, {
+                  filter: getRequestedFilter(),
+                  sort: getRequestedSort(),
+                  query: getRequestedQuery()
+                })}"
+                data-detail-recommendation-card
+              >
+                <p class="detail-recommendation-card__series">${localizedProduct.series}</p>
+                <h3 class="detail-recommendation-card__title">${localizedProduct.title}</h3>
+                <p class="detail-recommendation-card__price">¥${product.price}</p>
+                <p class="detail-recommendation-card__meta">${localizedProduct.deliveryEstimate}</p>
+              </a>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function createDetailNavigationLink(direction, product) {
+      if (!product) {
+        return `
+          <a class="detail-nav__link" aria-disabled="true" data-detail-nav-${direction}>
+            <span class="detail-nav__direction">${direction === "previous" ? "Previous" : "Next"}</span>
+            <span class="detail-nav__title">${t("detail.navNoItemTitle")}</span>
+            <span class="detail-nav__meta">${t("detail.navNoItemMeta")}</span>
+          </a>
+        `;
+      }
+
+      const localizedProduct = getLocalizedProduct(product);
+
+      return `
+        <a class="detail-nav__link" href="${getActiveDetailHref(product.id)}" data-detail-nav-${direction}>
+          <span class="detail-nav__direction">${direction === "previous" ? "Previous" : "Next"}</span>
+          <span class="detail-nav__title">${localizedProduct.title}</span>
+          <span class="detail-nav__meta">${localizedProduct.categoryLabel} · ¥${product.price}</span>
+        </a>
+      `;
+    }
+
+    function createDetailBreadcrumbMarkup(product, filterValue) {
+      const localizedProduct = getLocalizedProduct(product);
+      const storefrontHref = getStorefrontHref(filterValue, getRequestedSort(), getRequestedQuery());
+      const segments = [
+        `<a class="detail-breadcrumb__link" href="${STOREFRONT_PATH}">${t("common.home")}</a>`,
+        `<a class="detail-breadcrumb__link" href="${storefrontHref}">${t("common.socksHome")}</a>`
+      ];
+
+      if (filterValue && filterValue !== FILTER_KEY.ALL) {
+        segments.push(`<span class="detail-breadcrumb__segment">${getFilterLabel(filterValue)}</span>`);
+      }
+
+      segments.push(`<span class="detail-breadcrumb__segment is-current">${localizedProduct.title}</span>`);
+
+      return `
+        <nav class="detail-breadcrumb" aria-label="Breadcrumb" data-detail-breadcrumb>
+          ${segments.join('<span class="detail-breadcrumb__divider">/</span>')}
+        </nav>
+      `;
+    }
+
+    function createDetailSourceMarkup(product) {
+      const filterValue = getRequestedFilter();
+      const sortValue = getRequestedSort();
+      const queryValue = getRequestedQuery();
+      const hasExplicitContext = hasExplicitStorefrontContextInUrl();
+      const breadcrumbMarkup = createDetailBreadcrumbMarkup(
+        product,
+        hasExplicitContext ? filterValue : FILTER_KEY.ALL
+      );
+
+      if (!hasExplicitContext) {
+        return `
+          <div class="detail-source detail-source--compact">
+            ${breadcrumbMarkup}
+          </div>
+        `;
+      }
+
+      return `
+        <div class="detail-source">
+          <a class="detail-source__link" href="${getStorefrontHref(filterValue, sortValue, queryValue)}" data-detail-source-link>
+            ${t("detail.sourceBack", { label: getFilterLabel(filterValue) })}
+          </a>
+          <p class="detail-source__sort" data-detail-sort-copy>${t("detail.currentSort", { label: getSortLabel(sortValue) })}</p>
+          ${breadcrumbMarkup}
+        </div>
+      `;
+    }
+
+    function getDetailNavigationState(productId, contextProducts) {
+      const currentIndex = contextProducts.findIndex((product) => product.id === productId);
+      if (currentIndex === -1) {
+        return {
+          previousProduct: null,
+          nextProduct: null
+        };
+      }
+
+      return {
+        previousProduct: contextProducts[currentIndex - 1] || null,
+        nextProduct: contextProducts[currentIndex + 1] || null
+      };
+    }
+
+    function createDetailPagePanelMarkup(product, options = {}) {
+      const localizedProduct = getLocalizedProduct(product);
+      const previousProduct = options.previousProduct || null;
+      const nextProduct = options.nextProduct || null;
+      const detailSourceMarkup = options.detailSourceMarkup || "";
+      const recommendationsMarkup = options.recommendationsMarkup || `<p class="detail-recommendations__empty">${t("detail.noRecommendations")}</p>`;
+      const detailTag = product.isRecommended ? t("listing.recommendedTag") : localizedProduct.categoryLabel;
+      const sizeButtons = createSizeButtonsMarkup(product, {
+        dataAttribute: "data-detail-size"
+      });
+
+      return `
+        <div class="detail-stack">
+          ${detailSourceMarkup}
+          <div class="detail-layout" data-detail-product-root data-product-id="${product.id}">
+            <section class="detail-visual">
+              <span class="detail-visual__badge">${product.discount}</span>
+              <span class="detail-visual__tag">${detailTag}</span>
+              <div class="detail-visual__sock" aria-hidden="true">${createSockIllustration(product)}</div>
+            </section>
+            <section class="detail-content">
+              <div class="detail-content__meta">
+                <div class="detail-content__price">
+                  <span class="detail-content__price-current" data-detail-page-price>¥${product.price}</span>
+                  <span class="detail-content__price-original" data-detail-page-original-price>¥${product.originalPrice}</span>
+                </div>
+                ${createRatingMarkup(product)}
+                ${createCommerceMarkup(product)}
+              </div>
+              <div class="product-card__sizes" aria-label="${localizedProduct.title} sizes">
+                ${sizeButtons}
+              </div>
+              <p class="detail-content__release">${product.releaseDate}</p>
+              <button class="detail-content__cta" type="button" data-detail-cart-button>${t("cart.addToCart")}</button>
+            </section>
+          </div>
+          <div class="detail-sections">
+            <section class="detail-section">
+              <p class="detail-section__eyebrow">${t("detail.continueEyebrow")}</p>
+              <h2 class="detail-section__title">${t("detail.continueTitle")}</h2>
+              <div class="detail-nav">
+                ${createDetailNavigationLink("previous", previousProduct)}
+                ${createDetailNavigationLink("next", nextProduct)}
+              </div>
+            </section>
+            <section class="detail-section">
+              <p class="detail-section__eyebrow">${t("detail.recommendedEyebrow")}</p>
+              <h2 class="detail-section__title">${t("detail.recommendedTitle")}</h2>
+              ${recommendationsMarkup}
+            </section>
+          </div>
+        </div>
+      `;
+    }
+
+    function createDetailEmptyStateMarkup() {
+      return `
+        <div class="detail-empty-state" data-detail-empty-state>
+          <p class="detail-empty-state__title">${t("detail.emptyTitle")}</p>
+          <p class="detail-empty-state__copy">${t("detail.emptyCopy")}</p>
+        </div>
+      `;
+    }
+
+    function createCardMarkup(product) {
+      const localizedProduct = getLocalizedProduct(product);
+      const sizeButtons = createSizeButtonsMarkup(product);
 
       const recommendationTag = product.isRecommended
-        ? '<span class="product-card__tag">推荐</span>'
-        : `<span class="product-card__tag">${product.categoryLabel}</span>`;
+        ? `<span class="product-card__tag">${t("listing.recommendedTag")}</span>`
+        : `<span class="product-card__tag">${localizedProduct.categoryLabel}</span>`;
 
       return `
         <article class="product-card" data-product-card data-product-id="${product.id}">
@@ -842,23 +3851,25 @@
           </div>
           <div class="product-card__content">
             <div>
-              <p class="product-card__series">${product.series}</p>
-              <h2 class="product-card__title">${product.title}</h2>
-              <p class="product-card__name">${product.categoryLabel}</p>
+              <p class="product-card__series">${localizedProduct.series}</p>
+              <h2 class="product-card__title">${localizedProduct.title}</h2>
+              <p class="product-card__name">${localizedProduct.categoryLabel}</p>
             </div>
             <div class="product-card__price">
               <span class="product-card__price-current">¥${product.price}</span>
               <span class="product-card__price-original">¥${product.originalPrice}</span>
             </div>
             ${createRatingMarkup(product)}
-            <p class="product-card__description">${product.description}</p>
-            <div class="product-card__sizes" aria-label="${product.title} 可选尺码">
+            <p class="product-card__description">${localizedProduct.description}</p>
+            ${createCommerceMarkup(product)}
+            <div class="product-card__sizes" aria-label="${localizedProduct.title} sizes">
               ${sizeButtons}
             </div>
             <div class="product-card__footer">
               <span class="product-card__name">${product.releaseDate}</span>
             </div>
-            <button class="product-card__cta" type="button" data-cart-button>加入购物车</button>
+            <a class="product-card__detail-link" href="${getActiveDetailHref(product.id)}" data-product-detail-link>${t("listing.viewDetails")}</a>
+            <button class="product-card__cta" type="button" data-cart-button>${t("cart.addToCart")}</button>
           </div>
         </article>
       `;
@@ -867,8 +3878,14 @@
     async function fetchProducts() {
       const params = new URLSearchParams({
         filter: activeFilter,
-        sort: activeSort
+        sort: activeSort,
+        locale: activeLocale
       });
+
+      if (activeQuery) {
+        params.set("q", activeQuery);
+      }
+
       const response = await fetch(`/api/products?${params.toString()}`);
 
       if (!response.ok) {
@@ -876,7 +3893,7 @@
       }
 
       const payload = await response.json();
-      resultCount.textContent = `共 ${payload.meta.count} 件商品`;
+      resultCount.textContent = t("listing.resultCount", { count: payload.meta.count });
       return payload.items;
     }
 
@@ -894,14 +3911,170 @@
       });
     }
 
+    function syncActiveStateFromUrl() {
+      activeFilter = getRequestedFilter();
+      activeSort = getRequestedSort();
+      activeQuery = getRequestedQuery();
+    }
+
+    function bindSizeSelection(sizeButtons) {
+      sizeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          sizeButtons.forEach((sizeButton) => {
+            sizeButton.classList.remove("is-selected");
+            sizeButton.setAttribute("aria-pressed", "false");
+          });
+
+          button.classList.add("is-selected");
+          button.setAttribute("aria-pressed", "true");
+        });
+      });
+    }
+
+    function updateCartButtonFeedback(button, feedbackKey) {
+      button.textContent = t("cart.addedToCart");
+
+      if (cartFeedbackTimers.has(feedbackKey)) {
+        window.clearTimeout(cartFeedbackTimers.get(feedbackKey));
+      }
+
+      const timerId = window.setTimeout(() => {
+        button.textContent = t("cart.addToCart");
+        cartFeedbackTimers.delete(feedbackKey);
+      }, 1500);
+
+      cartFeedbackTimers.set(feedbackKey, timerId);
+    }
+
+    function createDetailBackHref() {
+      return getStorefrontHref(getRequestedFilter(), getRequestedSort(), getRequestedQuery());
+    }
+
+    function renderDetailEmptyState(backHref) {
+      detailPageSeries.textContent = t("detail.pageSeries");
+      detailPageTitle.textContent = t("detail.emptyTitle");
+      detailPageDescription.textContent = t("detail.emptyCopy");
+      detailBackLink.textContent = t("common.backToStorefront");
+      detailBackLink.href = backHref;
+      detailPagePanel.innerHTML = createDetailEmptyStateMarkup();
+    }
+
+    function bindDetailInteractions(product) {
+      const detailRoot = detailPagePanel.querySelector("[data-detail-product-root]");
+      if (!detailRoot) {
+        return;
+      }
+
+      const sizeButtons = Array.from(detailRoot.querySelectorAll("[data-detail-size]"));
+      const cartButton = detailRoot.querySelector("[data-detail-cart-button]");
+
+      bindSizeSelection(sizeButtons);
+
+      if (!cartButton) {
+        return;
+      }
+
+      cartButton.addEventListener("click", async () => {
+        const selectedSize = detailRoot.querySelector('[data-detail-size][aria-pressed="true"]');
+
+        if (!selectedSize) {
+          return;
+        }
+
+        try {
+          await addCartItem(product.id, selectedSize.textContent.trim());
+          updateCartButtonFeedback(cartButton, `${product.id}-detail`);
+        } catch (error) {
+          cartButton.textContent = t("cart.addToCart");
+        }
+      });
+    }
+
+    async function renderDetailPage() {
+      const backHref = createDetailBackHref();
+      const requestedProductId = getRequestedDetailProductId();
+      const requestedFilter = getRequestedFilter();
+      const requestedSort = getRequestedSort();
+      const requestedQuery = getRequestedQuery();
+
+      if (hasExplicitStorefrontContextInUrl()) {
+        syncNavigationContext(requestedFilter, requestedSort, requestedQuery);
+      }
+
+      detailBackLink.href = backHref;
+
+      if (!requestedProductId) {
+        renderDetailEmptyState(backHref);
+        return;
+      }
+
+      const allProductsPromise = fetchAllProducts();
+      const contextProductsPromise = requestedFilter === FILTER_KEY.ALL && requestedSort === SORT_KEY.RECOMMENDED
+        && !requestedQuery
+        ? allProductsPromise
+        : fetchProductsForState(requestedFilter, requestedSort, requestedQuery).catch(() => []);
+
+      const [allProducts, contextProducts] = await Promise.all([
+        allProductsPromise,
+        contextProductsPromise
+      ]);
+
+      syncProductCatalog(allProducts);
+      renderCartState();
+      const product = allProducts.find((entry) => entry.id === requestedProductId);
+
+      if (!product) {
+        renderDetailEmptyState(backHref);
+        return;
+      }
+
+      const { previousProduct, nextProduct } = getDetailNavigationState(
+        requestedProductId,
+        Array.isArray(contextProducts) && contextProducts.length ? contextProducts : allProducts
+      );
+      const recommendedProducts = allProducts
+        .filter((entry) => entry.id !== requestedProductId)
+        .slice(0, 3);
+      const localizedProduct = getLocalizedProduct(product);
+
+      detailPageSeries.textContent = product.series;
+      detailPageTitle.textContent = localizedProduct.title;
+      detailPageDescription.textContent = localizedProduct.description;
+      detailBackLink.href = backHref;
+      detailPagePanel.innerHTML = createDetailPagePanelMarkup(product, {
+        previousProduct,
+        nextProduct,
+        detailSourceMarkup: createDetailSourceMarkup(product),
+        recommendationsMarkup: createDetailRecommendationsMarkup(recommendedProducts)
+      });
+
+      const stockLabel = detailPagePanel.querySelector("[data-stock-label]");
+      if (stockLabel) {
+        stockLabel.setAttribute("data-detail-page-stock", "");
+      }
+
+      bindDetailInteractions(product);
+    }
+
     function createCartItemMarkup(item) {
       const product = findProduct(item.productId);
-      const title = product ? product.title : "已选商品";
-      const series = product ? product.series : "Anonymous Cart";
-      const sizeText = `尺码 ${item.size}`;
+      const localizedProduct = getLocalizedProduct(product);
+      const title = localizedProduct ? localizedProduct.title : t("cart.itemFallback");
+      const series = localizedProduct ? localizedProduct.series : "Anonymous Cart";
+      const sizeText = t("cart.size", { size: item.size });
       const quantityText = `x${item.quantity}`;
       const unitPrice = product ? product.price : 0;
       const subtotal = unitPrice * item.quantity;
+      const detailHref = product
+        ? getContextualDetailHref(product.id, {
+          filter: isValidFilter(getSearchParams().get("filter")) ? getSearchParams().get("filter") : undefined,
+          sort: isValidSort(getSearchParams().get("sort")) ? getSearchParams().get("sort") : undefined,
+          query: getRequestedQuery()
+        })
+        : "";
+      const detailLinkMarkup = product
+        ? `<a class="cart-drawer__item-link" href="${detailHref}" data-cart-item-detail-link>${t("cart.viewItem")}</a>`
+        : "";
 
       return `
         <article class="cart-drawer__item" data-cart-item>
@@ -914,28 +4087,121 @@
           <p class="cart-drawer__item-subtotal">¥${subtotal}</p>
           <div class="cart-drawer__item-actions">
             <div class="cart-drawer__qty-controls">
-              <button class="cart-drawer__qty-button" type="button" data-cart-decrease data-product-id="${item.productId}" data-size="${item.size}" aria-label="减少 ${title} 数量"${item.quantity <= 1 || isCartMutationPending ? " disabled" : ""}>-</button>
+              <button class="cart-drawer__qty-button" type="button" data-cart-decrease data-product-id="${item.productId}" data-size="${item.size}" aria-label="${t("cart.decrease", { title })}"${item.quantity <= 1 || isCartMutationPending ? " disabled" : ""}>-</button>
               <span class="cart-drawer__qty-value">${item.quantity}</span>
-              <button class="cart-drawer__qty-button" type="button" data-cart-increase data-product-id="${item.productId}" data-size="${item.size}" aria-label="增加 ${title} 数量"${isCartMutationPending ? " disabled" : ""}>+</button>
+              <button class="cart-drawer__qty-button" type="button" data-cart-increase data-product-id="${item.productId}" data-size="${item.size}" aria-label="${t("cart.increase", { title })}"${isCartMutationPending ? " disabled" : ""}>+</button>
             </div>
-            <button class="cart-drawer__remove" type="button" data-cart-remove data-product-id="${item.productId}" data-size="${item.size}" aria-label="移除 ${title}"${isCartMutationPending ? " disabled" : ""}>移除</button>
+            <div class="cart-drawer__item-secondary-actions">
+              ${detailLinkMarkup}
+              <button class="cart-drawer__remove" type="button" data-cart-remove data-product-id="${item.productId}" data-size="${item.size}" aria-label="${t("cart.remove", { title })}"${isCartMutationPending ? " disabled" : ""}>${activeLocale === LOCALE_KEY.EN_US ? "Remove" : "移除"}</button>
+            </div>
           </div>
         </article>
       `;
     }
 
+    function createOrderConfirmationMarkup() {
+      if (!orderConfirmationState) {
+        return "";
+      }
+
+      return `
+        <section class="cart-drawer__confirmation" data-order-confirmation>
+          <p class="cart-drawer__confirmation-eyebrow">${t("cart.confirmationEyebrow")}</p>
+          <h3 class="cart-drawer__confirmation-title">${t("cart.confirmationTitle")}</h3>
+          <p class="cart-drawer__confirmation-copy">${t("cart.confirmationCopy")}</p>
+          <div class="cart-drawer__confirmation-grid">
+            <div class="cart-drawer__confirmation-row">
+              <span>${t("common.orderNumber")}</span>
+              <span class="cart-drawer__confirmation-value" data-order-number>${orderConfirmationState.orderNumber}</span>
+            </div>
+            <div class="cart-drawer__confirmation-row">
+              <span>${t("common.items")}</span>
+              <span class="cart-drawer__confirmation-value" data-order-items>${t("common.itemCount", { count: orderConfirmationState.itemCount })}</span>
+            </div>
+            <div class="cart-drawer__confirmation-row">
+              <span>${t("common.delivery")}</span>
+              <span class="cart-drawer__confirmation-value" data-order-delivery>${t("common.estimatedDelivery")}: ${orderConfirmationState.estimatedDelivery}</span>
+            </div>
+          </div>
+          <button class="cart-drawer__confirmation-action" type="button" data-view-order-page>${t("cart.viewOrderPage")}</button>
+          <button class="cart-drawer__confirmation-action" type="button" data-continue-shopping>${t("cart.continueShopping")}</button>
+        </section>
+      `;
+    }
+
+    function getCartPricingSummary(items) {
+      return items.reduce((summary, item) => {
+        const product = findProduct(item.productId);
+        if (!product) {
+          return summary;
+        }
+
+        summary.subtotal += product.originalPrice * item.quantity;
+        summary.total += product.price * item.quantity;
+        return summary;
+      }, {
+        subtotal: 0,
+        total: 0
+      });
+    }
+
+    function getEarliestDeliveryDate(items) {
+      const deliveryCandidates = items
+        .map((item) => {
+          const product = findProduct(item.productId);
+          return product ? parseDeliveryEstimate(product.deliveryEstimate) : null;
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.date - right.date);
+
+      return deliveryCandidates[0] || null;
+    }
+
+    function getPurchasedProductIds(items) {
+      return Array.from(new Set(items.map((item) => item.productId)));
+    }
+
+    function buildOrderConfirmationState() {
+      const itemCount = getCartQuantity(cartState.items);
+      const earliestDelivery = getEarliestDeliveryDate(cartState.items);
+      const pricingSummary = getCartPricingSummary(cartState.items);
+
+      return {
+        orderNumber: createOrderNumber(),
+        itemCount,
+        estimatedDelivery: earliestDelivery
+          ? formatAbsoluteDeliveryDate(earliestDelivery.date)
+          : activeLocale === LOCALE_KEY.EN_US ? "Not available" : "暂不可用",
+        subtotal: pricingSummary.subtotal,
+        savings: pricingSummary.subtotal - pricingSummary.total,
+        total: pricingSummary.total,
+        purchasedProductIds: getPurchasedProductIds(cartState.items)
+      };
+    }
+
     function renderCartDrawer() {
       const quantity = getCartQuantity(cartState.items);
-      const total = cartState.items.reduce((sum, item) => {
-        const product = findProduct(item.productId);
-        return sum + ((product ? product.price : 0) * item.quantity);
-      }, 0);
+      const pricingSummary = getCartPricingSummary(cartState.items);
+      const savingsValue = pricingSummary.subtotal - pricingSummary.total;
+      const earliestDelivery = getEarliestDeliveryDate(cartState.items);
 
-      cartDrawerMeta.textContent = `共 ${quantity} 件商品`;
-      cartDrawerItems.innerHTML = quantity === 0
-        ? '<div class="cart-drawer__empty" data-cart-empty-state>购物车还是空的</div>'
-        : cartState.items.map(createCartItemMarkup).join("");
-      cartDrawerTotal.textContent = `¥${total}`;
+      cartDrawerMeta.textContent = orderConfirmationState
+        ? t("cart.orderComplete")
+        : t("cart.drawerMeta", { count: quantity });
+      cartDrawerItems.innerHTML = orderConfirmationState
+        ? createOrderConfirmationMarkup()
+        : quantity === 0
+          ? `<div class="cart-drawer__empty" data-cart-empty-state>${t("cart.empty")}</div>`
+          : cartState.items.map(createCartItemMarkup).join("");
+      cartSubtotal.textContent = formatCurrency(pricingSummary.subtotal);
+      cartSavings.textContent = formatSavingsValue(savingsValue);
+      cartShipping.textContent = t("commerce.shippingFree");
+      cartDrawerTotal.textContent = formatCurrency(pricingSummary.total);
+      cartDeliverySummary.textContent = earliestDelivery
+        ? t("commerce.earliestDelivery", { label: formatAbsoluteDeliveryDate(earliestDelivery.date) })
+        : t("commerce.addItemsDelivery");
+      cartTrustCopy.textContent = t("commerce.trustCopy");
     }
 
     function setCartDrawerOpen(nextState) {
@@ -943,7 +4209,28 @@
       cartDrawer.dataset.open = nextState ? "true" : "false";
       cartDrawer.setAttribute("aria-hidden", nextState ? "false" : "true");
       cartToggleButton.setAttribute("aria-expanded", nextState ? "true" : "false");
+      detailCartToggleButton.setAttribute("aria-expanded", nextState ? "true" : "false");
       document.body.classList.toggle("is-cart-drawer-open", nextState);
+    }
+
+    function syncPageView() {
+      const currentView = getCurrentView();
+      const isStorefrontView = currentView === "storefront";
+      const isDetailView = currentView === DETAIL_VIEW_KEY;
+      const isOrderView = currentView === ORDER_VIEW_KEY;
+
+      document.body.dataset.view = currentView;
+      pageRoot.dataset.view = currentView;
+      storefrontView.hidden = !isStorefrontView;
+      detailView.hidden = !isDetailView;
+      orderView.hidden = !isOrderView;
+      const allowDrawer = !isOrderView;
+      cartDrawer.hidden = !allowDrawer;
+      cartBackdrop.hidden = !allowDrawer;
+
+      if (!allowDrawer && isCartDrawerOpen) {
+        setCartDrawerOpen(false);
+      }
     }
 
     function setCartMutationPending(nextState) {
@@ -954,8 +4241,11 @@
     function renderCartState() {
       const quantity = getCartQuantity(cartState.items);
       cartCount.textContent = String(quantity);
-      cartSummary.textContent = `购物车 ${quantity} 件`;
+      cartSummary.textContent = t("cart.summary", { count: quantity });
+      detailCartCount.textContent = String(quantity);
+      detailCartSummary.textContent = t("cart.summary", { count: quantity });
       clearCartButton.disabled = quantity === 0 || isCartMutationPending;
+      cartCheckoutButton.disabled = quantity === 0 || isCartMutationPending;
       renderCartDrawer();
     }
 
@@ -1011,6 +4301,8 @@
         }
 
         const payload = await response.json();
+        clearOrderConfirmationState();
+        clearStoredOrderConfirmationSnapshot();
         syncCartItem(payload.item);
         return payload;
       } finally {
@@ -1095,10 +4387,23 @@
       }
     }
 
+    async function checkoutCart() {
+      if (getCartQuantity(cartState.items) === 0 || isCartMutationPending) {
+        return;
+      }
+
+      rememberStorefrontOriginForCheckout();
+      const confirmationSnapshot = buildOrderConfirmationState();
+      await clearCart();
+      orderConfirmationState = confirmationSnapshot;
+      saveOrderConfirmationSnapshot(confirmationSnapshot);
+      renderCartState();
+    }
+
     function showLoadFailureState() {
       productGrid.classList.add("is-empty");
-      productGrid.innerHTML = '<div class="empty-state" data-empty-state>商品加载失败，请稍后重试</div>';
-      resultCount.textContent = "共 0 件商品";
+      productGrid.innerHTML = `<div class="empty-state" data-empty-state>${t("listing.loadFailure")}</div>`;
+      resultCount.textContent = t("listing.resultCount", { count: 0 });
       syncToolbarState();
     }
 
@@ -1113,6 +4418,8 @@
       sortButtons.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.sort === activeSort);
       });
+
+      renderShellCopy();
     }
 
     function bindCardInteractions() {
@@ -1123,52 +4430,35 @@
         const cartButton = card.querySelector("[data-cart-button]");
         const productId = card.dataset.productId;
 
-        sizeButtons.forEach((button) => {
-          button.addEventListener("click", () => {
-            sizeButtons.forEach((sizeButton) => {
-              sizeButton.classList.remove("is-selected");
-              sizeButton.setAttribute("aria-pressed", "false");
-            });
-
-            button.classList.add("is-selected");
-            button.setAttribute("aria-pressed", "true");
-          });
-        });
+        bindSizeSelection(sizeButtons);
 
         cartButton.addEventListener("click", async () => {
           const selectedSize = card.querySelector('[data-size][aria-pressed="true"]').textContent.trim();
 
           try {
             await addCartItem(productId, selectedSize);
-            cartButton.textContent = "已加入购物车";
-
-            if (cartFeedbackTimers.has(productId)) {
-              window.clearTimeout(cartFeedbackTimers.get(productId));
-            }
-
-            const timerId = window.setTimeout(() => {
-              cartButton.textContent = "加入购物车";
-              cartFeedbackTimers.delete(productId);
-            }, 1500);
-
-            cartFeedbackTimers.set(productId, timerId);
+            updateCartButtonFeedback(cartButton, productId);
           } catch (error) {
-            cartButton.textContent = "加入购物车";
+            cartButton.textContent = t("cart.addToCart");
           }
         });
       });
     }
 
     async function renderProducts() {
-      const visibleProducts = await fetchProducts();
-      syncProductCatalog(visibleProducts);
+      const [allProducts, visibleProducts] = await Promise.all([
+        fetchAllProducts(),
+        fetchProducts()
+      ]);
+      syncNavigationContext(activeFilter, activeSort, activeQuery);
+      syncProductCatalog(allProducts);
       const isEmpty = visibleProducts.length === 0;
 
       productGrid.classList.toggle("is-empty", isEmpty);
       productGrid.innerHTML = isEmpty
-        ? '<div class="empty-state" data-empty-state>当前分类暂无商品</div>'
+        ? `<div class="empty-state" data-empty-state>${t("listing.empty")}</div>`
         : visibleProducts.map(createCardMarkup).join("");
-      resultCount.textContent = `共 ${visibleProducts.length} 件商品`;
+      resultCount.textContent = t("listing.resultCount", { count: visibleProducts.length });
       syncToolbarState();
       renderCartDrawer();
 
@@ -1176,6 +4466,13 @@
         bindCardInteractions();
       }
     }
+
+    siteSearchForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const nextQuery = normalizeQueryValue(siteSearchInput.value);
+      const nextHref = getStorefrontHref(activeFilter, activeSort, nextQuery);
+      window.location.href = nextHref;
+    });
 
     toolbar.addEventListener("click", async (event) => {
       const cartToggle = event.target.closest("[data-cart-toggle]");
@@ -1206,9 +4503,21 @@
       }
     });
 
+    detailCartToggleButton.addEventListener("click", () => {
+      setCartDrawerOpen(true);
+    });
+
     clearCartButton.addEventListener("click", async () => {
       try {
         await clearCart();
+      } catch (error) {
+        renderCartState();
+      }
+    });
+
+    cartCheckoutButton.addEventListener("click", async () => {
+      try {
+        await checkoutCart();
       } catch (error) {
         renderCartState();
       }
@@ -1222,7 +4531,33 @@
       setCartDrawerOpen(false);
     });
 
+    localeButtons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        const nextLocale = normalizeLocale(button.dataset.localeOption);
+
+        if (nextLocale === activeLocale) {
+          return;
+        }
+
+        activeLocale = nextLocale;
+        saveLocale(activeLocale);
+        await rerenderActiveViewForLocale();
+      });
+    });
+
     cartDrawer.addEventListener("click", async (event) => {
+      const continueShoppingButton = event.target.closest("[data-continue-shopping]");
+      if (continueShoppingButton) {
+        setCartDrawerOpen(false);
+        return;
+      }
+
+      const viewOrderPageButton = event.target.closest("[data-view-order-page]");
+      if (viewOrderPageButton) {
+        window.location.href = ORDER_VIEW_PATH;
+        return;
+      }
+
       const increaseButton = event.target.closest("[data-cart-increase]");
       if (increaseButton) {
         const productId = increaseButton.dataset.productId;
@@ -1273,13 +4608,57 @@
       }
     });
 
-    renderProducts().catch(() => {
-      showLoadFailureState();
-    });
+    async function initializePage() {
+      activeLocale = readStoredLocale();
+      syncActiveStateFromUrl();
+      initializeNavigationContext();
+      renderLocaleControls();
+      renderStaticCopy();
+      syncPageView();
+      if (getCurrentView() === "storefront") {
+        syncNavigationContext(activeFilter, activeSort, activeQuery);
+      }
 
-    renderCartState();
-    renderCartDrawer();
-    fetchCart().catch(() => {
+      if (getCurrentView() === ORDER_VIEW_KEY) {
+        await renderOrderPage();
+        return;
+      }
+
+      renderCartState();
+      renderCartDrawer();
+
+      const cartLoadPromise = fetchCart().catch(() => {
+        renderCartState();
+      });
+
+      if (getCurrentView() === DETAIL_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderDetailPage();
+        return;
+      }
+      cartLoadPromise.catch(() => {
+        renderCartState();
+      });
+
+      try {
+        await renderProducts();
+      } catch (error) {
+        showLoadFailureState();
+      }
+    }
+
+    initializePage().catch(() => {
+      if (getCurrentView() === ORDER_VIEW_KEY) {
+        renderOrderPageFallback();
+        return;
+      }
+
+      if (getCurrentView() === DETAIL_VIEW_KEY) {
+        renderDetailEmptyState(createDetailBackHref());
+        return;
+      }
+
+      showLoadFailureState();
       renderCartState();
     });
   </script>

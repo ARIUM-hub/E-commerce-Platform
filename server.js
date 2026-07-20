@@ -13,10 +13,12 @@ const requiredDataFiles = ["products.json", "cart.json"];
 const staticRoutes = new Map([
   ["/", path.join(rootDir, "socks-product-list.html")],
   ["/socks-product-list.html", path.join(rootDir, "socks-product-list.html")],
-  ["/socks-product-card.html", path.join(rootDir, "socks-product-card.html")]
+  ["/socks-product-card.html", path.join(rootDir, "socks-product-card.html")],
+  ["/socks-order-confirmation.html", path.join(rootDir, "socks-order-confirmation.html")]
 ]);
 const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
+const validLocales = new Set(["zh-CN", "en-US"]);
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -95,9 +97,40 @@ function sortRecommended(left, right) {
   return right.releaseDate.localeCompare(left.releaseDate);
 }
 
-function getProductsPayload(products, filterValue, sortValue) {
+function normalizeLocale(localeValue) {
+  return validLocales.has(localeValue) ? localeValue : "zh-CN";
+}
+
+function localizeProduct(product, locale) {
+  const fallbackCopy = product.localizedContent?.["zh-CN"] || {};
+  const localizedCopy = product.localizedContent?.[locale] || fallbackCopy;
+  const { localizedContent, ...rest } = product;
+
+  return {
+    ...rest,
+    title: localizedCopy.title || fallbackCopy.title || product.title,
+    categoryLabel: localizedCopy.categoryLabel || fallbackCopy.categoryLabel || product.categoryLabel,
+    description: localizedCopy.description || fallbackCopy.description || product.description
+  };
+}
+
+function normalizeSearchQuery(queryValue) {
+  return typeof queryValue === "string" ? queryValue.trim() : "";
+}
+
+function matchesLocalizedProductQuery(product, query) {
+  const normalizedQuery = query.toLocaleLowerCase();
+
+  return [product.title, product.description, product.categoryLabel].some((fieldValue) => {
+    return typeof fieldValue === "string" && fieldValue.toLocaleLowerCase().includes(normalizedQuery);
+  });
+}
+
+function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue) {
   const filter = validFilters.has(filterValue) ? filterValue : "all";
   const sort = validSorts.has(sortValue) ? sortValue : "recommended";
+  const locale = normalizeLocale(localeValue);
+  const q = normalizeSearchQuery(queryValue);
   const items = filter === "all"
     ? [...products]
     : products.filter((product) => product.categoryKey === filter);
@@ -112,13 +145,28 @@ function getProductsPayload(products, filterValue, sortValue) {
     items.sort((left, right) => right.releaseDate.localeCompare(left.releaseDate));
   }
 
+  const localizedItems = items.map((product) => localizeProduct(product, locale));
+  const matchedItems = q
+    ? localizedItems.filter((product) => matchesLocalizedProductQuery(product, q))
+    : localizedItems;
+
+  const payloadMeta = {
+    filter,
+    sort,
+    count: matchedItems.length
+  };
+
+  if (localeValue) {
+    payloadMeta.locale = locale;
+  }
+
+  if (q) {
+    payloadMeta.q = q;
+  }
+
   return {
-    items,
-    meta: {
-      filter,
-      sort,
-      count: items.length
-    }
+    items: matchedItems,
+    meta: payloadMeta
   };
 }
 
@@ -181,7 +229,9 @@ const server = http.createServer(async (request, response) => {
       const payload = getProductsPayload(
         products,
         requestUrl.searchParams.get("filter"),
-        requestUrl.searchParams.get("sort")
+        requestUrl.searchParams.get("sort"),
+        requestUrl.searchParams.get("locale"),
+        requestUrl.searchParams.get("q")
       );
       sendJson(response, 200, payload);
       return;

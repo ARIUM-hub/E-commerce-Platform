@@ -24,6 +24,49 @@ test("returns products with default filter and recommended sort", async ({ reque
   expect(payload.items[2].title).toBe("通勤罗口袜");
 });
 
+test("returns English localized product content when locale=en-US is requested", async ({ request }) => {
+  const response = await request.get("/api/products?locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.meta).toEqual({
+    filter: "all",
+    sort: "recommended",
+    count: 6,
+    locale: "en-US"
+  });
+  expect(payload.items[0]).toMatchObject({
+    id: "sock-01",
+    title: "Minimal Crew Socks",
+    categoryLabel: "Crew Socks",
+    description: "Soft, breathable fabric made for daily commuting and relaxed at-home wear."
+  });
+  expect(payload.items[1]).toMatchObject({
+    id: "sock-02",
+    title: "Compression Sport Socks",
+    categoryLabel: "Sport Socks"
+  });
+});
+
+test("searches localized product fields with q and locale", async ({ request }) => {
+  const response = await request.get("/api/products?locale=en-US&q=quick-dry");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.meta).toEqual({
+    filter: "all",
+    sort: "recommended",
+    count: 1,
+    locale: "en-US",
+    q: "quick-dry"
+  });
+  expect(payload.items).toHaveLength(1);
+  expect(payload.items[0]).toMatchObject({
+    id: "sock-04",
+    title: "Quick-Dry Training Socks"
+  });
+});
+
 test("filters sport products and sorts by ascending price", async ({ request }) => {
   const response = await request.get("/api/products?filter=sport&sort=price-asc");
   expect(response.ok()).toBe(true);
@@ -203,5 +246,79 @@ test("keeps rating metadata in filtered product responses", async ({ request }) 
     ratingValue: 4.6,
     reviewCount: 973,
     isTopRated: false
+  });
+});
+
+test("returns fulfillment metadata for every product card", async ({ request }) => {
+  const response = await request.get("/api/products");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock01 = payload.items.find((product) => product.id === "sock-01");
+
+  expect(sock01).toMatchObject({
+    id: "sock-01",
+    shippingLabel: "FREE delivery",
+    deliveryEstimate: "Get it by Sunday, July 19",
+    stockLabel: "In stock",
+    isLowStock: false
+  });
+
+  payload.items.forEach((product) => {
+    expect(typeof product.shippingLabel).toBe("string");
+    expect(typeof product.deliveryEstimate).toBe("string");
+    expect(typeof product.stockLabel).toBe("string");
+    expect(typeof product.isLowStock).toBe("boolean");
+  });
+});
+
+test("keeps fulfillment metadata in filtered product responses", async ({ request }) => {
+  const response = await request.get("/api/products?filter=sport&sort=price-asc");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock04 = payload.items.find((product) => product.id === "sock-04");
+
+  expect(sock04).toMatchObject({
+    id: "sock-04",
+    shippingLabel: "FREE delivery",
+    deliveryEstimate: "Get it by Monday, July 20",
+    stockLabel: "Only 5 left in stock",
+    isLowStock: true
+  });
+});
+
+test("returns social proof metadata for every product card", async ({ request }) => {
+  const response = await request.get("/api/products");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock02 = payload.items.find((product) => product.id === "sock-02");
+
+  expect(sock02).toMatchObject({
+    id: "sock-02",
+    recentlyBoughtLabel: "2K+ bought in past month",
+    isBestSeller: true
+  });
+
+  payload.items.forEach((product) => {
+    expect(typeof product.recentlyBoughtLabel).toBe("string");
+    expect(typeof product.isBestSeller).toBe("boolean");
+  });
+});
+
+test("keeps social proof independent from recommended products", async ({ request }) => {
+  const response = await request.get("/api/products?filter=daily&sort=recommended");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock05 = payload.items.find((product) => product.id === "sock-05");
+
+  expect(sock05).toMatchObject({
+    id: "sock-05",
+    title: "通勤罗口袜",
+    recentlyBoughtLabel: "1K+ bought in past month",
+    isBestSeller: false,
+    isRecommended: true
   });
 });
