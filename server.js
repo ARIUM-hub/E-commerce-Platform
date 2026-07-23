@@ -46,6 +46,7 @@ const staticRoutes = new Map([
 const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
 const validLocales = new Set(["zh-CN", "en-US"]);
+const validStockFilters = new Set(["all", "in-stock", "low-stock", "out-of-stock"]);
 const shippingMethods = {
   standard: {
     id: "standard",
@@ -189,6 +190,31 @@ function normalizeSearchQuery(queryValue) {
   return typeof queryValue === "string" ? queryValue.trim() : "";
 }
 
+function normalizeOptionalNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeProductRefinements(options = {}) {
+  const minPrice = normalizeOptionalNumber(options.minPrice);
+  const maxPrice = normalizeOptionalNumber(options.maxPrice);
+  const ratingMin = normalizeOptionalNumber(options.ratingMin);
+  const stock = validStockFilters.has(options.stock) ? options.stock : "all";
+  const size = String(options.size || "").trim();
+
+  return {
+    minPrice,
+    maxPrice,
+    size,
+    stock,
+    ratingMin
+  };
+}
+
 function normalizePositiveInteger(value, fallback, options = {}) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
@@ -222,34 +248,93 @@ function matchesLocalizedProductQuery(product, query) {
   });
 }
 
+function hasSellableVariant(product, size = "") {
+  return getProductVariants(product).some((variant) => {
+    const sizeMatches = !size || variant.size === size;
+    return sizeMatches && variant.isAvailable && variant.stockQuantity > 0;
+  });
+}
+
+function hasLowStockVariant(product, size = "") {
+  return getProductVariants(product).some((variant) => {
+    const sizeMatches = !size || variant.size === size;
+    return sizeMatches
+      && variant.isAvailable
+      && variant.stockQuantity > 0
+      && variant.stockQuantity <= variant.lowStockThreshold;
+  });
+}
+
+function matchesSizeFilter(product, size) {
+  return !size || getProductVariants(product).some((variant) => variant.size === size);
+}
+
+function matchesStockFilter(product, stock, size) {
+  if (stock === "in-stock") {
+    return hasSellableVariant(product, size);
+  }
+
+  if (stock === "low-stock") {
+    return hasLowStockVariant(product, size);
+  }
+
+  if (stock === "out-of-stock") {
+    return !hasSellableVariant(product, size);
+  }
+
+  return true;
+}
+
+function matchesProductRefinements(product, refinements) {
+  if (refinements.minPrice !== null && product.price < refinements.minPrice) {
+    return false;
+  }
+
+  if (refinements.maxPrice !== null && product.price > refinements.maxPrice) {
+    return false;
+  }
+
+  if (refinements.ratingMin !== null && product.ratingValue < refinements.ratingMin) {
+    return false;
+  }
+
+  if (!matchesSizeFilter(product, refinements.size)) {
+    return false;
+  }
+
+  return matchesStockFilter(product, refinements.stock, refinements.size);
+}
+
 function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue, options = {}) {
   const filter = validFilters.has(filterValue) ? filterValue : "all";
   const sort = validSorts.has(sortValue) ? sortValue : "recommended";
   const locale = normalizeLocale(localeValue);
   const q = normalizeSearchQuery(queryValue);
+  const refinements = normalizeProductRefinements(options);
   const items = filter === "all"
     ? [...products]
     : products.filter((product) => product.categoryKey === filter);
-
-  if (sort === "recommended") {
-    items.sort(sortRecommended);
-  } else if (sort === "price-asc") {
-    items.sort((left, right) => left.price - right.price);
-  } else if (sort === "price-desc") {
-    items.sort((left, right) => right.price - left.price);
-  } else if (sort === "newest") {
-    items.sort((left, right) => right.releaseDate.localeCompare(left.releaseDate));
-  }
 
   const localizedItems = items.map((product) => localizeProduct(product, locale));
   const matchedItems = q
     ? localizedItems.filter((product) => matchesLocalizedProductQuery(product, q))
     : localizedItems;
+  const refinedItems = matchedItems.filter((product) => matchesProductRefinements(product, refinements));
+
+  if (sort === "recommended") {
+    refinedItems.sort(sortRecommended);
+  } else if (sort === "price-asc") {
+    refinedItems.sort((left, right) => left.price - right.price);
+  } else if (sort === "price-desc") {
+    refinedItems.sort((left, right) => right.price - left.price);
+  } else if (sort === "newest") {
+    refinedItems.sort((left, right) => right.releaseDate.localeCompare(left.releaseDate));
+  }
 
   const payloadMeta = {
     filter,
     sort,
-    count: matchedItems.length
+    count: refinedItems.length
   };
 
   if (localeValue) {
@@ -262,7 +347,7 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
 
   const page = normalizePositiveInteger(options.page, 1);
   const pageSize = normalizePositiveInteger(options.pageSize, 8, { max: 24 });
-  const paginated = paginateItems(matchedItems, page, pageSize);
+  const paginated = paginateItems(refinedItems, page, pageSize);
 
   return {
     items: paginated.items,
@@ -274,7 +359,8 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
       page: paginated.page,
       pageSize: paginated.pageSize,
       totalPages: paginated.totalPages,
-      hasMore: paginated.hasMore
+      hasMore: paginated.hasMore,
+      filters: refinements
     }
   };
 }
@@ -856,7 +942,12 @@ const server = http.createServer(async (request, response) => {
         requestUrl.searchParams.get("q"),
         {
           page: requestUrl.searchParams.get("page"),
-          pageSize: requestUrl.searchParams.get("pageSize")
+          pageSize: requestUrl.searchParams.get("pageSize"),
+          minPrice: requestUrl.searchParams.get("minPrice"),
+          maxPrice: requestUrl.searchParams.get("maxPrice"),
+          size: requestUrl.searchParams.get("size"),
+          stock: requestUrl.searchParams.get("stock"),
+          ratingMin: requestUrl.searchParams.get("ratingMin")
         }
       );
       sendJson(response, 200, payload);

@@ -864,6 +864,65 @@ test("filters sport products and sorts by ascending price", async ({ request }) 
   ]);
 });
 
+test("filters products by price range", async ({ request }) => {
+  const response = await request.get("/api/products?minPrice=40&maxPrice=50&pageSize=24&locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.items.length).toBeGreaterThan(0);
+  payload.items.forEach((product) => {
+    expect(product.price).toBeGreaterThanOrEqual(40);
+    expect(product.price).toBeLessThanOrEqual(50);
+  });
+  expect(payload.meta.filters).toMatchObject({
+    minPrice: 40,
+    maxPrice: 50
+  });
+});
+
+test("filters products by SKU size", async ({ request }) => {
+  const response = await request.get("/api/products?size=43&pageSize=24&locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.items.length).toBeGreaterThan(0);
+  payload.items.forEach((product) => {
+    expect(product.variants.some((variant) => variant.size === "43")).toBe(true);
+  });
+  expect(payload.meta.filters.size).toBe("43");
+});
+
+test("filters products by stock state", async ({ request }) => {
+  const lowStockResponse = await request.get("/api/products?stock=low-stock&pageSize=24&locale=en-US");
+  expect(lowStockResponse.ok()).toBe(true);
+  const lowStockPayload = await lowStockResponse.json();
+  expect(lowStockPayload.items.length).toBeGreaterThan(0);
+  lowStockPayload.items.forEach((product) => {
+    expect(product.variants.some((variant) => {
+      return variant.isAvailable && variant.stockQuantity > 0 && variant.stockQuantity <= variant.lowStockThreshold;
+    })).toBe(true);
+  });
+
+  const outOfStockResponse = await request.get("/api/products?stock=out-of-stock&pageSize=24&locale=en-US");
+  expect(outOfStockResponse.ok()).toBe(true);
+  const outOfStockPayload = await outOfStockResponse.json();
+  outOfStockPayload.items.forEach((product) => {
+    expect(product.variants.some((variant) => variant.isAvailable && variant.stockQuantity > 0)).toBe(false);
+  });
+});
+
+test("filters products by minimum rating", async ({ request }) => {
+  const response = await request.get("/api/products?ratingMin=4.7&pageSize=24&locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.items.length).toBeGreaterThan(0);
+  payload.items.forEach((product) => {
+    expect(product.ratingValue).toBeGreaterThanOrEqual(4.7);
+  });
+  expect(payload.meta.filters.ratingMin).toBe(4.7);
+});
+
 test("falls back to default filter and recommended sort for invalid query values", async ({ request }) => {
   const response = await request.get("/api/products?filter=business&sort=featured");
   expect(response.ok()).toBe(true);
