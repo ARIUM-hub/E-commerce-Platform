@@ -1304,6 +1304,19 @@ test("filters the list by category and updates the result count", async ({ page 
   await expect(page.getByText("夜跑反光运动袜")).toBeVisible();
 });
 
+test("applies advanced filters from the storefront url", async ({ page }) => {
+  await page.goto("/socks-product-list.html?minPrice=40&maxPrice=50&size=43&stock=in-stock&ratingMin=4.5");
+
+  await expect(page.locator("[data-active-filter-chip]")).toContainText([
+    "¥40 - ¥50",
+    "43",
+    "in-stock",
+    "4.5+"
+  ]);
+  await expect(page.locator("[data-product-card]")).not.toHaveCount(0);
+  await expect(page.locator("[data-product-card]").first().locator("[data-size='43']")).toBeVisible();
+});
+
 test("submits q through the shared header search and filters the storefront results", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 

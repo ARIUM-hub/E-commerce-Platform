@@ -565,7 +565,7 @@ git commit -m "feat: recommend products for empty searches"
 - Modify: `tests/socks-product-list.spec.js`
 - Modify: `socks-product-list.html`
 
-- [ ] **Step 1: Write failing UI test for URL-driven filters**
+- [x] **Step 1: Write failing UI test for URL-driven filters**
 
 Add this test near existing list interaction tests:
 
@@ -584,7 +584,7 @@ test("applies price size stock and rating filters from the storefront url", asyn
 });
 ```
 
-- [ ] **Step 2: Run URL-driven filter UI test and verify it fails**
+- [x] **Step 2: Run URL-driven filter UI test and verify it fails**
 
 Run:
 
@@ -594,7 +594,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because the filter UI and query state do not exist yet.
 
-- [ ] **Step 3: Add JavaScript state constants and URL readers**
+- [x] **Step 3: Add JavaScript state constants and URL readers**
 
 In `socks-product-list.html`, near current filter/sort/query constants, add:
 
@@ -651,7 +651,7 @@ Add these helpers near existing `getRequestedQuery()` helpers:
 
 Call `syncAdvancedListStateFromUrl()` inside the existing list state initialization after `activeQuery` is set.
 
-- [ ] **Step 4: Send advanced filters in `fetchProducts`**
+- [x] **Step 4: Send advanced filters in `fetchProducts`**
 
 Add this helper:
 
@@ -682,7 +682,7 @@ After parsing payload:
       activeHasMore = Boolean(payload.meta.hasMore);
 ```
 
-- [ ] **Step 5: Add filter rail markup container and active chips**
+- [x] **Step 5: Add filter rail markup container and active chips**
 
 In the storefront page shell near the current toolbar, add:
 
@@ -706,7 +706,7 @@ In the storefront page shell near the current toolbar, add:
 
 If the exact toolbar markup differs, place the `aside` before the product grid and the chips near the result count.
 
-- [ ] **Step 6: Add chip rendering function**
+- [x] **Step 6: Add chip rendering function**
 
 Add:
 
@@ -738,7 +738,7 @@ Add:
 
 Call `renderActiveFilterChips()` after product rendering and after URL state initialization.
 
-- [ ] **Step 7: Add minimal CSS for filter rail and chips**
+- [x] **Step 7: Add minimal CSS for filter rail and chips**
 
 Add CSS near existing toolbar/list styles:
 
@@ -789,7 +789,7 @@ Add CSS near existing toolbar/list styles:
     }
 ```
 
-- [ ] **Step 8: Run URL-driven filter UI test and verify it passes**
+- [x] **Step 8: Run URL-driven filter UI test and verify it passes**
 
 Run:
 
@@ -799,7 +799,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

@@ -499,6 +499,25 @@
       white-space: nowrap;
     }
 
+    .active-filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: -4px 0 18px;
+    }
+
+    .active-filter-chip {
+      min-height: 36px;
+      border: 1px solid #d8d8d8;
+      border-radius: var(--radius-pill);
+      background: #ffffff;
+      color: #222222;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 13px;
+      box-shadow: 0 8px 18px rgba(17, 17, 17, 0.05);
+    }
+
     .cart-drawer__action {
       border: 1px solid #d4d4d4;
       border-radius: var(--radius-pill);
@@ -2621,6 +2640,8 @@
         <p class="toolbar__result" data-result-count></p>
       </section>
 
+      <div class="active-filter-chips" data-active-filter-chips aria-label="当前筛选条件"></div>
+
       <section class="product-grid" data-product-grid></section>
     </div>
 
@@ -2821,6 +2842,16 @@
       NEWEST: "newest"
     };
 
+    const STOCK_FILTER_KEY = {
+      ALL: "all",
+      IN_STOCK: "in-stock",
+      LOW_STOCK: "low-stock",
+      OUT_OF_STOCK: "out-of-stock"
+    };
+
+    const validStockFilters = new Set(Object.values(STOCK_FILTER_KEY));
+    const DEFAULT_PAGE_SIZE = 8;
+
     const LOCALE_KEY = {
       ZH_CN: "zh-CN",
       EN_US: "en-US"
@@ -2882,6 +2913,7 @@
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
+    const activeFilterChips = document.querySelector("[data-active-filter-chips]");
     const detailPagePanel = document.querySelector("[data-detail-page-panel]");
     const detailPageSeries = document.querySelector("[data-detail-page-series]");
     const detailPageTitle = document.querySelector("[data-detail-page-title]");
@@ -2941,6 +2973,15 @@
     let activeFilter = FILTER_KEY.ALL;
     let activeSort = SORT_KEY.RECOMMENDED;
     let activeQuery = "";
+    let activeMinPrice = "";
+    let activeMaxPrice = "";
+    let activeSize = "";
+    let activeStock = STOCK_FILTER_KEY.ALL;
+    let activeRatingMin = "";
+    let activePage = 1;
+    let activePageSize = DEFAULT_PAGE_SIZE;
+    let activeHasMore = false;
+    let activeTotalCount = 0;
     let activeLocale = LOCALE_KEY.ZH_CN;
     let navigationContext = {
       storefrontHref: STOREFRONT_PATH,
@@ -3712,6 +3753,35 @@
 
     function getRequestedQuery() {
       return normalizeQueryValue(getSearchParams().get("q"));
+    }
+
+    function getRequestedNumberParam(name) {
+      const value = getSearchParams().get(name);
+      if (value == null || value === "") {
+        return "";
+      }
+
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? String(parsed) : "";
+    }
+
+    function getRequestedSize() {
+      return String(getSearchParams().get("size") || "").trim();
+    }
+
+    function getRequestedStock() {
+      const stockValue = getSearchParams().get("stock");
+      return validStockFilters.has(stockValue) ? stockValue : STOCK_FILTER_KEY.ALL;
+    }
+
+    function getRequestedPage() {
+      const parsed = Number.parseInt(getSearchParams().get("page"), 10);
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+    }
+
+    function getRequestedPageSize() {
+      const parsed = Number.parseInt(getSearchParams().get("pageSize"), 10);
+      return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 24) : DEFAULT_PAGE_SIZE;
     }
 
     function getRequestedDetailProductId() {
@@ -5096,11 +5166,33 @@
       const params = new URLSearchParams({
         filter: activeFilter,
         sort: activeSort,
-        locale: activeLocale
+        locale: activeLocale,
+        page: String(activePage),
+        pageSize: String(activePageSize)
       });
 
       if (activeQuery) {
         params.set("q", activeQuery);
+      }
+
+      if (activeMinPrice) {
+        params.set("minPrice", activeMinPrice);
+      }
+
+      if (activeMaxPrice) {
+        params.set("maxPrice", activeMaxPrice);
+      }
+
+      if (activeSize) {
+        params.set("size", activeSize);
+      }
+
+      if (activeStock !== STOCK_FILTER_KEY.ALL) {
+        params.set("stock", activeStock);
+      }
+
+      if (activeRatingMin) {
+        params.set("ratingMin", activeRatingMin);
       }
 
       const response = await fetch(`/api/products?${params.toString()}`);
@@ -5110,7 +5202,9 @@
       }
 
       const payload = await response.json();
-      resultCount.textContent = t("listing.resultCount", { count: payload.meta.count });
+      activeHasMore = Boolean(payload.meta?.hasMore);
+      activeTotalCount = payload.meta?.totalCount ?? payload.meta.count;
+      resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
       return payload.items;
     }
 
@@ -5132,6 +5226,13 @@
       activeFilter = getRequestedFilter();
       activeSort = getRequestedSort();
       activeQuery = getRequestedQuery();
+      activeMinPrice = getRequestedNumberParam("minPrice");
+      activeMaxPrice = getRequestedNumberParam("maxPrice");
+      activeSize = getRequestedSize();
+      activeStock = getRequestedStock();
+      activeRatingMin = getRequestedNumberParam("ratingMin");
+      activePage = getRequestedPage();
+      activePageSize = getRequestedPageSize();
     }
 
     function bindSizeSelection(sizeButtons, options = {}) {
@@ -6026,6 +6127,7 @@
       productGrid.innerHTML = `<div class="empty-state" data-empty-state>${t("listing.loadFailure")}</div>`;
       resultCount.textContent = t("listing.resultCount", { count: 0 });
       syncToolbarState();
+      renderActiveFilterChips();
     }
 
     function syncToolbarState() {
@@ -6041,6 +6143,37 @@
       });
 
       renderShellCopy();
+    }
+
+    function renderActiveFilterChips() {
+      if (!activeFilterChips) {
+        return;
+      }
+
+      const chips = [];
+      if (activeMinPrice || activeMaxPrice) {
+        chips.push({
+          key: "price",
+          label: `¥${activeMinPrice || "0"} - ¥${activeMaxPrice || "不限"}`
+        });
+      }
+
+      if (activeSize) {
+        chips.push({ key: "size", label: activeSize });
+      }
+
+      if (activeStock !== STOCK_FILTER_KEY.ALL) {
+        chips.push({ key: "stock", label: activeStock });
+      }
+
+      if (activeRatingMin) {
+        chips.push({ key: "rating", label: `${activeRatingMin}+` });
+      }
+
+      activeFilterChips.hidden = chips.length === 0;
+      activeFilterChips.innerHTML = chips.map((chip) => {
+        return `<span class="active-filter-chip" data-active-filter-chip data-chip-key="${chip.key}">${escapeHtml(chip.label)}</span>`;
+      }).join("");
     }
 
     function bindCardInteractions() {
@@ -6097,8 +6230,9 @@
       productGrid.innerHTML = isEmpty
         ? `<div class="empty-state" data-empty-state>${t("listing.empty")}</div>`
         : visibleProducts.map(createCardMarkup).join("");
-      resultCount.textContent = t("listing.resultCount", { count: visibleProducts.length });
+      resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
       syncToolbarState();
+      renderActiveFilterChips();
       renderCartDrawer();
 
       if (!isEmpty) {
