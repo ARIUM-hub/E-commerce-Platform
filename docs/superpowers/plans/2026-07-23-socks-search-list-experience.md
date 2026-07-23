@@ -1043,7 +1043,7 @@ git commit -m "feat: add storefront filters and load more"
 - Modify: `tests/socks-product-list.spec.js`
 - Modify: `socks-product-list.html`
 
-- [ ] **Step 1: Write failing no-result UI test**
+- [x] **Step 1: Write failing no-result UI test**
 
 Add:
 
@@ -1061,7 +1061,7 @@ test("shows no-result recommendations and recovery actions", async ({ page }) =>
 });
 ```
 
-- [ ] **Step 2: Run no-result UI test and verify it fails**
+- [x] **Step 2: Run no-result UI test and verify it fails**
 
 Run:
 
@@ -1071,7 +1071,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because no-result markup and recovery actions do not exist.
 
-- [ ] **Step 3: Capture API recommendations in fetch flow**
+- [x] **Step 3: Capture API recommendations in fetch flow**
 
 Add state:
 
@@ -1085,7 +1085,7 @@ Inside `fetchProducts()` after parsing payload:
       recommendationProducts = Array.isArray(payload.recommendations) ? payload.recommendations : [];
 ```
 
-- [ ] **Step 4: Render no-result state**
+- [x] **Step 4: Render no-result state**
 
 Add:
 
@@ -1111,7 +1111,7 @@ Add:
 
 In the main product render path, call `renderNoResults()` when `visibleProducts.length === 0`.
 
-- [ ] **Step 5: Add recovery action handlers**
+- [x] **Step 5: Add recovery action handlers**
 
 Add click handling:
 
@@ -1143,7 +1143,7 @@ Add click handling:
       }
 ```
 
-- [ ] **Step 6: Run no-result UI test and verify it passes**
+- [x] **Step 6: Run no-result UI test and verify it passes**
 
 Run:
 
@@ -1153,7 +1153,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 

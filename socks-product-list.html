@@ -1707,6 +1707,83 @@
       font-size: 16px;
     }
 
+    .no-results {
+      display: grid;
+      gap: 18px;
+      padding: 34px;
+      border: 1px solid #e8e8e8;
+      border-radius: 28px;
+      background: #ffffff;
+      box-shadow: 0 16px 36px rgba(17, 17, 17, 0.06);
+    }
+
+    .no-results__title {
+      margin: 0;
+      color: #111111;
+      font-size: 24px;
+    }
+
+    .no-results__copy {
+      margin: 0;
+      max-width: 620px;
+      color: #666666;
+      line-height: 1.7;
+    }
+
+    .no-results__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .no-results__button {
+      min-height: 42px;
+      border: 1px solid #111111;
+      border-radius: var(--radius-pill);
+      background: #111111;
+      color: #ffffff;
+      padding: 0 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .no-results__button--secondary {
+      background: #ffffff;
+      color: #111111;
+    }
+
+    .no-results__recommendations {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .no-results__recommendation {
+      display: grid;
+      gap: 6px;
+      border: 1px solid #ececec;
+      border-radius: 18px;
+      background: #fafafa;
+      padding: 14px;
+    }
+
+    .no-results__recommendation-title,
+    .no-results__recommendation-price {
+      margin: 0;
+    }
+
+    .no-results__recommendation-title {
+      color: #222222;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .no-results__recommendation-price {
+      color: #111111;
+      font-weight: 800;
+    }
+
     .detail-panel {
       padding: 24px;
       border: 1px solid #e6e6e6;
@@ -2455,6 +2532,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .no-results__recommendations {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .product-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -2471,6 +2552,10 @@
 
       .advanced-filters__body,
       .advanced-filters__price-row {
+        grid-template-columns: 1fr;
+      }
+
+      .no-results__recommendations {
         grid-template-columns: 1fr;
       }
 
@@ -3117,6 +3202,7 @@
     let activeLocale = LOCALE_KEY.ZH_CN;
     let visibleProducts = [];
     let allProductsCache = [];
+    let recommendationProducts = [];
     let navigationContext = {
       storefrontHref: STOREFRONT_PATH,
       filter: FILTER_KEY.ALL,
@@ -5387,6 +5473,7 @@
       const payload = await response.json();
       activeHasMore = Boolean(payload.meta?.hasMore);
       activeTotalCount = payload.meta?.totalCount ?? payload.meta.count;
+      recommendationProducts = Array.isArray(payload.recommendations) ? payload.recommendations : [];
       resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
       return payload.items;
     }
@@ -6444,13 +6531,45 @@
       loadMoreProductsButton.textContent = "加载更多";
     }
 
+    function renderNoResults() {
+      const title = activeLocale === LOCALE_KEY.EN_US ? "No exact matches" : "没有找到完全匹配";
+      const copy = activeLocale === LOCALE_KEY.EN_US
+        ? "Try clearing filters or browse recommended socks from the current catalog."
+        : "可以清除筛选条件，或者先看看当前目录里更受欢迎的袜子。";
+      const clearAllLabel = activeLocale === LOCALE_KEY.EN_US ? "View all socks" : "查看全部袜子";
+      const clearRefinementsLabel = activeLocale === LOCALE_KEY.EN_US ? "Keep search, clear filters" : "保留搜索，清除筛选";
+      const recommendations = recommendationProducts.map((product) => {
+        const localizedProduct = getLocalizedProduct(product);
+        return `
+          <article class="no-results__recommendation" data-recommendation-card data-product-id="${escapeHtml(product.id)}">
+            <h3 class="no-results__recommendation-title">${escapeHtml(localizedProduct.title)}</h3>
+            <p class="no-results__recommendation-price">¥${product.price}</p>
+          </article>
+        `;
+      }).join("");
+
+      productGrid.innerHTML = `
+        <section class="no-results" data-no-results>
+          <h2 class="no-results__title" data-no-results-title>${title}</h2>
+          <p class="no-results__copy">${copy}</p>
+          <div class="no-results__actions">
+            <button class="no-results__button" type="button" data-clear-all-filters>${clearAllLabel}</button>
+            <button class="no-results__button no-results__button--secondary" type="button" data-clear-refinement-filters>${clearRefinementsLabel}</button>
+          </div>
+          <div class="no-results__recommendations">${recommendations}</div>
+        </section>
+      `;
+    }
+
     function renderProductGridItems(products) {
       const isEmpty = products.length === 0;
 
       productGrid.classList.toggle("is-empty", isEmpty);
-      productGrid.innerHTML = isEmpty
-        ? `<div class="empty-state" data-empty-state>${t("listing.empty")}</div>`
-        : products.map(createCardMarkup).join("");
+      if (isEmpty) {
+        renderNoResults();
+      } else {
+        productGrid.innerHTML = products.map(createCardMarkup).join("");
+      }
       resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
       syncToolbarState();
       renderAdvancedFilterControls();
@@ -6603,6 +6722,33 @@
       } catch (error) {
         loadMoreProductsButton.disabled = false;
         loadMoreProductsButton.textContent = "加载更多";
+      }
+    });
+
+    productGrid.addEventListener("click", async (event) => {
+      const clearAllFilters = event.target.closest("[data-clear-all-filters]");
+      if (clearAllFilters) {
+        await navigateToAdvancedFilterState({
+          q: "",
+          minPrice: "",
+          maxPrice: "",
+          size: "",
+          stock: STOCK_FILTER_KEY.ALL,
+          ratingMin: "",
+          pageSize: DEFAULT_PAGE_SIZE
+        });
+        return;
+      }
+
+      const clearRefinementFilters = event.target.closest("[data-clear-refinement-filters]");
+      if (clearRefinementFilters) {
+        await navigateToAdvancedFilterState({
+          minPrice: "",
+          maxPrice: "",
+          size: "",
+          stock: STOCK_FILTER_KEY.ALL,
+          ratingMin: ""
+        });
       }
     });
 

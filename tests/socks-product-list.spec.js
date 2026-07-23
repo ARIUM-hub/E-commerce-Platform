@@ -1342,6 +1342,18 @@ test("loads more products without replacing the first page", async ({ page }) =>
   await expect(page.locator("[data-product-card]").first()).toHaveAttribute("data-product-id", firstProductId);
 });
 
+test("shows no-result recommendations and recovery actions", async ({ page }) => {
+  await page.goto("/socks-product-list.html?q=not-a-real-sock-query&maxPrice=1");
+
+  await expect(page.locator("[data-no-results]")).toBeVisible();
+  await expect(page.locator("[data-no-results-title]")).toContainText(/没有|No/);
+  await expect(page.locator("[data-recommendation-card]")).not.toHaveCount(0);
+
+  await page.locator("[data-clear-all-filters]").click();
+  await expect(page).not.toHaveURL(/maxPrice=1/);
+  await expect(page.locator("[data-product-card]")).not.toHaveCount(0);
+});
+
 test("submits q through the shared header search and filters the storefront results", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
