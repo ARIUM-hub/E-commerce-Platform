@@ -1,6 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { test, expect } = require("@playwright/test");
+const { test, expect, request: playwrightRequest } = require("@playwright/test");
 
 const cartFile = path.join(__dirname, "fixtures", "test-data", "cart.json");
 const ordersFile = path.join(__dirname, "fixtures", "test-data", "orders.json");
@@ -545,6 +545,34 @@ test("rolls back checkout when SKU stock is insufficient", async ({ request }) =
   expect((await cartResponse.json()).items).toEqual([
     expect.objectContaining({ skuId: "sock-01-43", quantity: 3 })
   ]);
+});
+
+test("allows only one checkout to claim the final SKU stock", async ({ request }) => {
+  const secondContext = await playwrightRequest.newContext({
+    baseURL: "http://127.0.0.1:4173"
+  });
+
+  try {
+    const firstAdd = await request.post("/api/cart/items", {
+      data: { productId: "sock-01", size: "44", quantity: 2 }
+    });
+    const firstCookie = getSessionCookie(firstAdd);
+
+    const secondAdd = await secondContext.post("/api/cart/items", {
+      data: { productId: "sock-01", size: "44", quantity: 2 }
+    });
+    const secondCookie = getSessionCookie(secondAdd);
+
+    const [firstCheckout, secondCheckout] = await Promise.all([
+      request.post("/api/orders", { headers: { cookie: firstCookie }, data: checkoutPayload }),
+      secondContext.post("/api/orders", { headers: { cookie: secondCookie }, data: checkoutPayload })
+    ]);
+
+    const statuses = [firstCheckout.status(), secondCheckout.status()].sort();
+    expect(statuses).toEqual([201, 409]);
+  } finally {
+    await secondContext.dispose();
+  }
 });
 
 async function createOrderViaApi(request) {
