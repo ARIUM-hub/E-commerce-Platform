@@ -1,3 +1,10 @@
 {
-  "items": []
+  "items": [
+    {
+      "productId": "sock-10",
+      "skuId": "sock-10-35",
+      "size": "35",
+      "quantity": 7
+    }
+  ]
 }

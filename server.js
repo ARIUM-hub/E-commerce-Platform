@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -9,7 +10,18 @@ const rootDir = __dirname;
 const dataDir = path.resolve(rootDir, process.env.DATA_DIR || "data");
 const productsFile = path.join(dataDir, "products.json");
 const cartFile = path.join(dataDir, "cart.json");
-const requiredDataFiles = ["products.json", "cart.json"];
+const ordersFile = path.join(dataDir, "orders.json");
+const usersFile = path.join(dataDir, "users.json");
+const sessionsFile = path.join(dataDir, "sessions.json");
+const userCartsFile = path.join(dataDir, "user-carts.json");
+const requiredDataFiles = [
+  "products.json",
+  "cart.json",
+  "orders.json",
+  "users.json",
+  "sessions.json",
+  "user-carts.json"
+];
 const staticRoutes = new Map([
   ["/", path.join(rootDir, "socks-product-list.html")],
   ["/socks-product-list.html", path.join(rootDir, "socks-product-list.html")],
@@ -19,6 +31,30 @@ const staticRoutes = new Map([
 const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
 const validLocales = new Set(["zh-CN", "en-US"]);
+const shippingMethods = {
+  standard: {
+    id: "standard",
+    label: { "zh-CN": "标准配送", "en-US": "Standard delivery" },
+    fee: 0,
+    deliveryDays: 4
+  },
+  express: {
+    id: "express",
+    label: { "zh-CN": "加急配送", "en-US": "Express delivery" },
+    fee: 12,
+    deliveryDays: 2
+  }
+};
+const orderStatusLabels = {
+  pending_payment: { "zh-CN": "待支付", "en-US": "Pending payment" },
+  paid: { "zh-CN": "已支付", "en-US": "Paid" },
+  processing: { "zh-CN": "处理中", "en-US": "Processing" },
+  shipped: { "zh-CN": "已发货", "en-US": "Shipped" },
+  delivered: { "zh-CN": "已送达", "en-US": "Delivered" },
+  cancelled: { "zh-CN": "已取消", "en-US": "Cancelled" }
+};
+const sessionCookieName = "socks_session";
+const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -31,6 +67,14 @@ const mimeTypes = {
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(payload));
+}
+
+function sendJsonWithHeaders(response, statusCode, payload, headers = {}) {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...headers
+  });
   response.end(JSON.stringify(payload));
 }
 
@@ -179,6 +223,52 @@ function getCartPayload(cart) {
   };
 }
 
+function getProductVariants(product) {
+  return Array.isArray(product.variants) ? product.variants : [];
+}
+
+function findProductVariant(product, size) {
+  return getProductVariants(product).find((variant) => variant.size === size) || null;
+}
+
+function isVariantSellable(variant) {
+  return Boolean(variant)
+    && variant.isAvailable !== false
+    && Number.isInteger(variant.stockQuantity)
+    && variant.stockQuantity > 0;
+}
+
+function getVariantStockLimit(variant) {
+  if (!variant || !Number.isInteger(variant.stockQuantity) || variant.stockQuantity < 0) {
+    return null;
+  }
+  return variant.stockQuantity;
+}
+
+function normalizeCartItemWithVariant(item, product) {
+  const variant = item.skuId
+    ? getProductVariants(product).find((entry) => entry.skuId === item.skuId)
+    : findProductVariant(product, item.size);
+
+  return variant
+    ? { ...item, skuId: variant.skuId, size: variant.size }
+    : item;
+}
+
+function isCartItemForVariant(item, variant) {
+  return item.skuId === variant.skuId
+    || (!item.skuId && variant.skuId === `${item.productId}-${item.size}`);
+}
+
+function getCartSkuQuantity(cart, variant, excludedSkuId) {
+  return cart.items.reduce((sum, item) => {
+    if (!isCartItemForVariant(item, variant) || excludedSkuId === variant.skuId) {
+      return sum;
+    }
+    return sum + item.quantity;
+  }, 0);
+}
+
 function validateCartItemInput(products, body) {
   const product = products.find((item) => item.id === body.productId);
   if (!product) {
@@ -189,11 +279,20 @@ function validateCartItemInput(products, body) {
     };
   }
 
-  if (!product.sizes.includes(body.size)) {
+  const variant = findProductVariant(product, body.size);
+  if (!variant) {
     return {
       statusCode: 400,
       code: "INVALID_SIZE",
       message: "Size is not available for this product."
+    };
+  }
+
+  if (!isVariantSellable(variant)) {
+    return {
+      statusCode: 409,
+      code: "OUT_OF_STOCK",
+      message: "Selected size is out of stock."
     };
   }
 
@@ -206,13 +305,484 @@ function validateCartItemInput(products, body) {
     };
   }
 
-  return { quantity };
+  return { product, variant, quantity };
 }
 
 function findCartItemIndex(cart, productId, size) {
   return cart.items.findIndex((item) => {
     return item.productId === productId && item.size === size;
   });
+}
+
+function getProductStockLimit(product) {
+  return Number.isInteger(product.stockQuantity) && product.stockQuantity > 0
+    ? product.stockQuantity
+    : null;
+}
+
+function getCartProductQuantity(cart, productId, excludedSize) {
+  return cart.items.reduce((total, item) => {
+    if (item.productId !== productId || item.size === excludedSize) {
+      return total;
+    }
+
+    return total + item.quantity;
+  }, 0);
+}
+
+function validateStockQuantity(cart, product, requestedQuantity, excludedSize) {
+  const stockLimit = getProductStockLimit(product);
+  if (stockLimit === null) {
+    return null;
+  }
+
+  const nextProductQuantity = getCartProductQuantity(cart, product.id, excludedSize) + requestedQuantity;
+  if (nextProductQuantity <= stockLimit) {
+    return null;
+  }
+
+  return {
+    statusCode: 409,
+    code: "OUT_OF_STOCK",
+    message: "Product stock is not enough for the requested quantity."
+  };
+}
+
+function validateSkuStockQuantity(cart, variant, requestedQuantity, excludedSkuId) {
+  const stockLimit = getVariantStockLimit(variant);
+  if (stockLimit === null) {
+    return null;
+  }
+
+  const currentQuantity = getCartSkuQuantity(cart, variant, excludedSkuId);
+  const nextQuantity = currentQuantity + requestedQuantity;
+  if (nextQuantity <= stockLimit) {
+    return null;
+  }
+
+  return {
+    statusCode: 409,
+    code: "INSUFFICIENT_STOCK",
+    message: "Selected size stock is not enough for the requested quantity."
+  };
+}
+
+function getRequiredCheckoutFields(body) {
+  const missingFields = [];
+  const customer = body.customer || {};
+  const shippingAddress = body.shippingAddress || {};
+
+  if (!String(customer.name || "").trim()) missingFields.push("customer.name");
+  if (!String(customer.contact || "").trim()) missingFields.push("customer.contact");
+  if (!String(shippingAddress.address || "").trim()) missingFields.push("shippingAddress.address");
+  if (!String(shippingAddress.city || "").trim()) missingFields.push("shippingAddress.city");
+  if (!String(shippingAddress.region || "").trim()) missingFields.push("shippingAddress.region");
+  if (!String(shippingAddress.postalCode || "").trim()) missingFields.push("shippingAddress.postalCode");
+
+  return missingFields;
+}
+
+function formatDeliveryDate(daysFromNow, locale = "zh-CN") {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long"
+  }).format(date);
+}
+
+function getShippingMethod(methodId, locale = "zh-CN") {
+  const method = shippingMethods[methodId];
+  if (!method) {
+    return null;
+  }
+
+  return {
+    id: method.id,
+    label: method.label[locale] || method.label["zh-CN"],
+    fee: method.fee,
+    estimatedDelivery: formatDeliveryDate(method.deliveryDays, locale)
+  };
+}
+
+function buildOrderId(existingOrders) {
+  const stamp = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date()).replaceAll("-", "");
+  const sequence = String(existingOrders.length + 1).padStart(4, "0");
+  return `SOCK-${stamp}-${sequence}`;
+}
+
+function buildOrderItems(cart, products, locale = "zh-CN") {
+  return cart.items.map((item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    const variant = product ? findProductVariant(product, item.size) : null;
+    const localizedProduct = localizeProduct(product, locale);
+
+    return {
+      productId: item.productId,
+      skuId: item.skuId || variant?.skuId || `${product.id}-${item.size}`,
+      title: localizedProduct.title,
+      size: item.size,
+      quantity: item.quantity,
+      price: product.price,
+      originalPrice: product.originalPrice
+    };
+  });
+}
+
+function calculateOrderTotals(items, shippingFee) {
+  const subtotal = items.reduce((total, item) => total + item.originalPrice * item.quantity, 0);
+  const itemTotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const savings = subtotal - itemTotal;
+
+  return {
+    subtotal,
+    savings,
+    shipping: shippingFee,
+    total: itemTotal + shippingFee
+  };
+}
+
+function createTimelineEntry(status, locale = "zh-CN") {
+  return {
+    status,
+    label: orderStatusLabels[status][locale] || orderStatusLabels[status]["zh-CN"],
+    at: new Date().toISOString()
+  };
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function createPublicUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    addresses: Array.isArray(user.addresses) ? user.addresses : []
+  };
+}
+
+function buildUserId(users) {
+  return `user-${String(users.length + 1).padStart(4, "0")}`;
+}
+
+function createPasswordSalt() {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+function hashPassword(password, salt) {
+  const hash = crypto.createHash("sha256");
+  hash.update(`${salt}:${password}`);
+  return `sha256:${hash.digest("hex")}`;
+}
+
+function verifyPassword(password, user) {
+  return hashPassword(password, user.passwordSalt) === user.passwordHash;
+}
+
+function createSessionId() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function getCookieValue(request, cookieName) {
+  const cookieHeader = request.headers.cookie || "";
+  return cookieHeader
+    .split(";")
+    .map((entry) => entry.trim())
+    .map((entry) => entry.split("="))
+    .find(([name]) => name === cookieName)?.[1] || "";
+}
+
+function createSessionCookie(sessionId) {
+  return `${sessionCookieName}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionMaxAgeSeconds}`;
+}
+
+function createExpiredSessionCookie() {
+  return `${sessionCookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+async function getSessionContext(request) {
+  const sessionId = getCookieValue(request, sessionCookieName);
+  if (!sessionId) {
+    return { session: null, user: null };
+  }
+
+  const [sessionsPayload, usersPayload] = await Promise.all([
+    readJsonFile(sessionsFile),
+    readJsonFile(usersFile)
+  ]);
+  const now = Date.now();
+  const session = (Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [])
+    .find((entry) => entry.id === sessionId && new Date(entry.expiresAt).getTime() > now);
+  const user = session
+    ? (Array.isArray(usersPayload.users) ? usersPayload.users : []).find((entry) => entry.id === session.userId)
+    : null;
+
+  return { session, user };
+}
+
+async function createUserSession(userId) {
+  const sessionsPayload = await readJsonFile(sessionsFile);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + sessionMaxAgeSeconds * 1000);
+  const session = {
+    id: createSessionId(),
+    userId,
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString()
+  };
+
+  sessionsPayload.sessions = Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [];
+  sessionsPayload.sessions.push(session);
+  await writeJsonFile(sessionsFile, sessionsPayload);
+  return session;
+}
+
+async function removeSession(sessionId) {
+  const sessionsPayload = await readJsonFile(sessionsFile);
+  sessionsPayload.sessions = (Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [])
+    .filter((session) => session.id !== sessionId);
+  await writeJsonFile(sessionsFile, sessionsPayload);
+}
+
+function validateAuthPayload(body, mode) {
+  const missingFields = [];
+  if (mode === "register" && !String(body.name || "").trim()) missingFields.push("name");
+  if (!normalizeEmail(body.email)) missingFields.push("email");
+  if (!String(body.password || "").trim()) missingFields.push("password");
+  return missingFields;
+}
+
+function normalizeCartPayload(cart) {
+  return {
+    items: Array.isArray(cart.items) ? cart.items : []
+  };
+}
+
+function findUserCartIndex(userCartsPayload, userId) {
+  userCartsPayload.carts = Array.isArray(userCartsPayload.carts) ? userCartsPayload.carts : [];
+  return userCartsPayload.carts.findIndex((cart) => cart.userId === userId);
+}
+
+async function readActiveCart(request) {
+  const { user } = await getSessionContext(request);
+  if (!user) {
+    return {
+      user: null,
+      cart: normalizeCartPayload(await readJsonFile(cartFile))
+    };
+  }
+
+  const userCartsPayload = await readJsonFile(userCartsFile);
+  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
+  const cart = cartIndex === -1
+    ? { userId: user.id, items: [] }
+    : userCartsPayload.carts[cartIndex];
+
+  return {
+    user,
+    cart: normalizeCartPayload(cart)
+  };
+}
+
+async function writeActiveCart(user, cart) {
+  const normalizedCart = normalizeCartPayload(cart);
+  if (!user) {
+    await writeJsonFile(cartFile, normalizedCart);
+    return normalizedCart;
+  }
+
+  const userCartsPayload = await readJsonFile(userCartsFile);
+  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
+  const userCart = {
+    userId: user.id,
+    items: normalizedCart.items
+  };
+
+  if (cartIndex === -1) {
+    userCartsPayload.carts.push(userCart);
+  } else {
+    userCartsPayload.carts[cartIndex] = userCart;
+  }
+
+  await writeJsonFile(userCartsFile, userCartsPayload);
+  return normalizedCart;
+}
+
+function mergeCartItems(baseItems, incomingItems, products) {
+  const mergedItems = baseItems.map((item) => ({ ...item }));
+  const warnings = [];
+
+  incomingItems.forEach((incomingItem) => {
+    const product = products.find((entry) => entry.id === incomingItem.productId);
+    const variant = product ? findProductVariant(product, incomingItem.size) : null;
+    if (!product || !variant || !isVariantSellable(variant)) {
+      return;
+    }
+
+    const existingItem = mergedItems.find((item) => {
+      return item.skuId === variant.skuId
+        || (item.productId === incomingItem.productId && item.size === variant.size);
+    });
+    const existingQuantity = existingItem ? existingItem.quantity : 0;
+    const requestedQuantity = existingQuantity + incomingItem.quantity;
+    const stockLimit = getVariantStockLimit(variant);
+    const nextQuantity = stockLimit === null ? requestedQuantity : Math.min(requestedQuantity, stockLimit);
+
+    if (stockLimit !== null && requestedQuantity > stockLimit) {
+      warnings.push({
+        code: "CART_MERGE_STOCK_ADJUSTED",
+        productId: product.id,
+        skuId: variant.skuId,
+        size: variant.size,
+        quantity: nextQuantity
+      });
+    }
+
+    if (existingItem) {
+      existingItem.productId = product.id;
+      existingItem.skuId = variant.skuId;
+      existingItem.size = variant.size;
+      existingItem.quantity = nextQuantity;
+    } else {
+      mergedItems.push({
+        productId: incomingItem.productId,
+        skuId: variant.skuId,
+        size: variant.size,
+        quantity: nextQuantity
+      });
+    }
+  });
+
+  return { items: mergedItems, warnings };
+}
+
+async function mergeAnonymousCartIntoUserCart(user) {
+  const [products, anonymousCart, userCartsPayload] = await Promise.all([
+    readJsonFile(productsFile),
+    readJsonFile(cartFile),
+    readJsonFile(userCartsFile)
+  ]);
+  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
+  const currentUserCart = cartIndex === -1
+    ? { userId: user.id, items: [] }
+    : userCartsPayload.carts[cartIndex];
+  const mergeResult = mergeCartItems(
+    Array.isArray(currentUserCart.items) ? currentUserCart.items : [],
+    Array.isArray(anonymousCart.items) ? anonymousCart.items : [],
+    products
+  );
+  const nextUserCart = {
+    userId: user.id,
+    items: mergeResult.items
+  };
+
+  if (cartIndex === -1) {
+    userCartsPayload.carts.push(nextUserCart);
+  } else {
+    userCartsPayload.carts[cartIndex] = nextUserCart;
+  }
+
+  await writeJsonFile(userCartsFile, userCartsPayload);
+  await writeJsonFile(cartFile, { items: [] });
+
+  return {
+    cart: normalizeCartPayload(nextUserCart),
+    warnings: mergeResult.warnings
+  };
+}
+
+function getRequiredAddressFields(body) {
+  const missingFields = [];
+  if (!String(body.name || "").trim()) missingFields.push("name");
+  if (!String(body.contact || "").trim()) missingFields.push("contact");
+  if (!String(body.address || "").trim()) missingFields.push("address");
+  if (!String(body.city || "").trim()) missingFields.push("city");
+  if (!String(body.region || "").trim()) missingFields.push("region");
+  if (!String(body.postalCode || "").trim()) missingFields.push("postalCode");
+  return missingFields;
+}
+
+function buildAddressId(addresses) {
+  return `addr-${String(addresses.length + 1).padStart(4, "0")}`;
+}
+
+function normalizeAddressPayload(body, existingAddress = {}) {
+  return {
+    ...existingAddress,
+    name: String(body.name ?? existingAddress.name ?? "").trim(),
+    contact: String(body.contact ?? existingAddress.contact ?? "").trim(),
+    address: String(body.address ?? existingAddress.address ?? "").trim(),
+    city: String(body.city ?? existingAddress.city ?? "").trim(),
+    region: String(body.region ?? existingAddress.region ?? "").trim(),
+    postalCode: String(body.postalCode ?? existingAddress.postalCode ?? "").trim(),
+    note: String(body.note ?? existingAddress.note ?? "").trim()
+  };
+}
+
+async function requireUser(request, response) {
+  const { user } = await getSessionContext(request);
+  if (!user) {
+    sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+    return null;
+  }
+  return user;
+}
+
+async function updateUser(userId, updater) {
+  const usersPayload = await readJsonFile(usersFile);
+  usersPayload.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+  const userIndex = usersPayload.users.findIndex((user) => user.id === userId);
+  if (userIndex === -1) {
+    return null;
+  }
+
+  const nextUser = updater(usersPayload.users[userIndex]);
+  usersPayload.users[userIndex] = nextUser;
+  await writeJsonFile(usersFile, usersPayload);
+  return nextUser;
+}
+
+function parseAddressPath(pathname, suffix = "") {
+  const escapedSuffix = suffix.replaceAll("/", "\\/");
+  const match = pathname.match(new RegExp(`^\\/api\\/me\\/addresses\\/([^/]+)${escapedSuffix}$`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+const allowedOrderTransitions = {
+  pending_payment: new Set(["paid", "cancelled"]),
+  paid: new Set(["processing"]),
+  processing: new Set(["shipped"]),
+  shipped: new Set(["delivered"]),
+  delivered: new Set([]),
+  cancelled: new Set([])
+};
+
+function parseOrderIdFromPath(pathname) {
+  const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
+  return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
+}
+
+function parseOrderStatusPath(pathname) {
+  const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)\/status$/);
+  return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
+}
+
+function findOrderIndex(ordersPayload, orderId) {
+  const orders = Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [];
+  return orders.findIndex((order) => order.id === orderId);
 }
 
 const server = http.createServer(async (request, response) => {
@@ -241,9 +811,138 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  if (request.method === "GET" && requestUrl.pathname === "/api/session") {
+    try {
+      const { user } = await getSessionContext(request);
+      sendJson(response, 200, {
+        authenticated: Boolean(user),
+        user: createPublicUser(user)
+      });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
+    try {
+      const body = await readRequestBody(request);
+      const missingFields = validateAuthPayload(body, "register");
+      if (missingFields.length) {
+        sendJson(response, 400, {
+          ok: false,
+          error: {
+            code: "AUTH_VALIDATION_FAILED",
+            message: "Registration information is incomplete.",
+            fields: missingFields
+          }
+        });
+        return;
+      }
+
+      const usersPayload = await readJsonFile(usersFile);
+      usersPayload.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+      const email = normalizeEmail(body.email);
+      if (usersPayload.users.some((user) => user.email === email)) {
+        sendError(response, 409, "EMAIL_ALREADY_REGISTERED", "Email is already registered.");
+        return;
+      }
+
+      const passwordSalt = createPasswordSalt();
+      const user = {
+        id: buildUserId(usersPayload.users),
+        name: String(body.name).trim(),
+        email,
+        passwordHash: hashPassword(String(body.password), passwordSalt),
+        passwordSalt,
+        createdAt: new Date().toISOString(),
+        addresses: []
+      };
+      usersPayload.users.push(user);
+      await writeJsonFile(usersFile, usersPayload);
+
+      const session = await createUserSession(user.id);
+      const mergeResult = await mergeAnonymousCartIntoUserCart(user);
+      sendJsonWithHeaders(response, 201, {
+        ok: true,
+        user: createPublicUser(user),
+        cart: getCartPayload(mergeResult.cart),
+        cartMergeWarnings: mergeResult.warnings
+      }, {
+        "Set-Cookie": createSessionCookie(session.id)
+      });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
+    try {
+      const body = await readRequestBody(request);
+      const missingFields = validateAuthPayload(body, "login");
+      if (missingFields.length) {
+        sendError(response, 400, "AUTH_VALIDATION_FAILED", "Login information is incomplete.");
+        return;
+      }
+
+      const usersPayload = await readJsonFile(usersFile);
+      const email = normalizeEmail(body.email);
+      const user = (Array.isArray(usersPayload.users) ? usersPayload.users : [])
+        .find((entry) => entry.email === email);
+      if (!user || !verifyPassword(String(body.password), user)) {
+        sendError(response, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+        return;
+      }
+
+      const session = await createUserSession(user.id);
+      const mergeResult = await mergeAnonymousCartIntoUserCart(user);
+      sendJsonWithHeaders(response, 200, {
+        ok: true,
+        user: createPublicUser(user),
+        cart: getCartPayload(mergeResult.cart),
+        cartMergeWarnings: mergeResult.warnings
+      }, {
+        "Set-Cookie": createSessionCookie(session.id)
+      });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/auth/logout") {
+    try {
+      const sessionId = getCookieValue(request, sessionCookieName);
+      if (sessionId) {
+        await removeSession(sessionId);
+      }
+      sendJsonWithHeaders(response, 200, { ok: true }, {
+        "Set-Cookie": createExpiredSessionCookie()
+      });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/cart") {
     try {
-      const cart = await readJsonFile(cartFile);
+      const { cart } = await readActiveCart(request);
       sendJson(response, 200, getCartPayload(cart));
       return;
     } catch (error) {
@@ -255,7 +954,8 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/cart/items") {
     try {
       const products = await readJsonFile(productsFile);
-      const cart = await readJsonFile(cartFile);
+      const activeCart = await readActiveCart(request);
+      const cart = activeCart.cart;
       const body = await readRequestBody(request);
       const validation = validateCartItemInput(products, body);
 
@@ -264,24 +964,36 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      const variant = validation.variant;
+      const stockValidation = validateSkuStockQuantity(cart, variant, validation.quantity);
+      if (stockValidation) {
+        sendError(response, stockValidation.statusCode, stockValidation.code, stockValidation.message);
+        return;
+      }
+
       const existingItem = cart.items.find((item) => {
-        return item.productId === body.productId && item.size === body.size;
+        return item.skuId === variant.skuId
+          || (item.productId === body.productId && item.size === body.size);
       });
 
       if (existingItem) {
+        existingItem.skuId = variant.skuId;
+        existingItem.size = variant.size;
         existingItem.quantity += validation.quantity;
       } else {
         cart.items.push({
           productId: body.productId,
-          size: body.size,
+          skuId: variant.skuId,
+          size: variant.size,
           quantity: validation.quantity
         });
       }
 
-      await writeJsonFile(cartFile, cart);
+      await writeActiveCart(activeCart.user, cart);
 
       const item = cart.items.find((entry) => {
-        return entry.productId === body.productId && entry.size === body.size;
+        return entry.skuId === variant.skuId
+          || (entry.productId === body.productId && entry.size === body.size);
       });
 
       sendJson(response, 200, {
@@ -304,7 +1016,8 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/cart/clear") {
     try {
       const emptyCart = { items: [] };
-      await writeJsonFile(cartFile, emptyCart);
+      const activeCart = await readActiveCart(request);
+      await writeActiveCart(activeCart.user, emptyCart);
       sendJson(response, 200, {
         ok: true,
         items: [],
@@ -317,10 +1030,374 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  if (request.method === "GET" && requestUrl.pathname === "/api/me/addresses") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+      sendJson(response, 200, { addresses: Array.isArray(user.addresses) ? user.addresses : [] });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/me/addresses") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+      const body = await readRequestBody(request);
+      const missingFields = getRequiredAddressFields(body);
+      if (missingFields.length) {
+        sendJson(response, 400, {
+          ok: false,
+          error: {
+            code: "ADDRESS_VALIDATION_FAILED",
+            message: "Address information is incomplete.",
+            fields: missingFields
+          }
+        });
+        return;
+      }
+
+      const nextUser = await updateUser(user.id, (currentUser) => {
+        const addresses = Array.isArray(currentUser.addresses) ? currentUser.addresses : [];
+        const address = {
+          id: buildAddressId(addresses),
+          ...normalizeAddressPayload(body),
+          isDefault: addresses.length === 0
+        };
+        return {
+          ...currentUser,
+          addresses: [...addresses, address]
+        };
+      });
+      const address = nextUser.addresses[nextUser.addresses.length - 1];
+      sendJson(response, 201, { ok: true, address, addresses: nextUser.addresses });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAddressId = parseAddressPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedAddressId) {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+      const body = await readRequestBody(request);
+      let updatedAddress = null;
+      const nextUser = await updateUser(user.id, (currentUser) => {
+        const addresses = Array.isArray(currentUser.addresses) ? currentUser.addresses : [];
+        const addressIndex = addresses.findIndex((address) => address.id === requestedAddressId);
+        if (addressIndex === -1) {
+          return currentUser;
+        }
+        const nextAddresses = [...addresses];
+        updatedAddress = normalizeAddressPayload(body, nextAddresses[addressIndex]);
+        nextAddresses[addressIndex] = updatedAddress;
+        return { ...currentUser, addresses: nextAddresses };
+      });
+      if (!updatedAddress) {
+        sendError(response, 404, "ADDRESS_NOT_FOUND", "Address was not found.");
+        return;
+      }
+      sendJson(response, 200, { ok: true, address: updatedAddress, addresses: nextUser.addresses });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const defaultAddressId = parseAddressPath(requestUrl.pathname, "/default");
+  if (request.method === "POST" && defaultAddressId) {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+      let foundAddress = false;
+      const nextUser = await updateUser(user.id, (currentUser) => {
+        const addresses = Array.isArray(currentUser.addresses) ? currentUser.addresses : [];
+        foundAddress = addresses.some((address) => address.id === defaultAddressId);
+        if (!foundAddress) {
+          return currentUser;
+        }
+        return {
+          ...currentUser,
+          addresses: addresses.map((address) => ({
+            ...address,
+            isDefault: address.id === defaultAddressId
+          }))
+        };
+      });
+      if (!foundAddress) {
+        sendError(response, 404, "ADDRESS_NOT_FOUND", "Address was not found.");
+        return;
+      }
+      sendJson(response, 200, {
+        ok: true,
+        addresses: nextUser.addresses
+      });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "DELETE" && requestedAddressId) {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+      let foundAddress = false;
+      const nextUser = await updateUser(user.id, (currentUser) => {
+        const addresses = Array.isArray(currentUser.addresses) ? currentUser.addresses : [];
+        foundAddress = addresses.some((address) => address.id === requestedAddressId);
+        if (!foundAddress) {
+          return currentUser;
+        }
+        const nextAddresses = addresses.filter((address) => address.id !== requestedAddressId);
+        if (nextAddresses.length && !nextAddresses.some((address) => address.isDefault)) {
+          nextAddresses[0] = { ...nextAddresses[0], isDefault: true };
+        }
+        return { ...currentUser, addresses: nextAddresses };
+      });
+      if (!foundAddress) {
+        sendError(response, 404, "ADDRESS_NOT_FOUND", "Address was not found.");
+        return;
+      }
+      sendJson(response, 200, {
+        ok: true,
+        addresses: nextUser.addresses
+      });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/orders") {
+    try {
+      const products = await readJsonFile(productsFile);
+      const activeCart = await readActiveCart(request);
+      const cart = activeCart.cart;
+      const ordersPayload = await readJsonFile(ordersFile);
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+
+      if (!Array.isArray(cart.items) || cart.items.length === 0) {
+        sendError(response, 400, "EMPTY_CART", "Cart is empty.");
+        return;
+      }
+
+      const missingFields = getRequiredCheckoutFields(body);
+      if (missingFields.length) {
+        sendJson(response, 400, {
+          ok: false,
+          error: {
+            code: "CHECKOUT_VALIDATION_FAILED",
+            message: "Checkout information is incomplete.",
+            fields: missingFields
+          }
+        });
+        return;
+      }
+
+      const shippingMethod = getShippingMethod(body.shippingMethodId, locale);
+      if (!shippingMethod) {
+        sendError(response, 400, "INVALID_SHIPPING_METHOD", "Shipping method is invalid.");
+        return;
+      }
+
+      for (const cartItem of cart.items) {
+        const product = products.find((entry) => entry.id === cartItem.productId);
+        if (!product) {
+          sendError(response, 404, "PRODUCT_NOT_FOUND", "Product was not found.");
+          return;
+        }
+        const variant = findProductVariant(product, cartItem.size);
+        if (!variant) {
+          sendError(response, 400, "INVALID_SIZE", "Size is not available for this product.");
+          return;
+        }
+        if (!isVariantSellable(variant)) {
+          sendError(response, 409, "OUT_OF_STOCK", "Selected size is out of stock.");
+          return;
+        }
+        const stockValidation = validateSkuStockQuantity(
+          cart,
+          variant,
+          cartItem.quantity,
+          variant.skuId
+        );
+        if (stockValidation) {
+          sendError(response, stockValidation.statusCode, stockValidation.code, stockValidation.message);
+          return;
+        }
+        cartItem.skuId = variant.skuId;
+        cartItem.size = variant.size;
+      }
+
+      const orderItems = buildOrderItems(cart, products, locale);
+      const order = {
+        id: buildOrderId(Array.isArray(ordersPayload.orders) ? ordersPayload.orders : []),
+        userId: activeCart.user ? activeCart.user.id : null,
+        status: "pending_payment",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        customer: {
+          name: String(body.customer.name).trim(),
+          contact: String(body.customer.contact).trim()
+        },
+        shippingAddress: {
+          address: String(body.shippingAddress.address).trim(),
+          city: String(body.shippingAddress.city).trim(),
+          region: String(body.shippingAddress.region).trim(),
+          postalCode: String(body.shippingAddress.postalCode).trim(),
+          note: String(body.shippingAddress.note || "").trim()
+        },
+        shippingMethod,
+        items: orderItems,
+        totals: calculateOrderTotals(orderItems, shippingMethod.fee),
+        timeline: [createTimelineEntry("pending_payment", locale)]
+      };
+
+      const nextOrdersPayload = {
+        orders: Array.isArray(ordersPayload.orders) ? ordersPayload.orders : []
+      };
+      nextOrdersPayload.orders.push(order);
+      await writeJsonFile(ordersFile, nextOrdersPayload);
+
+      const emptyCart = { items: [] };
+      await writeActiveCart(activeCart.user, emptyCart);
+
+      sendJson(response, 201, {
+        ok: true,
+        order,
+        cart: getCartPayload(emptyCart)
+      });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/me/orders") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+
+      const ordersPayload = await readJsonFile(ordersFile);
+      const orders = (Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [])
+        .filter((order) => order.userId === user.id)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+      sendJson(response, 200, { orders });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedOrderId = parseOrderIdFromPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedOrderId) {
+    try {
+      const ordersPayload = await readJsonFile(ordersFile);
+      const order = (Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [])
+        .find((entry) => entry.id === requestedOrderId);
+
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { order });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedStatusOrderId = parseOrderStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedStatusOrderId) {
+    try {
+      const ordersPayload = await readJsonFile(ordersFile);
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+      const nextStatus = String(body.status || "").trim();
+
+      if (!allowedOrderTransitions[nextStatus]) {
+        sendError(response, 400, "INVALID_ORDER_STATUS", "Order status is invalid.");
+        return;
+      }
+
+      const orderIndex = findOrderIndex(ordersPayload, requestedStatusOrderId);
+      if (orderIndex === -1) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const order = ordersPayload.orders[orderIndex];
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const allowedNextStatuses = allowedOrderTransitions[order.status] || new Set();
+      if (!allowedNextStatuses.has(nextStatus)) {
+        sendError(response, 409, "INVALID_ORDER_TRANSITION", "Order status transition is not allowed.");
+        return;
+      }
+
+      order.status = nextStatus;
+      order.updatedAt = new Date().toISOString();
+      order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
+      order.timeline.push(createTimelineEntry(nextStatus, locale));
+
+      await writeJsonFile(ordersFile, ordersPayload);
+      sendJson(response, 200, { ok: true, order });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "PATCH" && requestUrl.pathname === "/api/cart/items") {
     try {
       const products = await readJsonFile(productsFile);
-      const cart = await readJsonFile(cartFile);
+      const activeCart = await readActiveCart(request);
+      const cart = activeCart.cart;
       const body = await readRequestBody(request);
       const validation = validateCartItemInput(products, body);
 
@@ -329,14 +1406,35 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const itemIndex = findCartItemIndex(cart, body.productId, body.size);
+      const variant = validation.variant;
+      const itemIndex = cart.items.findIndex((item) => {
+        return item.skuId === variant.skuId
+          || (item.productId === body.productId && item.size === body.size);
+      });
       if (itemIndex === -1) {
         sendError(response, 404, "CART_ITEM_NOT_FOUND", "Cart item was not found.");
         return;
       }
 
-      cart.items[itemIndex].quantity = validation.quantity;
-      await writeJsonFile(cartFile, cart);
+      const stockValidation = validateSkuStockQuantity(
+        cart,
+        variant,
+        validation.quantity,
+        variant.skuId
+      );
+      if (stockValidation) {
+        sendError(response, stockValidation.statusCode, stockValidation.code, stockValidation.message);
+        return;
+      }
+
+      cart.items[itemIndex] = {
+        ...cart.items[itemIndex],
+        productId: body.productId,
+        skuId: variant.skuId,
+        size: variant.size,
+        quantity: validation.quantity
+      };
+      await writeActiveCart(activeCart.user, cart);
 
       sendJson(response, 200, {
         ok: true,
@@ -358,9 +1456,17 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "DELETE" && requestUrl.pathname === "/api/cart/items") {
     try {
-      const cart = await readJsonFile(cartFile);
+      const products = await readJsonFile(productsFile);
+      const activeCart = await readActiveCart(request);
+      const cart = activeCart.cart;
       const body = await readRequestBody(request);
-      const itemIndex = findCartItemIndex(cart, body.productId, body.size);
+      const product = products.find((item) => item.id === body.productId);
+      const variant = product ? findProductVariant(product, body.size) : null;
+      const itemIndex = cart.items.findIndex((item) => {
+        return variant
+          ? item.skuId === variant.skuId || (item.productId === body.productId && item.size === body.size)
+          : item.productId === body.productId && item.size === body.size;
+      });
 
       if (itemIndex === -1) {
         sendError(response, 404, "CART_ITEM_NOT_FOUND", "Cart item was not found.");
@@ -368,7 +1474,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       const [removedItem] = cart.items.splice(itemIndex, 1);
-      await writeJsonFile(cartFile, cart);
+      await writeActiveCart(activeCart.user, cart);
 
       sendJson(response, 200, {
         ok: true,

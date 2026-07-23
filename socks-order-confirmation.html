@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>跳转到订单页</title>
+  <meta http-equiv="refresh" content="0; url=/socks-product-list.html?view=order">
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: linear-gradient(180deg, #f6f6f6 0%, #ececec 100%);
+      color: #111111;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .notice {
+      width: min(520px, 100%);
+      padding: 28px;
+      border: 1px solid #e6e6e6;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+
+    .notice__title {
+      margin: 0 0 10px;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .notice__copy {
+      margin: 0;
+      color: #666666;
+      line-height: 1.7;
+    }
+
+    .notice__link {
+      color: #111111;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <section class="notice">
+    <h1 class="notice__title">正在跳转到统一订单页</h1>
+    <p class="notice__copy">
+      如果页面没有自动跳转，请打开
+      <a class="notice__link" href="/socks-product-list.html?view=order">统一订单入口</a>。
+    </p>
+  </section>
+  <script>
+    window.location.replace("/socks-product-list.html?view=order");
+  </script>
+</body>
+</html>

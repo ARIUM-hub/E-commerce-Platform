@@ -31,8 +31,8 @@ test("keeps product fixtures identical between app and test datasets", async () 
     fs.readFileSync(path.resolve(__dirname, "fixtures", "test-data", "products.json"), "utf8")
   );
 
-  expect(appProducts).toHaveLength(6);
-  expect(testProducts).toHaveLength(6);
+  expect(appProducts).toHaveLength(12);
+  expect(testProducts).toHaveLength(12);
   expect(testProducts).toEqual(appProducts);
 
   for (const product of appProducts) {

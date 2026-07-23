@@ -3,9 +3,547 @@ const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 
 const cartFile = path.join(__dirname, "fixtures", "test-data", "cart.json");
+const ordersFile = path.join(__dirname, "fixtures", "test-data", "orders.json");
+const usersFile = path.join(__dirname, "fixtures", "test-data", "users.json");
+const sessionsFile = path.join(__dirname, "fixtures", "test-data", "sessions.json");
+const userCartsFile = path.join(__dirname, "fixtures", "test-data", "user-carts.json");
 
 test.beforeEach(async () => {
   await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
+  await fs.writeFile(ordersFile, `${JSON.stringify({ orders: [] }, null, 2)}\n`, "utf8");
+  await fs.writeFile(usersFile, `${JSON.stringify({ users: [] }, null, 2)}\n`, "utf8");
+  await fs.writeFile(sessionsFile, `${JSON.stringify({ sessions: [] }, null, 2)}\n`, "utf8");
+  await fs.writeFile(userCartsFile, `${JSON.stringify({ carts: [] }, null, 2)}\n`, "utf8");
+});
+
+test("returns an empty order collection fixture by default", async () => {
+  const orders = JSON.parse(await fs.readFile(ordersFile, "utf8"));
+  expect(orders).toEqual({ orders: [] });
+});
+
+test("returns empty user session fixtures by default", async () => {
+  const users = JSON.parse(await fs.readFile(usersFile, "utf8"));
+  const sessions = JSON.parse(await fs.readFile(sessionsFile, "utf8"));
+  const userCarts = JSON.parse(await fs.readFile(userCartsFile, "utf8"));
+
+  expect(users).toEqual({ users: [] });
+  expect(sessions).toEqual({ sessions: [] });
+  expect(userCarts).toEqual({ carts: [] });
+});
+
+const checkoutPayload = {
+  locale: "en-US",
+  customer: {
+    name: "Alex Chen",
+    contact: "alex@example.com"
+  },
+  shippingAddress: {
+    address: "100 Demo Street",
+    city: "Seattle",
+    region: "WA",
+    postalCode: "98101",
+    note: "Leave at the door"
+  },
+  shippingMethodId: "standard"
+};
+
+const registerPayload = {
+  name: "Alex Chen",
+  email: "alex@example.com",
+  password: "demo1234"
+};
+
+const addressPayload = {
+  name: "Alex Chen",
+  contact: "alex@example.com",
+  address: "100 Demo Street",
+  city: "Seattle",
+  region: "WA",
+  postalCode: "98101",
+  note: "Leave at the door"
+};
+
+function getSessionCookie(response) {
+  const setCookie = response.headers()["set-cookie"] || "";
+  const match = /socks_session=([^;]+)/.exec(setCookie);
+  return match ? `socks_session=${match[1]}` : "";
+}
+
+async function registerAndGetCookie(request) {
+  const response = await request.post("/api/auth/register", { data: registerPayload });
+  expect(response.status()).toBe(201);
+  return getSessionCookie(response);
+}
+
+test("registers a user and creates an http-only session", async ({ request }) => {
+  const response = await request.post("/api/auth/register", { data: registerPayload });
+  expect(response.status()).toBe(201);
+  expect(response.headers()["set-cookie"]).toContain("HttpOnly");
+  expect(response.headers()["set-cookie"]).toContain("SameSite=Lax");
+
+  const payload = await response.json();
+  expect(payload.user).toMatchObject({
+    name: "Alex Chen",
+    email: "alex@example.com",
+    addresses: []
+  });
+  expect(payload.user.id).toMatch(/^user-\d{4}$/);
+  expect(payload.user.passwordHash).toBeUndefined();
+  expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
+
+  const users = JSON.parse(await fs.readFile(usersFile, "utf8"));
+  expect(users.users).toHaveLength(1);
+  expect(users.users[0].passwordHash).toMatch(/^sha256:/);
+  expect(users.users[0].passwordSalt.length).toBeGreaterThan(8);
+
+  const sessions = JSON.parse(await fs.readFile(sessionsFile, "utf8"));
+  expect(sessions.sessions).toHaveLength(1);
+});
+
+test("rejects duplicate user registration emails", async ({ request }) => {
+  await request.post("/api/auth/register", { data: registerPayload });
+
+  const response = await request.post("/api/auth/register", { data: registerPayload });
+  expect(response.status()).toBe(409);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("EMAIL_ALREADY_REGISTERED");
+});
+
+test("logs in a registered user and returns the active session user", async ({ request }) => {
+  await request.post("/api/auth/register", { data: registerPayload });
+
+  const loginResponse = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: registerPayload.password }
+  });
+  expect(loginResponse.ok()).toBe(true);
+
+  const sessionCookie = getSessionCookie(loginResponse);
+  expect(sessionCookie).toContain("socks_session=");
+
+  const sessionResponse = await request.get("/api/session", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(sessionResponse.ok()).toBe(true);
+  const sessionPayload = await sessionResponse.json();
+  expect(sessionPayload.authenticated).toBe(true);
+  expect(sessionPayload.user.email).toBe(registerPayload.email);
+});
+
+test("rejects login with an incorrect password", async ({ request }) => {
+  await request.post("/api/auth/register", { data: registerPayload });
+
+  const response = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: "wrong-password" }
+  });
+  expect(response.status()).toBe(401);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("INVALID_CREDENTIALS");
+});
+
+test("logs out and clears the active session", async ({ request }) => {
+  const registerResponse = await request.post("/api/auth/register", { data: registerPayload });
+  const sessionCookie = getSessionCookie(registerResponse);
+
+  const logoutResponse = await request.post("/api/auth/logout", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(logoutResponse.ok()).toBe(true);
+  expect(logoutResponse.headers()["set-cookie"]).toContain("Max-Age=0");
+
+  const sessionResponse = await request.get("/api/session", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(sessionResponse.ok()).toBe(true);
+  await expect(sessionResponse.json()).resolves.toMatchObject({
+    authenticated: false,
+    user: null
+  });
+});
+
+test("merges anonymous cart into the user cart after login", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 2 }
+  });
+  await request.post("/api/auth/register", { data: registerPayload });
+
+  const loginResponse = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: registerPayload.password }
+  });
+  const sessionCookie = getSessionCookie(loginResponse);
+  const payload = await loginResponse.json();
+
+  expect(payload.cart.items).toEqual([
+    { productId: "sock-01", skuId: "sock-01-39", size: "39", quantity: 2 }
+  ]);
+
+  const userCartResponse = await request.get("/api/cart", {
+    headers: { cookie: sessionCookie }
+  });
+  await expect(userCartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-01", skuId: "sock-01-39", size: "39", quantity: 2 }],
+    meta: { itemCount: 1 }
+  });
+
+  const anonymousCart = JSON.parse(await fs.readFile(cartFile, "utf8"));
+  expect(anonymousCart).toEqual({ items: [] });
+});
+
+test("keeps anonymous and logged-in carts isolated", async ({ request }) => {
+  const registerResponse = await request.post("/api/auth/register", { data: registerPayload });
+  const sessionCookie = getSessionCookie(registerResponse);
+
+  await request.post("/api/cart/items", {
+    headers: { cookie: sessionCookie },
+    data: { productId: "sock-02", size: "43", quantity: 1 }
+  });
+  await request.post("/api/auth/logout", {
+    headers: { cookie: sessionCookie }
+  });
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-05", size: "39", quantity: 1 }
+  });
+
+  const anonymousCartResponse = await request.get("/api/cart");
+  await expect(anonymousCartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }],
+    meta: { itemCount: 1 }
+  });
+
+  const loginResponse = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: registerPayload.password }
+  });
+  const nextSessionCookie = getSessionCookie(loginResponse);
+  const userCartResponse = await request.get("/api/cart", {
+    headers: { cookie: nextSessionCookie }
+  });
+  await expect(userCartResponse.json()).resolves.toEqual({
+    items: [
+      { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 1 },
+      { productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }
+    ],
+    meta: { itemCount: 2 }
+  });
+});
+
+test("caps anonymous cart merge quantities by SKU stock", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 3 }
+  });
+  const registerResponse = await request.post("/api/auth/register", { data: registerPayload });
+  const sessionCookie = getSessionCookie(registerResponse);
+
+  const response = await request.post("/api/cart/items", {
+    headers: { cookie: sessionCookie },
+    data: { productId: "sock-01", size: "43", quantity: 1 }
+  });
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("INSUFFICIENT_STOCK");
+});
+
+test("requires authentication for address management", async ({ request }) => {
+  const response = await request.get("/api/me/addresses");
+  expect(response.status()).toBe(401);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("AUTH_REQUIRED");
+});
+
+test("creates lists updates defaults and deletes user addresses", async ({ request }) => {
+  const sessionCookie = await registerAndGetCookie(request);
+
+  const createResponse = await request.post("/api/me/addresses", {
+    headers: { cookie: sessionCookie },
+    data: addressPayload
+  });
+  expect(createResponse.status()).toBe(201);
+  const createPayload = await createResponse.json();
+  expect(createPayload.address).toMatchObject({
+    ...addressPayload,
+    isDefault: true
+  });
+  expect(createPayload.address.id).toMatch(/^addr-\d{4}$/);
+
+  const listResponse = await request.get("/api/me/addresses", {
+    headers: { cookie: sessionCookie }
+  });
+  await expect(listResponse.json()).resolves.toMatchObject({
+    addresses: [createPayload.address]
+  });
+
+  const secondResponse = await request.post("/api/me/addresses", {
+    headers: { cookie: sessionCookie },
+    data: {
+      ...addressPayload,
+      address: "200 Work Avenue",
+      postalCode: "98102"
+    }
+  });
+  expect(secondResponse.status()).toBe(201);
+  const secondAddress = (await secondResponse.json()).address;
+  expect(secondAddress.isDefault).toBe(false);
+
+  const defaultResponse = await request.post(`/api/me/addresses/${secondAddress.id}/default`, {
+    headers: { cookie: sessionCookie }
+  });
+  expect(defaultResponse.ok()).toBe(true);
+  const defaultPayload = await defaultResponse.json();
+  expect(defaultPayload.addresses.find((address) => address.id === secondAddress.id).isDefault).toBe(true);
+
+  const patchResponse = await request.patch(`/api/me/addresses/${secondAddress.id}`, {
+    headers: { cookie: sessionCookie },
+    data: { note: "Front desk" }
+  });
+  expect(patchResponse.ok()).toBe(true);
+  expect((await patchResponse.json()).address.note).toBe("Front desk");
+
+  const deleteResponse = await request.delete(`/api/me/addresses/${secondAddress.id}`, {
+    headers: { cookie: sessionCookie }
+  });
+  expect(deleteResponse.ok()).toBe(true);
+  const deletePayload = await deleteResponse.json();
+  expect(deletePayload.addresses).toHaveLength(1);
+  expect(deletePayload.addresses[0].isDefault).toBe(true);
+});
+
+test("rejects order creation when cart is empty", async ({ request }) => {
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(400);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("EMPTY_CART");
+});
+
+test("rejects order creation when required checkout fields are missing", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+
+  const response = await request.post("/api/orders", {
+    data: {
+      locale: "en-US",
+      customer: { name: "", contact: "" },
+      shippingAddress: { address: "", city: "", region: "", postalCode: "" },
+      shippingMethodId: "standard"
+    }
+  });
+  expect(response.status()).toBe(400);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("CHECKOUT_VALIDATION_FAILED");
+  expect(payload.error.fields).toEqual([
+    "customer.name",
+    "customer.contact",
+    "shippingAddress.address",
+    "shippingAddress.city",
+    "shippingAddress.region",
+    "shippingAddress.postalCode"
+  ]);
+});
+
+test("creates a persisted order from the current cart and clears the cart", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 2 }
+  });
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(201);
+
+  const payload = await response.json();
+  expect(payload.order).toMatchObject({
+    status: "pending_payment",
+    customer: checkoutPayload.customer,
+    shippingAddress: checkoutPayload.shippingAddress,
+    shippingMethod: {
+      id: "standard",
+      fee: 0
+    },
+    totals: {
+      subtotal: 118,
+      savings: 40,
+      shipping: 0,
+      total: 78
+    }
+  });
+  expect(payload.order.id).toMatch(/^SOCK-\d{8}-\d{4}$/);
+  expect(payload.order.items).toEqual([
+    {
+      productId: "sock-01",
+      skuId: "sock-01-39",
+      title: "Minimal Crew Socks",
+      size: "39",
+      quantity: 2,
+      price: 39,
+      originalPrice: 59
+    }
+  ]);
+  expect(payload.order.timeline[0].status).toBe("pending_payment");
+  expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
+
+  const persistedOrders = JSON.parse(await fs.readFile(ordersFile, "utf8"));
+  expect(persistedOrders.orders).toHaveLength(1);
+
+  const persistedCart = JSON.parse(await fs.readFile(cartFile, "utf8"));
+  expect(persistedCart).toEqual({ items: [] });
+});
+
+test("persists skuId on order items created from cart", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+
+  expect(payload.order.items[0]).toMatchObject({
+    productId: "sock-01",
+    skuId: "sock-01-39",
+    size: "39",
+    quantity: 1
+  });
+});
+
+async function createOrderViaApi(request) {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(201);
+  return response.json();
+}
+
+async function createLoggedInOrder(request, userPayload = registerPayload) {
+  const registerResponse = await request.post("/api/auth/register", { data: userPayload });
+  const sessionCookie = getSessionCookie(registerResponse);
+  await request.post("/api/cart/items", {
+    headers: { cookie: sessionCookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const response = await request.post("/api/orders", {
+    headers: { cookie: sessionCookie },
+    data: checkoutPayload
+  });
+  expect(response.status()).toBe(201);
+  return {
+    sessionCookie,
+    order: (await response.json()).order
+  };
+}
+
+test("creates orders with the logged-in user id and lists user order history", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request);
+  expect(order.userId).toMatch(/^user-\d{4}$/);
+
+  const historyResponse = await request.get("/api/me/orders", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(historyResponse.ok()).toBe(true);
+  const historyPayload = await historyResponse.json();
+  expect(historyPayload.orders).toHaveLength(1);
+  expect(historyPayload.orders[0]).toMatchObject({
+    id: order.id,
+    status: "pending_payment",
+    userId: order.userId
+  });
+});
+
+test("does not expose another user's order detail", async ({ request }) => {
+  const { order } = await createLoggedInOrder(request);
+  const secondRegisterResponse = await request.post("/api/auth/register", {
+    data: {
+      name: "Mia Wong",
+      email: "mia@example.com",
+      password: "demo1234"
+    }
+  });
+  const secondSessionCookie = getSessionCookie(secondRegisterResponse);
+
+  const response = await request.get(`/api/orders/${order.id}`, {
+    headers: { cookie: secondSessionCookie }
+  });
+  expect(response.status()).toBe(404);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ORDER_NOT_FOUND");
+});
+
+test("requires login for user order history", async ({ request }) => {
+  const response = await request.get("/api/me/orders");
+  expect(response.status()).toBe(401);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("AUTH_REQUIRED");
+});
+
+test("returns a persisted order by id", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const response = await request.get(`/api/orders/${order.id}`);
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.order.id).toBe(order.id);
+  expect(payload.order.status).toBe("pending_payment");
+  expect(payload.order.items[0].title).toBe("Minimal Crew Socks");
+});
+
+test("returns 404 for missing order id", async ({ request }) => {
+  const response = await request.get("/api/orders/SOCK-20990101-9999");
+  expect(response.status()).toBe(404);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ORDER_NOT_FOUND");
+});
+
+test("advances order status through the allowed lifecycle", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const paidResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "en-US" }
+  });
+  expect(paidResponse.ok()).toBe(true);
+  expect((await paidResponse.json()).order.status).toBe("paid");
+
+  const processingResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "processing", locale: "en-US" }
+  });
+  expect(processingResponse.ok()).toBe(true);
+  expect((await processingResponse.json()).order.status).toBe("processing");
+
+  const shippedResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "shipped", locale: "en-US" }
+  });
+  expect(shippedResponse.ok()).toBe(true);
+  expect((await shippedResponse.json()).order.status).toBe("shipped");
+
+  const deliveredResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "delivered", locale: "en-US" }
+  });
+  expect(deliveredResponse.ok()).toBe(true);
+  const deliveredPayload = await deliveredResponse.json();
+  expect(deliveredPayload.order.status).toBe("delivered");
+  expect(deliveredPayload.order.timeline.map((entry) => entry.status)).toEqual([
+    "pending_payment",
+    "paid",
+    "processing",
+    "shipped",
+    "delivered"
+  ]);
+});
+
+test("rejects invalid order status transitions", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const response = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "shipped", locale: "en-US" }
+  });
+  expect(response.status()).toBe(409);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("INVALID_ORDER_TRANSITION");
 });
 
 test("returns products with default filter and recommended sort", async ({ request }) => {
@@ -16,9 +554,9 @@ test("returns products with default filter and recommended sort", async ({ reque
   expect(payload.meta).toEqual({
     filter: "all",
     sort: "recommended",
-    count: 6
+    count: 12
   });
-  expect(payload.items).toHaveLength(6);
+  expect(payload.items).toHaveLength(12);
   expect(payload.items[0].title).toBe("极简中筒袜");
   expect(payload.items[1].title).toBe("轻压运动袜");
   expect(payload.items[2].title).toBe("通勤罗口袜");
@@ -32,7 +570,7 @@ test("returns English localized product content when locale=en-US is requested",
   expect(payload.meta).toEqual({
     filter: "all",
     sort: "recommended",
-    count: 6,
+    count: 12,
     locale: "en-US"
   });
   expect(payload.items[0]).toMatchObject({
@@ -75,9 +613,14 @@ test("filters sport products and sorts by ascending price", async ({ request }) 
   expect(payload.meta).toEqual({
     filter: "sport",
     sort: "price-asc",
-    count: 2
+    count: 4
   });
-  expect(payload.items.map((item) => item.title)).toEqual(["速干训练袜", "轻压运动袜"]);
+  expect(payload.items.map((item) => item.title)).toEqual([
+    "速干训练袜",
+    "轻压运动袜",
+    "夜跑反光运动袜",
+    "厚底毛圈运动袜"
+  ]);
 });
 
 test("falls back to default filter and recommended sort for invalid query values", async ({ request }) => {
@@ -88,7 +631,7 @@ test("falls back to default filter and recommended sort for invalid query values
   expect(payload.meta).toEqual({
     filter: "all",
     sort: "recommended",
-    count: 6
+    count: 12
   });
   expect(payload.items.slice(0, 3).map((item) => item.title)).toEqual([
     "极简中筒袜",
@@ -110,12 +653,12 @@ test("returns an empty anonymous cart by default", async ({ request }) => {
 
 test("adds an item to the cart and persists quantity merges", async ({ request }) => {
   const firstAdd = await request.post("/api/cart/items", {
-    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+    data: { productId: "sock-02", size: "43", quantity: 1 }
   });
   expect(firstAdd.ok()).toBe(true);
 
   const secondAdd = await request.post("/api/cart/items", {
-    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+    data: { productId: "sock-02", size: "43", quantity: 1 }
   });
   expect(secondAdd.ok()).toBe(true);
 
@@ -124,14 +667,14 @@ test("adds an item to the cart and persists quantity merges", async ({ request }
 
   const cartPayload = await cartResponse.json();
   expect(cartPayload.items).toEqual([
-    { productId: "sock-02", size: "43-45", quantity: 2 }
+    { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 2 }
   ]);
   expect(cartPayload.meta.itemCount).toBe(1);
 });
 
 test("rejects invalid cart size values", async ({ request }) => {
   const response = await request.post("/api/cart/items", {
-    data: { productId: "sock-02", size: "35-38", quantity: 1 }
+    data: { productId: "sock-02", size: "35", quantity: 1 }
   });
   expect(response.status()).toBe(400);
 
@@ -141,7 +684,7 @@ test("rejects invalid cart size values", async ({ request }) => {
 
 test("clears the anonymous cart state", async ({ request }) => {
   const addResponse = await request.post("/api/cart/items", {
-    data: { productId: "sock-01", size: "35-38", quantity: 1 }
+    data: { productId: "sock-01", size: "35", quantity: 1 }
   });
   expect(addResponse.ok()).toBe(true);
 
@@ -163,52 +706,137 @@ test("clears the anonymous cart state", async ({ request }) => {
   });
 });
 
+test("adds a valid SKU-backed size and stores skuId on the cart item", async ({ request }) => {
+  const response = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.item).toMatchObject({
+    productId: "sock-01",
+    skuId: "sock-01-39",
+    size: "39",
+    quantity: 1
+  });
+
+  const cartResponse = await request.get("/api/cart");
+  await expect(cartResponse.json()).resolves.toMatchObject({
+    items: [
+      { productId: "sock-01", skuId: "sock-01-39", size: "39", quantity: 1 }
+    ]
+  });
+});
+
+test("rejects sold-out SKU sizes", async ({ request }) => {
+  const response = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "45", quantity: 1 }
+  });
+  expect(response.status()).toBe(409);
+
+  const payload = await response.json();
+  expect(payload.error.code).toBe("OUT_OF_STOCK");
+});
+
+test("enforces stock independently for each SKU size", async ({ request }) => {
+  const firstResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 3 }
+  });
+  expect(firstResponse.ok()).toBe(true);
+
+  const secondResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "44", quantity: 2 }
+  });
+  expect(secondResponse.ok()).toBe(true);
+
+  const overLimitResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 1 }
+  });
+  expect(overLimitResponse.status()).toBe(409);
+  expect((await overLimitResponse.json()).error.code).toBe("INSUFFICIENT_STOCK");
+});
+
+test("updates SKU-backed cart item quantities up to that SKU stock", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 1 }
+  });
+
+  const response = await request.patch("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 3 }
+  });
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).item).toMatchObject({
+    skuId: "sock-01-43",
+    quantity: 3
+  });
+
+  const overLimitResponse = await request.patch("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 4 }
+  });
+  expect(overLimitResponse.status()).toBe(409);
+  expect((await overLimitResponse.json()).error.code).toBe("INSUFFICIENT_STOCK");
+});
+
+test("counts legacy cart items when enforcing SKU stock limits", async ({ request }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [{ productId: "sock-10", size: "35", quantity: 8 }]
+  }, null, 2)}\n`, "utf8");
+
+  const response = await request.post("/api/cart/items", {
+    data: { productId: "sock-10", size: "35", quantity: 1 }
+  });
+
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("INSUFFICIENT_STOCK");
+});
+
 test("updates an existing cart item quantity", async ({ request }) => {
   const addResponse = await request.post("/api/cart/items", {
-    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+    data: { productId: "sock-02", size: "43", quantity: 1 }
   });
   expect(addResponse.ok()).toBe(true);
 
   const updateResponse = await request.fetch("/api/cart/items", {
     method: "PATCH",
-    data: { productId: "sock-02", size: "43-45", quantity: 3 }
+    data: { productId: "sock-02", size: "43", quantity: 3 }
   });
   expect(updateResponse.ok()).toBe(true);
 
   const updatePayload = await updateResponse.json();
   expect(updatePayload.item).toEqual({
     productId: "sock-02",
-    size: "43-45",
+    skuId: "sock-02-43",
+    size: "43",
     quantity: 3
   });
 
   const cartResponse = await request.get("/api/cart");
   expect(cartResponse.ok()).toBe(true);
   await expect(cartResponse.json()).resolves.toEqual({
-    items: [{ productId: "sock-02", size: "43-45", quantity: 3 }],
+    items: [{ productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 3 }],
     meta: { itemCount: 1 }
   });
 });
 
 test("removes a single cart item without clearing the rest", async ({ request }) => {
   await request.post("/api/cart/items", {
-    data: { productId: "sock-02", size: "43-45", quantity: 1 }
+    data: { productId: "sock-02", size: "43", quantity: 1 }
   });
   await request.post("/api/cart/items", {
-    data: { productId: "sock-05", size: "39-42", quantity: 1 }
+    data: { productId: "sock-05", size: "39", quantity: 1 }
   });
 
   const removeResponse = await request.fetch("/api/cart/items", {
     method: "DELETE",
-    data: { productId: "sock-02", size: "43-45" }
+    data: { productId: "sock-02", size: "43" }
   });
   expect(removeResponse.ok()).toBe(true);
 
   const removePayload = await removeResponse.json();
   expect(removePayload).toEqual({
     ok: true,
-    removedItem: { productId: "sock-02", size: "43-45", quantity: 1 },
-    items: [{ productId: "sock-05", size: "39-42", quantity: 1 }],
+    removedItem: { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 1 },
+    items: [{ productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }],
     meta: { itemCount: 1 }
   });
 });
@@ -272,6 +900,64 @@ test("returns fulfillment metadata for every product card", async ({ request }) 
   });
 });
 
+test("returns SKU variants and merchandising metadata for products", async ({ request }) => {
+  const response = await request.get("/api/products?locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const product = payload.items.find((item) => item.id === "sock-01");
+
+  expect(product.variants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        skuId: "sock-01-39",
+        size: "39",
+        color: expect.any(String),
+        material: expect.any(String),
+        stockQuantity: expect.any(Number),
+        lowStockThreshold: expect.any(Number),
+        isAvailable: expect.any(Boolean)
+      })
+    ])
+  );
+  expect(product.gallery).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: expect.any(String),
+        src: expect.any(String),
+        alt: expect.any(String)
+      })
+    ])
+  );
+  expect(product.colors).toEqual(expect.arrayContaining(["Black", "White", "Gray"]));
+  expect(product.materials.length).toBeGreaterThan(0);
+  expect(product.sizeChart).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        size: "39",
+        footLengthCm: expect.any(String),
+        usMen: expect.any(String),
+        usWomen: expect.any(String)
+      })
+    ])
+  );
+});
+
+test("returns unique SKU ids for every product variant", async ({ request }) => {
+  const response = await request.get("/api/products?locale=en-US");
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+
+  payload.items.forEach((product) => {
+    const skuIds = product.variants.map((variant) => variant.skuId);
+    expect(new Set(skuIds).size).toBe(skuIds.length);
+    product.variants.forEach((variant) => {
+      expect(variant.skuId).toBe(`${product.id}-${variant.size}`);
+      expect(product.sizes).toContain(variant.size);
+    });
+  });
+});
+
 test("keeps fulfillment metadata in filtered product responses", async ({ request }) => {
   const response = await request.get("/api/products?filter=sport&sort=price-asc");
   expect(response.ok()).toBe(true);
@@ -320,5 +1006,71 @@ test("keeps social proof independent from recommended products", async ({ reques
     recentlyBoughtLabel: "1K+ bought in past month",
     isBestSeller: false,
     isRecommended: true
+  });
+});
+
+test("returns structured stock quantity for low stock products", async ({ request }) => {
+  const response = await request.get("/api/products");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const sock04 = payload.items.find((product) => product.id === "sock-04");
+  const sock10 = payload.items.find((product) => product.id === "sock-10");
+
+  expect(sock04).toMatchObject({
+    id: "sock-04",
+    isLowStock: true,
+    stockQuantity: 5
+  });
+  expect(sock10).toMatchObject({
+    id: "sock-10",
+    isLowStock: true,
+    stockQuantity: 8
+  });
+});
+
+test("rejects cart additions that exceed SKU stock quantity", async ({ request }) => {
+  const firstAdd = await request.post("/api/cart/items", {
+    data: { productId: "sock-10", size: "35", quantity: 8 }
+  });
+  expect(firstAdd.ok()).toBe(true);
+
+  const overLimitAdd = await request.post("/api/cart/items", {
+    data: { productId: "sock-10", size: "35", quantity: 1 }
+  });
+  expect(overLimitAdd.status()).toBe(409);
+
+  const payload = await overLimitAdd.json();
+  expect(payload.error.code).toBe("INSUFFICIENT_STOCK");
+
+  const cartResponse = await request.get("/api/cart");
+  expect(cartResponse.ok()).toBe(true);
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 8 }],
+    meta: { itemCount: 1 }
+  });
+});
+
+test("rejects cart quantity updates that exceed SKU stock quantity", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-10", size: "35", quantity: 7 }
+  });
+
+  const overLimitUpdate = await request.fetch("/api/cart/items", {
+    method: "PATCH",
+    data: { productId: "sock-10", size: "35", quantity: 9 }
+  });
+  expect(overLimitUpdate.status()).toBe(409);
+
+  const payload = await overLimitUpdate.json();
+  expect(payload.error.code).toBe("INSUFFICIENT_STOCK");
+
+  const cartResponse = await request.get("/api/cart");
+  expect(cartResponse.ok()).toBe(true);
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [
+      { productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 7 }
+    ],
+    meta: { itemCount: 1 }
   });
 });

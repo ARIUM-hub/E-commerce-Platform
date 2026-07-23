@@ -9,16 +9,236 @@
     "originalPrice": 59,
     "discount": "32% OFF",
     "description": "柔软透气面料，适合日常通勤与居家穿着。",
-    "sizes": ["35-38", "39-42", "43-45"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "极简中筒袜",
+        "categoryLabel": "中筒袜",
+        "description": "柔软透气面料，适合日常通勤与居家穿着。"
+      },
+      "en-US": {
+        "title": "Minimal Crew Socks",
+        "categoryLabel": "Crew Socks",
+        "description": "Soft, breathable fabric made for daily commuting and relaxed at-home wear."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
     "isRecommended": true,
     "ratingValue": 4.7,
     "reviewCount": 1284,
     "isTopRated": true,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Sunday, July 19",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "800+ bought in past month",
+    "isBestSeller": false,
     "releaseDate": "2026-07-15",
     "visualTone": "#f7f7f7",
     "visualShadow": "#d4d4d4",
     "visualAccent": "#c3c3c3",
-    "visualPattern": "minimal"
+    "visualPattern": "minimal",
+    "variants": [
+      {
+        "skuId": "sock-01-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 4,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-36",
+        "size": "36",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 11,
+        "lowStockThreshold": 4,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 9,
+        "lowStockThreshold": 4,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 7,
+        "lowStockThreshold": 4,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-39",
+        "size": "39",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 8,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 6,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 5,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-42",
+        "size": "42",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 4,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-43",
+        "size": "43",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 3,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-44",
+        "size": "44",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 2,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-01-45",
+        "size": "45",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 0,
+        "lowStockThreshold": 5,
+        "isAvailable": false
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23f7f7f7'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23c3c3c3'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Minimal Crew Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23f7f7f7'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Minimal Crew Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
   },
   {
     "id": "sock-02",
@@ -30,16 +250,172 @@
     "originalPrice": 69,
     "discount": "29% OFF",
     "description": "包裹感更强，适合慢跑和日常训练。",
-    "sizes": ["39-42", "43-45"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "轻压运动袜",
+        "categoryLabel": "运动袜",
+        "description": "包裹感更强，适合慢跑和日常训练。"
+      },
+      "en-US": {
+        "title": "Compression Sport Socks",
+        "categoryLabel": "Sport Socks",
+        "description": "A more supportive fit built for easy runs and everyday training."
+      }
+    },
+    "sizes": [
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
     "isRecommended": true,
     "ratingValue": 4.8,
     "reviewCount": 2316,
     "isTopRated": true,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Saturday, July 18",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "2K+ bought in past month",
+    "isBestSeller": true,
     "releaseDate": "2026-07-14",
     "visualTone": "#2d2d2d",
     "visualShadow": "#171717",
     "visualAccent": "#616161",
-    "visualPattern": "sport"
+    "visualPattern": "sport",
+    "variants": [
+      {
+        "skuId": "sock-02-39",
+        "size": "39",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-40",
+        "size": "40",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-41",
+        "size": "41",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-42",
+        "size": "42",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-43",
+        "size": "43",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-44",
+        "size": "44",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-02-45",
+        "size": "45",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%232d2d2d'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23616161'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Compression Sport Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%232d2d2d'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Compression Sport Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Nylon performance blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
   },
   {
     "id": "sock-03",
@@ -51,16 +427,188 @@
     "originalPrice": 39,
     "discount": "36% OFF",
     "description": "低调百搭，适合夏季与日常轻松穿着。",
-    "sizes": ["35-38", "39-42"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "柔棉短袜",
+        "categoryLabel": "日常袜",
+        "description": "低调百搭，适合夏季与日常轻松穿着。"
+      },
+      "en-US": {
+        "title": "Soft Cotton Ankle Socks",
+        "categoryLabel": "Daily Socks",
+        "description": "An easy, understated pair for warmer days and casual everyday styling."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42"
+    ],
     "isRecommended": false,
     "ratingValue": 4.5,
     "reviewCount": 864,
     "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Tuesday, July 21",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "500+ bought in past month",
+    "isBestSeller": false,
     "releaseDate": "2026-07-10",
     "visualTone": "#f1f1f1",
     "visualShadow": "#cfcfcf",
     "visualAccent": "#bcbcbc",
-    "visualPattern": "soft"
+    "visualPattern": "soft",
+    "variants": [
+      {
+        "skuId": "sock-03-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-36",
+        "size": "36",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-39",
+        "size": "39",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-03-42",
+        "size": "42",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23f1f1f1'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23bcbcbc'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Soft Cotton Ankle Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23f1f1f1'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Soft Cotton Ankle Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Modal"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      }
+    ]
   },
   {
     "id": "sock-04",
@@ -72,16 +620,173 @@
     "originalPrice": 58,
     "discount": "22% OFF",
     "description": "快干面料帮助维持长时间训练舒适度。",
-    "sizes": ["39-42", "43-45"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "速干训练袜",
+        "categoryLabel": "运动袜",
+        "description": "快干面料帮助维持长时间训练舒适度。"
+      },
+      "en-US": {
+        "title": "Quick-Dry Training Socks",
+        "categoryLabel": "Sport Socks",
+        "description": "Quick-dry fabric helps keep longer training sessions comfortable."
+      }
+    },
+    "sizes": [
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
     "isRecommended": false,
     "ratingValue": 4.4,
     "reviewCount": 642,
     "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Monday, July 20",
+    "stockLabel": "Only 5 left in stock",
+    "isLowStock": true,
+    "stockQuantity": 5,
+    "recentlyBoughtLabel": "300+ bought in past month",
+    "isBestSeller": false,
     "releaseDate": "2026-07-13",
     "visualTone": "#6d6d6d",
     "visualShadow": "#4b4b4b",
     "visualAccent": "#8b8b8b",
-    "visualPattern": "mesh"
+    "visualPattern": "mesh",
+    "variants": [
+      {
+        "skuId": "sock-04-39",
+        "size": "39",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 5,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-40",
+        "size": "40",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 4,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-41",
+        "size": "41",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 3,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-42",
+        "size": "42",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 5,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-43",
+        "size": "43",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 4,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-44",
+        "size": "44",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 3,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-04-45",
+        "size": "45",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 5,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%236d6d6d'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%238b8b8b'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Quick-Dry Training Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%236d6d6d'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Quick-Dry Training Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Nylon performance blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
   },
   {
     "id": "sock-05",
@@ -93,16 +798,236 @@
     "originalPrice": 49,
     "discount": "29% OFF",
     "description": "更适合正装与通勤鞋型的基础搭配。",
-    "sizes": ["35-38", "39-42", "43-45"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "通勤罗口袜",
+        "categoryLabel": "日常袜",
+        "description": "更适合正装与通勤鞋型的基础搭配。"
+      },
+      "en-US": {
+        "title": "Ribbed Commuter Socks",
+        "categoryLabel": "Daily Socks",
+        "description": "A cleaner everyday basic that pairs well with dress shoes and weekday commuting."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
     "isRecommended": true,
     "ratingValue": 4.6,
     "reviewCount": 973,
     "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Sunday, July 19",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "1K+ bought in past month",
+    "isBestSeller": false,
     "releaseDate": "2026-07-12",
     "visualTone": "#d8d8d8",
     "visualShadow": "#b7b7b7",
     "visualAccent": "#8c8c8c",
-    "visualPattern": "rib"
+    "visualPattern": "rib",
+    "variants": [
+      {
+        "skuId": "sock-05-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-36",
+        "size": "36",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-39",
+        "size": "39",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-42",
+        "size": "42",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-43",
+        "size": "43",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-44",
+        "size": "44",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-05-45",
+        "size": "45",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23d8d8d8'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%238c8c8c'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Ribbed Commuter Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23d8d8d8'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Ribbed Commuter Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Modal"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
   },
   {
     "id": "sock-06",
@@ -114,15 +1039,1346 @@
     "originalPrice": 42,
     "discount": "31% OFF",
     "description": "轻薄贴脚，适合浅口鞋与夏日轻装搭配。",
-    "sizes": ["35-38", "39-42"],
+    "localizedContent": {
+      "zh-CN": {
+        "title": "云感船袜",
+        "categoryLabel": "船袜",
+        "description": "轻薄贴脚，适合浅口鞋与夏日轻装搭配。"
+      },
+      "en-US": {
+        "title": "Cloud No-Show Socks",
+        "categoryLabel": "No-Show Socks",
+        "description": "Lightweight and close-fitting for low-cut shoes and easy summer outfits."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42"
+    ],
     "isRecommended": false,
     "ratingValue": 4.3,
     "reviewCount": 518,
     "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Tuesday, July 21",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "400+ bought in past month",
+    "isBestSeller": false,
     "releaseDate": "2026-07-11",
     "visualTone": "#fbfbfb",
     "visualShadow": "#d7d7d7",
     "visualAccent": "#b0b0b0",
-    "visualPattern": "light"
+    "visualPattern": "light",
+    "variants": [
+      {
+        "skuId": "sock-06-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-36",
+        "size": "36",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Combed cotton",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-39",
+        "size": "39",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Combed cotton",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-06-42",
+        "size": "42",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23fbfbfb'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23b0b0b0'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Cloud No-Show Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23fbfbfb'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Cloud No-Show Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Combed cotton",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      }
+    ]
+  },
+  {
+    "id": "sock-07",
+    "series": "Office Line",
+    "title": "商务黑中筒袜",
+    "categoryKey": "crew",
+    "categoryLabel": "中筒袜",
+    "price": 42,
+    "originalPrice": 62,
+    "discount": "32% OFF",
+    "description": "细密罗纹与稳重黑灰配色，适合皮鞋、乐福鞋和办公室穿搭。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "商务黑中筒袜",
+        "categoryLabel": "中筒袜",
+        "description": "细密罗纹与稳重黑灰配色，适合皮鞋、乐福鞋和办公室穿搭。"
+      },
+      "en-US": {
+        "title": "Business Black Crew Socks",
+        "categoryLabel": "Crew Socks",
+        "description": "Fine ribbing and a restrained black-gray palette for dress shoes, loafers, and office wear."
+      }
+    },
+    "sizes": [
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.6,
+    "reviewCount": 742,
+    "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Wednesday, July 22",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "600+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-09",
+    "visualTone": "#222222",
+    "visualShadow": "#111111",
+    "visualAccent": "#5d5d5d",
+    "visualPattern": "rib",
+    "variants": [
+      {
+        "skuId": "sock-07-39",
+        "size": "39",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-40",
+        "size": "40",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-41",
+        "size": "41",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-42",
+        "size": "42",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-43",
+        "size": "43",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-44",
+        "size": "44",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-07-45",
+        "size": "45",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23222222'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%235d5d5d'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Business Black Crew Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23222222'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Business Black Crew Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
+  },
+  {
+    "id": "sock-08",
+    "series": "Cushion Run",
+    "title": "厚底毛圈运动袜",
+    "categoryKey": "sport",
+    "categoryLabel": "运动袜",
+    "price": 55,
+    "originalPrice": 79,
+    "discount": "30% OFF",
+    "description": "脚底毛圈缓震更厚实，适合跑步、健身和高频运动训练。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "厚底毛圈运动袜",
+        "categoryLabel": "运动袜",
+        "description": "脚底毛圈缓震更厚实，适合跑步、健身和高频运动训练。"
+      },
+      "en-US": {
+        "title": "Cushioned Terry Sport Socks",
+        "categoryLabel": "Sport Socks",
+        "description": "Thicker terry cushioning underfoot for running, gym sessions, and frequent training."
+      }
+    },
+    "sizes": [
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.7,
+    "reviewCount": 1349,
+    "isTopRated": true,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Monday, July 20",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "1K+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-08",
+    "visualTone": "#444444",
+    "visualShadow": "#262626",
+    "visualAccent": "#9a9a9a",
+    "visualPattern": "sport",
+    "variants": [
+      {
+        "skuId": "sock-08-39",
+        "size": "39",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-40",
+        "size": "40",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-41",
+        "size": "41",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-42",
+        "size": "42",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-43",
+        "size": "43",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-44",
+        "size": "44",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-08-45",
+        "size": "45",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23444444'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%239a9a9a'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Cushioned Terry Sport Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23444444'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Cushioned Terry Sport Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Nylon performance blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
+  },
+  {
+    "id": "sock-09",
+    "series": "Clean Day",
+    "title": "抗菌柔棉短袜",
+    "categoryKey": "daily",
+    "categoryLabel": "日常袜",
+    "price": 32,
+    "originalPrice": 46,
+    "discount": "30% OFF",
+    "description": "柔棉触感配合抗菌整理，适合长时间日常穿着与换季补货。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "抗菌柔棉短袜",
+        "categoryLabel": "日常袜",
+        "description": "柔棉触感配合抗菌整理，适合长时间日常穿着与换季补货。"
+      },
+      "en-US": {
+        "title": "Antibacterial Soft Cotton Socks",
+        "categoryLabel": "Daily Socks",
+        "description": "Soft cotton handfeel with antibacterial finishing for longer daily wear and seasonal restocks."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.5,
+    "reviewCount": 681,
+    "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Thursday, July 23",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "700+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-07",
+    "visualTone": "#eeeeee",
+    "visualShadow": "#cccccc",
+    "visualAccent": "#777777",
+    "visualPattern": "soft",
+    "variants": [
+      {
+        "skuId": "sock-09-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-36",
+        "size": "36",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-39",
+        "size": "39",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-42",
+        "size": "42",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-43",
+        "size": "43",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-44",
+        "size": "44",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-09-45",
+        "size": "45",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23777777'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Antibacterial Soft Cotton Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23eeeeee'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Antibacterial Soft Cotton Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Modal"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
+  },
+  {
+    "id": "sock-10",
+    "series": "Invisible Grip",
+    "title": "防滑隐形船袜",
+    "categoryKey": "no-show",
+    "categoryLabel": "船袜",
+    "price": 31,
+    "originalPrice": 45,
+    "discount": "31% OFF",
+    "description": "后跟硅胶防滑条减少滑落，适合浅口鞋、通勤鞋和夏季轻装。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "防滑隐形船袜",
+        "categoryLabel": "船袜",
+        "description": "后跟硅胶防滑条减少滑落，适合浅口鞋、通勤鞋和夏季轻装。"
+      },
+      "en-US": {
+        "title": "Non-Slip Invisible No-Show Socks",
+        "categoryLabel": "No-Show Socks",
+        "description": "A silicone heel grip helps reduce slipping in low-cut shoes, commuter pairs, and summer outfits."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.4,
+    "reviewCount": 593,
+    "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Wednesday, July 22",
+    "stockLabel": "Only 8 left in stock",
+    "isLowStock": true,
+    "stockQuantity": 8,
+    "recentlyBoughtLabel": "450+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-06",
+    "visualTone": "#ffffff",
+    "visualShadow": "#dedede",
+    "visualAccent": "#9c9c9c",
+    "visualPattern": "light",
+    "variants": [
+      {
+        "skuId": "sock-10-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 8,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-36",
+        "size": "36",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 7,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Combed cotton",
+        "stockQuantity": 6,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 8,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-39",
+        "size": "39",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 7,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Combed cotton",
+        "stockQuantity": 6,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Combed cotton",
+        "stockQuantity": 8,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-10-42",
+        "size": "42",
+        "color": "White",
+        "material": "Combed cotton",
+        "stockQuantity": 7,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23ffffff'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%239c9c9c'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Non-Slip Invisible No-Show Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23ffffff'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Non-Slip Invisible No-Show Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Combed cotton",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      }
+    ]
+  },
+  {
+    "id": "sock-11",
+    "series": "Night Motion",
+    "title": "夜跑反光运动袜",
+    "categoryKey": "sport",
+    "categoryLabel": "运动袜",
+    "price": 52,
+    "originalPrice": 76,
+    "discount": "32% OFF",
+    "description": "袜口反光细节提升夜跑识别度，弹力包裹适合户外运动与晚间训练。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "夜跑反光运动袜",
+        "categoryLabel": "运动袜",
+        "description": "袜口反光细节提升夜跑识别度，弹力包裹适合户外运动与晚间训练。"
+      },
+      "en-US": {
+        "title": "Reflective Night Run Sport Socks",
+        "categoryLabel": "Sport Socks",
+        "description": "Reflective cuff details improve visibility for night runs, while an elastic wrap supports outdoor workouts."
+      }
+    },
+    "sizes": [
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.6,
+    "reviewCount": 812,
+    "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Friday, July 24",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "650+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-05",
+    "visualTone": "#303030",
+    "visualShadow": "#181818",
+    "visualAccent": "#c8c8c8",
+    "visualPattern": "sport",
+    "variants": [
+      {
+        "skuId": "sock-11-39",
+        "size": "39",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-40",
+        "size": "40",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-41",
+        "size": "41",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-42",
+        "size": "42",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-43",
+        "size": "43",
+        "color": "White",
+        "material": "Nylon performance blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-44",
+        "size": "44",
+        "color": "Gray",
+        "material": "Nylon performance blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-11-45",
+        "size": "45",
+        "color": "Black",
+        "material": "Nylon performance blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23303030'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23c8c8c8'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Reflective Night Run Sport Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23303030'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Reflective Night Run Sport Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Nylon performance blend",
+      "Spandex"
+    ],
+    "sizeChart": [
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      },
+      {
+        "size": "43",
+        "footLengthCm": "26.5-27.0",
+        "usMen": "9.5",
+        "usWomen": "11"
+      },
+      {
+        "size": "44",
+        "footLengthCm": "27.0-27.5",
+        "usMen": "10",
+        "usWomen": "11.5"
+      },
+      {
+        "size": "45",
+        "footLengthCm": "27.5-28.0",
+        "usMen": "11",
+        "usWomen": "12.5"
+      }
+    ]
+  },
+  {
+    "id": "sock-12",
+    "series": "Air Knit",
+    "title": "轻薄透气袜",
+    "categoryKey": "daily",
+    "categoryLabel": "日常袜",
+    "price": 27,
+    "originalPrice": 38,
+    "discount": "29% OFF",
+    "description": "轻薄针织带来更清爽脚感，适合夏季日常、通勤和低负担穿着。",
+    "localizedContent": {
+      "zh-CN": {
+        "title": "轻薄透气袜",
+        "categoryLabel": "日常袜",
+        "description": "轻薄针织带来更清爽脚感，适合夏季日常、通勤和低负担穿着。"
+      },
+      "en-US": {
+        "title": "Lightweight Breathable Socks",
+        "categoryLabel": "Daily Socks",
+        "description": "A lighter knit creates a cooler feel for summer daily wear, commuting, and low-bulk outfits."
+      }
+    },
+    "sizes": [
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42"
+    ],
+    "isRecommended": false,
+    "ratingValue": 4.3,
+    "reviewCount": 436,
+    "isTopRated": false,
+    "shippingLabel": "FREE delivery",
+    "deliveryEstimate": "Get it by Thursday, July 23",
+    "stockLabel": "In stock",
+    "isLowStock": false,
+    "recentlyBoughtLabel": "350+ bought in past month",
+    "isBestSeller": false,
+    "releaseDate": "2026-07-04",
+    "visualTone": "#f6f6f6",
+    "visualShadow": "#dadada",
+    "visualAccent": "#a7a7a7",
+    "visualPattern": "mesh",
+    "variants": [
+      {
+        "skuId": "sock-12-35",
+        "size": "35",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-36",
+        "size": "36",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-37",
+        "size": "37",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-38",
+        "size": "38",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-39",
+        "size": "39",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-40",
+        "size": "40",
+        "color": "Gray",
+        "material": "Cotton blend",
+        "stockQuantity": 12,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-41",
+        "size": "41",
+        "color": "Black",
+        "material": "Cotton blend",
+        "stockQuantity": 14,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      },
+      {
+        "skuId": "sock-12-42",
+        "size": "42",
+        "color": "White",
+        "material": "Cotton blend",
+        "stockQuantity": 13,
+        "lowStockThreshold": 5,
+        "isAvailable": true
+      }
+    ],
+    "gallery": [
+      {
+        "id": "main",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23f6f6f6'%2F%3E%3Cpath%20d%3D'M34%2048c18-16%2045-16%2063%200%207%206%2018%2010%2031%2010h8v15H77c-25%200-43-8-54-23z'%20fill%3D'%23a7a7a7'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Lightweight Breathable Socks main product image"
+      },
+      {
+        "id": "folded",
+        "src": "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20160%2090'%3E%3Crect%20width%3D'160'%20height%3D'90'%20fill%3D'%23eeeeee'%2F%3E%3Crect%20x%3D'36'%20y%3D'28'%20width%3D'88'%20height%3D'34'%20rx%3D'17'%20fill%3D'%23f6f6f6'%20stroke%3D'%23999999'%2F%3E%3C%2Fsvg%3E",
+        "alt": "Lightweight Breathable Socks folded product image"
+      }
+    ],
+    "colors": [
+      "Black",
+      "White",
+      "Gray"
+    ],
+    "materials": [
+      "Cotton blend",
+      "Modal"
+    ],
+    "sizeChart": [
+      {
+        "size": "35",
+        "footLengthCm": "22.0-22.5",
+        "usMen": "4",
+        "usWomen": "5.5"
+      },
+      {
+        "size": "36",
+        "footLengthCm": "22.5-23.0",
+        "usMen": "4.5",
+        "usWomen": "6"
+      },
+      {
+        "size": "37",
+        "footLengthCm": "23.0-23.5",
+        "usMen": "5",
+        "usWomen": "6.5"
+      },
+      {
+        "size": "38",
+        "footLengthCm": "23.5-24.0",
+        "usMen": "6",
+        "usWomen": "7.5"
+      },
+      {
+        "size": "39",
+        "footLengthCm": "24.5-25.0",
+        "usMen": "6.5-7",
+        "usWomen": "8-8.5"
+      },
+      {
+        "size": "40",
+        "footLengthCm": "25.0-25.5",
+        "usMen": "7.5",
+        "usWomen": "9"
+      },
+      {
+        "size": "41",
+        "footLengthCm": "25.5-26.0",
+        "usMen": "8",
+        "usWomen": "9.5"
+      },
+      {
+        "size": "42",
+        "footLengthCm": "26.0-26.5",
+        "usMen": "8.5",
+        "usWomen": "10"
+      }
+    ]
   }
 ]
