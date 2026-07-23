@@ -127,13 +127,39 @@ test("registers a user and creates an http-only session", async ({ request }) =>
   expect(payload.user.passwordHash).toBeUndefined();
   expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
 
-  const users = JSON.parse(await fs.readFile(usersFile, "utf8"));
-  expect(users.users).toHaveLength(1);
-  expect(users.users[0].passwordHash).toMatch(/^sha256:/);
-  expect(users.users[0].passwordSalt.length).toBeGreaterThan(8);
+  const db = createDatabase(testDbFile);
+  try {
+    const user = db.prepare(`
+      SELECT email, password_hash AS passwordHash, password_salt AS passwordSalt
+      FROM users
+      WHERE email = ?
+    `).get(registerPayload.email);
+    const session = db.prepare("SELECT COUNT(*) AS count FROM sessions").get();
 
-  const sessions = JSON.parse(await fs.readFile(sessionsFile, "utf8"));
-  expect(sessions.sessions).toHaveLength(1);
+    expect(user.passwordHash).toMatch(/^sha256:/);
+    expect(user.passwordSalt.length).toBeGreaterThan(8);
+    expect(session.count).toBe(1);
+  } finally {
+    db.close();
+  }
+});
+
+test("persists registered users and sessions in SQLite", async ({ request }) => {
+  const response = await request.post("/api/auth/register", { data: registerPayload });
+  expect(response.status()).toBe(201);
+  const sessionCookie = getSessionCookie(response);
+  expect(sessionCookie).toContain("socks_session=");
+
+  const db = createDatabase(testDbFile);
+  try {
+    const user = db.prepare("SELECT email FROM users WHERE email = ?").get(registerPayload.email);
+    const sessionId = sessionCookie.replace("socks_session=", "");
+    const session = db.prepare("SELECT id FROM sessions WHERE id = ?").get(sessionId);
+    expect(user).toEqual({ email: registerPayload.email });
+    expect(session).toEqual({ id: sessionId });
+  } finally {
+    db.close();
+  }
 });
 
 test("rejects duplicate user registration emails", async ({ request }) => {
@@ -358,6 +384,25 @@ test("creates lists updates defaults and deletes user addresses", async ({ reque
   const deletePayload = await deleteResponse.json();
   expect(deletePayload.addresses).toHaveLength(1);
   expect(deletePayload.addresses[0].isDefault).toBe(true);
+});
+
+test("persists address changes in SQLite", async ({ request }) => {
+  const sessionCookie = await registerAndGetCookie(request);
+
+  const response = await request.post("/api/me/addresses", {
+    headers: { cookie: sessionCookie },
+    data: addressPayload
+  });
+  expect(response.status()).toBe(201);
+
+  const db = createDatabase(testDbFile);
+  try {
+    const row = db.prepare("SELECT payload, is_default FROM addresses").get();
+    expect(JSON.parse(row.payload)).toMatchObject({ address: "100 Demo Street" });
+    expect(row.is_default).toBe(1);
+  } finally {
+    db.close();
+  }
 });
 
 test("rejects order creation when cart is empty", async ({ request }) => {

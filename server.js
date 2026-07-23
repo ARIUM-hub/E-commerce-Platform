@@ -6,6 +6,16 @@ const crypto = require("node:crypto");
 const { createApiError } = require("./lib/api-errors");
 const { createDatabase, initializeDatabase, getDatabasePath } = require("./lib/database");
 const { listProducts } = require("./lib/repositories/products");
+const {
+  findUserByEmail,
+  findUserById,
+  countUsers,
+  createUser,
+  createSession,
+  findSession,
+  deleteSession,
+  replaceAddresses
+} = require("./lib/repositories/users");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -532,22 +542,20 @@ async function getSessionContext(request) {
     return { session: null, user: null };
   }
 
-  const [sessionsPayload, usersPayload] = await Promise.all([
-    readJsonFile(sessionsFile),
-    readJsonFile(usersFile)
-  ]);
-  const now = Date.now();
-  const session = (Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [])
-    .find((entry) => entry.id === sessionId && new Date(entry.expiresAt).getTime() > now);
-  const user = session
-    ? (Array.isArray(usersPayload.users) ? usersPayload.users : []).find((entry) => entry.id === session.userId)
-    : null;
+  const { session, user } = withDatabase((db) => {
+    const foundSession = findSession(db, sessionId);
+    const now = Date.now();
+    const isActiveSession = foundSession && (!foundSession.expiresAt || new Date(foundSession.expiresAt).getTime() > now);
+    return {
+      session: isActiveSession ? foundSession : null,
+      user: isActiveSession && foundSession.userId ? findUserById(db, foundSession.userId) : null
+    };
+  });
 
   return { session, user };
 }
 
 async function createUserSession(userId) {
-  const sessionsPayload = await readJsonFile(sessionsFile);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + sessionMaxAgeSeconds * 1000);
   const session = {
@@ -557,17 +565,12 @@ async function createUserSession(userId) {
     expiresAt: expiresAt.toISOString()
   };
 
-  sessionsPayload.sessions = Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [];
-  sessionsPayload.sessions.push(session);
-  await writeJsonFile(sessionsFile, sessionsPayload);
+  withDatabase((db) => createSession(db, session));
   return session;
 }
 
 async function removeSession(sessionId) {
-  const sessionsPayload = await readJsonFile(sessionsFile);
-  sessionsPayload.sessions = (Array.isArray(sessionsPayload.sessions) ? sessionsPayload.sessions : [])
-    .filter((session) => session.id !== sessionId);
-  await writeJsonFile(sessionsFile, sessionsPayload);
+  withDatabase((db) => deleteSession(db, sessionId));
 }
 
 function validateAuthPayload(body, mode) {
@@ -755,17 +758,15 @@ async function requireUser(request, response) {
 }
 
 async function updateUser(userId, updater) {
-  const usersPayload = await readJsonFile(usersFile);
-  usersPayload.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
-  const userIndex = usersPayload.users.findIndex((user) => user.id === userId);
-  if (userIndex === -1) {
-    return null;
-  }
+  return withDatabase((db) => {
+    const currentUser = findUserById(db, userId);
+    if (!currentUser) {
+      return null;
+    }
 
-  const nextUser = updater(usersPayload.users[userIndex]);
-  usersPayload.users[userIndex] = nextUser;
-  await writeJsonFile(usersFile, usersPayload);
-  return nextUser;
+    const nextUser = updater(currentUser);
+    return replaceAddresses(db, userId, Array.isArray(nextUser.addresses) ? nextUser.addresses : []);
+  });
 }
 
 function parseAddressPath(pathname, suffix = "") {
@@ -855,26 +856,22 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const usersPayload = await readJsonFile(usersFile);
-      usersPayload.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
       const email = normalizeEmail(body.email);
-      if (usersPayload.users.some((user) => user.email === email)) {
+      if (withDatabase((db) => findUserByEmail(db, email))) {
         sendError(response, 409, "EMAIL_ALREADY_REGISTERED", "Email is already registered.");
         return;
       }
 
       const passwordSalt = createPasswordSalt();
-      const user = {
-        id: buildUserId(usersPayload.users),
+      const user = withDatabase((db) => createUser(db, {
+        id: buildUserId({ length: countUsers(db) }),
         name: String(body.name).trim(),
         email,
         passwordHash: hashPassword(String(body.password), passwordSalt),
         passwordSalt,
         createdAt: new Date().toISOString(),
         addresses: []
-      };
-      usersPayload.users.push(user);
-      await writeJsonFile(usersFile, usersPayload);
+      }));
 
       const session = await createUserSession(user.id);
       const mergeResult = await mergeAnonymousCartIntoUserCart(user);
@@ -907,10 +904,8 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const usersPayload = await readJsonFile(usersFile);
       const email = normalizeEmail(body.email);
-      const user = (Array.isArray(usersPayload.users) ? usersPayload.users : [])
-        .find((entry) => entry.email === email);
+      const user = withDatabase((db) => findUserByEmail(db, email));
       if (!user || !verifyPassword(String(body.password), user)) {
         sendError(response, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
         return;
