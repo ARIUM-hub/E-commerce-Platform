@@ -16,6 +16,11 @@ const {
   deleteSession,
   replaceAddresses
 } = require("./lib/repositories/users");
+const {
+  ensureCart,
+  getCart,
+  replaceCartItems
+} = require("./lib/repositories/carts");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -89,6 +94,17 @@ function sendJsonWithHeaders(response, statusCode, payload, headers = {}) {
     ...headers
   });
   response.end(JSON.stringify(payload));
+}
+
+function sendCartJson(response, statusCode, payload, activeCart) {
+  if (activeCart?.setCookieHeader) {
+    sendJsonWithHeaders(response, statusCode, payload, {
+      "Set-Cookie": activeCart.setCookieHeader
+    });
+    return;
+  }
+
+  sendJson(response, statusCode, payload);
 }
 
 function sendError(response, statusCode, code, message, details = {}) {
@@ -592,48 +608,67 @@ function findUserCartIndex(userCartsPayload, userId) {
   return userCartsPayload.carts.findIndex((cart) => cart.userId === userId);
 }
 
-async function readActiveCart(request) {
+async function readActiveCart(request, options = {}) {
   const { user } = await getSessionContext(request);
   if (!user) {
+    let sessionId = getCookieValue(request, sessionCookieName);
+    let setCookieHeader = null;
+
+    if (options.createAnonymousSession && !sessionId) {
+      sessionId = createSessionId();
+      const now = new Date();
+      const session = {
+        id: sessionId,
+        userId: null,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + sessionMaxAgeSeconds * 1000).toISOString()
+      };
+      withDatabase((db) => createSession(db, session));
+      setCookieHeader = createSessionCookie(sessionId);
+    } else if (options.createAnonymousSession && sessionId) {
+      withDatabase((db) => {
+        if (!findSession(db, sessionId)) {
+          const now = new Date();
+          createSession(db, {
+            id: sessionId,
+            userId: null,
+            createdAt: now.toISOString(),
+            expiresAt: new Date(now.getTime() + sessionMaxAgeSeconds * 1000).toISOString()
+          });
+        }
+      });
+    }
+
     return {
       user: null,
-      cart: normalizeCartPayload(await readJsonFile(cartFile))
+      sessionId,
+      setCookieHeader,
+      cart: sessionId
+        ? normalizeCartPayload(withDatabase((db) => getCart(db, { sessionId })))
+        : { items: [] }
     };
   }
 
-  const userCartsPayload = await readJsonFile(userCartsFile);
-  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
-  const cart = cartIndex === -1
-    ? { userId: user.id, items: [] }
-    : userCartsPayload.carts[cartIndex];
-
   return {
     user,
-    cart: normalizeCartPayload(cart)
+    sessionId: null,
+    setCookieHeader: null,
+    cart: normalizeCartPayload(withDatabase((db) => getCart(db, { userId: user.id })))
   };
 }
 
-async function writeActiveCart(user, cart) {
+async function writeActiveCart(activeCart, cart) {
   const normalizedCart = normalizeCartPayload(cart);
-  if (!user) {
-    await writeJsonFile(cartFile, normalizedCart);
+  const userId = activeCart.user?.id || null;
+  const sessionId = userId ? null : activeCart.sessionId;
+  if (!userId && !sessionId) {
     return normalizedCart;
   }
 
-  const userCartsPayload = await readJsonFile(userCartsFile);
-  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
-  const userCart = {
-    userId: user.id,
-    items: normalizedCart.items
-  };
-
-  if (cartIndex === -1) {
-    userCartsPayload.carts.push(userCart);
-  } else {
-    userCartsPayload.carts[cartIndex] = userCart;
-  }
-
-  await writeJsonFile(userCartsFile, userCartsPayload);
+  withDatabase((db) => {
+    const databaseCart = ensureCart(db, { userId, sessionId });
+    replaceCartItems(db, databaseCart.id, normalizedCart.items);
+  });
   return normalizedCart;
 }
 
@@ -963,7 +998,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/cart/items") {
     try {
       const products = await readJsonFile(productsFile);
-      const activeCart = await readActiveCart(request);
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);
       const validation = validateCartItemInput(products, body);
@@ -998,18 +1033,18 @@ const server = http.createServer(async (request, response) => {
         });
       }
 
-      await writeActiveCart(activeCart.user, cart);
+      await writeActiveCart(activeCart, cart);
 
       const item = cart.items.find((entry) => {
         return entry.skuId === variant.skuId
           || (entry.productId === body.productId && entry.size === body.size);
       });
 
-      sendJson(response, 200, {
+      sendCartJson(response, 200, {
         ok: true,
         item,
         meta: getCartPayload(cart).meta
-      });
+      }, activeCart);
       return;
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -1025,13 +1060,13 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/cart/clear") {
     try {
       const emptyCart = { items: [] };
-      const activeCart = await readActiveCart(request);
-      await writeActiveCart(activeCart.user, emptyCart);
-      sendJson(response, 200, {
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      await writeActiveCart(activeCart, emptyCart);
+      sendCartJson(response, 200, {
         ok: true,
         items: [],
         meta: { itemCount: 0 }
-      });
+      }, activeCart);
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -1290,7 +1325,7 @@ const server = http.createServer(async (request, response) => {
       await writeJsonFile(ordersFile, nextOrdersPayload);
 
       const emptyCart = { items: [] };
-      await writeActiveCart(activeCart.user, emptyCart);
+      await writeActiveCart(activeCart, emptyCart);
 
       sendJson(response, 201, {
         ok: true,
@@ -1407,7 +1442,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "PATCH" && requestUrl.pathname === "/api/cart/items") {
     try {
       const products = await readJsonFile(productsFile);
-      const activeCart = await readActiveCart(request);
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);
       const validation = validateCartItemInput(products, body);
@@ -1445,14 +1480,14 @@ const server = http.createServer(async (request, response) => {
         size: variant.size,
         quantity: validation.quantity
       };
-      await writeActiveCart(activeCart.user, cart);
+      await writeActiveCart(activeCart, cart);
 
-      sendJson(response, 200, {
+      sendCartJson(response, 200, {
         ok: true,
         item: cart.items[itemIndex],
         items: cart.items,
         meta: getCartPayload(cart).meta
-      });
+      }, activeCart);
       return;
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -1468,7 +1503,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "DELETE" && requestUrl.pathname === "/api/cart/items") {
     try {
       const products = await readJsonFile(productsFile);
-      const activeCart = await readActiveCart(request);
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);
       const product = products.find((item) => item.id === body.productId);
@@ -1485,14 +1520,14 @@ const server = http.createServer(async (request, response) => {
       }
 
       const [removedItem] = cart.items.splice(itemIndex, 1);
-      await writeActiveCart(activeCart.user, cart);
+      await writeActiveCart(activeCart, cart);
 
-      sendJson(response, 200, {
+      sendCartJson(response, 200, {
         ok: true,
         removedItem,
         items: cart.items,
         meta: getCartPayload(cart).meta
-      });
+      }, activeCart);
       return;
     } catch (error) {
       if (error instanceof SyntaxError) {

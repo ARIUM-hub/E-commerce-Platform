@@ -802,6 +802,53 @@ test("adds an item to the cart and persists quantity merges", async ({ request }
   expect(cartPayload.meta.itemCount).toBe(1);
 });
 
+test("persists anonymous cart items in SQLite by session cookie", async ({ request }) => {
+  const addResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-02", size: "43", quantity: 2 }
+  });
+  expect(addResponse.ok()).toBe(true);
+
+  const sessionCookie = getSessionCookie(addResponse);
+  expect(sessionCookie).toContain("socks_session=");
+  const sessionId = sessionCookie.replace("socks_session=", "");
+
+  const db = createDatabase(testDbFile);
+  try {
+    const cart = db.prepare(`
+      SELECT id, owner_type AS ownerType, session_id AS sessionId
+      FROM carts
+      WHERE session_id = ?
+    `).get(sessionId);
+    const item = db.prepare(`
+      SELECT product_id AS productId, sku_id AS skuId, size, quantity
+      FROM cart_items
+      WHERE cart_id = ?
+    `).get(cart.id);
+
+    expect(cart).toMatchObject({
+      ownerType: "anonymous",
+      sessionId
+    });
+    expect(item).toEqual({
+      productId: "sock-02",
+      skuId: "sock-02-43",
+      size: "43",
+      quantity: 2
+    });
+  } finally {
+    db.close();
+  }
+
+  const cartResponse = await request.get("/api/cart", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(cartResponse.ok()).toBe(true);
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 2 }],
+    meta: { itemCount: 1 }
+  });
+});
+
 test("rejects invalid cart size values", async ({ request }) => {
   const response = await request.post("/api/cart/items", {
     data: { productId: "sock-02", size: "35", quantity: 1 }
