@@ -1,6 +1,5 @@
 const http = require("node:http");
 const fs = require("node:fs");
-const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createApiError } = require("./lib/api-errors");
@@ -35,18 +34,8 @@ const port = Number.parseInt(process.env.PORT || "4173", 10);
 const rootDir = __dirname;
 const dataDir = path.resolve(rootDir, process.env.DATA_DIR || "data");
 const productsFile = path.join(dataDir, "products.json");
-const cartFile = path.join(dataDir, "cart.json");
-const ordersFile = path.join(dataDir, "orders.json");
-const usersFile = path.join(dataDir, "users.json");
-const sessionsFile = path.join(dataDir, "sessions.json");
-const userCartsFile = path.join(dataDir, "user-carts.json");
 const requiredDataFiles = [
-  "products.json",
-  "cart.json",
-  "orders.json",
-  "users.json",
-  "sessions.json",
-  "user-carts.json"
+  "products.json"
 ];
 const staticRoutes = new Map([
   ["/", path.join(rootDir, "socks-product-list.html")],
@@ -143,15 +132,6 @@ function sendFile(response, filePath) {
 
 function getStaticFilePath(urlPathname) {
   return staticRoutes.get(urlPathname) || null;
-}
-
-async function readJsonFile(filePath) {
-  const content = await fsp.readFile(filePath, "utf8");
-  return JSON.parse(content);
-}
-
-async function writeJsonFile(filePath, payload) {
-  await fsp.writeFile(filePath, JSON.stringify(payload, null, 2) + "\n", "utf8");
 }
 
 function withDatabase(callback) {
@@ -611,11 +591,6 @@ function normalizeCartPayload(cart) {
   };
 }
 
-function findUserCartIndex(userCartsPayload, userId) {
-  userCartsPayload.carts = Array.isArray(userCartsPayload.carts) ? userCartsPayload.carts : [];
-  return userCartsPayload.carts.findIndex((cart) => cart.userId === userId);
-}
-
 async function readActiveCart(request, options = {}) {
   const { user } = await getSessionContext(request);
   if (!user) {
@@ -824,11 +799,6 @@ function parseOrderStatusPath(pathname) {
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
 }
 
-function findOrderIndex(ordersPayload, orderId) {
-  const orders = Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [];
-  return orders.findIndex((order) => order.id === orderId);
-}
-
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
 
@@ -994,7 +964,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "POST" && requestUrl.pathname === "/api/cart/items") {
     try {
-      const products = await readJsonFile(productsFile);
+      const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);
@@ -1423,7 +1393,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "PATCH" && requestUrl.pathname === "/api/cart/items") {
     try {
-      const products = await readJsonFile(productsFile);
+      const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);
@@ -1484,7 +1454,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "DELETE" && requestUrl.pathname === "/api/cart/items") {
     try {
-      const products = await readJsonFile(productsFile);
+      const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request, { createAnonymousSession: true });
       const cart = activeCart.cart;
       const body = await readRequestBody(request);

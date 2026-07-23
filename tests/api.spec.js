@@ -853,6 +853,19 @@ test("returns an empty anonymous cart by default", async ({ request }) => {
   });
 });
 
+test("does not read live cart state from JSON files after SQLite migration", async ({ request }) => {
+  await fs.writeFile(cartFile, `${JSON.stringify({
+    items: [{ productId: "sock-01", size: "39", quantity: 99 }]
+  }, null, 2)}\n`, "utf8");
+
+  const response = await request.get("/api/cart");
+  expect(response.ok()).toBe(true);
+  await expect(response.json()).resolves.toEqual({
+    items: [],
+    meta: { itemCount: 0 }
+  });
+});
+
 test("adds an item to the cart and persists quantity merges", async ({ request }) => {
   const firstAdd = await request.post("/api/cart/items", {
     data: { productId: "sock-02", size: "43", quantity: 1 }
