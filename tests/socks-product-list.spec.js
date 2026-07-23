@@ -1081,14 +1081,15 @@ test("loads products from the backend response instead of inline seed markup", a
   ]);
 
   expect(productsResponse.ok()).toBe(true);
-  await expect(page.locator("[data-product-card]")).toHaveCount(12);
+  await expect(page.locator("[data-result-count]")).toHaveText("共 12 件商品");
+  await expect(page.locator("[data-product-card]")).toHaveCount(8);
 });
 
 test("renders multiple socks cards in a three-column desktop grid", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
   const productCards = page.locator("[data-product-card]");
-  await expect(productCards).toHaveCount(12);
+  await expect(productCards).toHaveCount(8);
   const firstCard = productCards.first();
 
   await expect(firstCard.locator(".product-card__media")).toBeVisible();
@@ -1100,6 +1101,8 @@ test("renders multiple socks cards in a three-column desktop grid", async ({ pag
   await expect(firstCard.locator(".product-card__price-original")).toHaveText("¥59");
   await expect(firstCard.getByRole("button", { name: "加入购物车" })).toBeVisible();
   await expect(productCards.nth(1).getByText("轻压运动袜")).toBeVisible();
+  await page.locator("[data-load-more-products]").click();
+  await expect(productCards).toHaveCount(12);
   await expect(page.locator('[data-product-card][data-product-id="sock-12"]')).toContainText("轻薄透气袜");
 
   const gridColumns = await page.locator("[data-product-grid]").evaluate((node) => {
@@ -1126,7 +1129,7 @@ test("shows all products on a clean storefront url even after a stored filtered 
   await page.goto("/socks-product-list.html");
 
   await expect(page.locator("[data-result-count]")).toHaveText("共 12 件商品");
-  await expect(page.locator("[data-product-card]")).toHaveCount(12);
+  await expect(page.locator("[data-product-card]")).toHaveCount(8);
   await expect(page.locator("[data-site-search-input]")).toHaveValue("");
 });
 
@@ -1352,6 +1355,20 @@ test("shows no-result recommendations and recovery actions", async ({ page }) =>
   await page.locator("[data-clear-all-filters]").click();
   await expect(page).not.toHaveURL(/maxPrice=1/);
   await expect(page.locator("[data-product-card]")).not.toHaveCount(0);
+});
+
+test("preserves advanced filters when opening product detail and returning", async ({ page }) => {
+  await page.goto("/socks-product-list.html?minPrice=40&maxPrice=60&size=43&stock=in-stock&ratingMin=4.5");
+
+  await page.locator("[data-product-card]").first().locator("[data-product-detail-link]").click();
+  await expect(page).toHaveURL(/view=detail/);
+  await expect(page).toHaveURL(/minPrice=40/);
+  await expect(page).toHaveURL(/size=43/);
+
+  await page.locator("[data-detail-back-link]").click();
+  await expect(page).toHaveURL(/minPrice=40/);
+  await expect(page).toHaveURL(/size=43/);
+  await expect(page.locator("[data-active-filter-chip]")).toContainText(["¥40 - ¥60", "43"]);
 });
 
 test("submits q through the shared header search and filters the storefront results", async ({ page }) => {

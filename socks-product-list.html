@@ -4094,6 +4094,24 @@
       return search ? `${STOREFRONT_PATH}?${search}` : STOREFRONT_PATH;
     }
 
+    function appendAdvancedContextParams(params, options = {}) {
+      const minPrice = options.minPrice ?? activeMinPrice;
+      const maxPrice = options.maxPrice ?? activeMaxPrice;
+      const size = options.size ?? activeSize;
+      const stock = options.stock ?? activeStock;
+      const ratingMin = options.ratingMin ?? activeRatingMin;
+      const pageSize = options.pageSize ?? activePageSize;
+
+      if (minPrice) params.set("minPrice", minPrice);
+      if (maxPrice) params.set("maxPrice", maxPrice);
+      if (size) params.set("size", size);
+      if (stock && stock !== STOCK_FILTER_KEY.ALL) params.set("stock", stock);
+      if (ratingMin) params.set("ratingMin", ratingMin);
+      if (Number(pageSize) !== DEFAULT_PAGE_SIZE) params.set("pageSize", String(pageSize));
+
+      return params;
+    }
+
     async function navigateToAdvancedFilterState(overrides = {}) {
       window.history.pushState(null, "", getStorefrontHrefWithAdvancedFilters(overrides));
       syncActiveStateFromUrl();
@@ -4592,6 +4610,7 @@
         params.set("q", queryValue);
       }
 
+      appendAdvancedContextParams(params, options);
       return `${STOREFRONT_PATH}?${params.toString()}`;
     }
 
@@ -5898,7 +5917,22 @@
     }
 
     function createDetailBackHref() {
-      return getStorefrontHref(getRequestedFilter(), getRequestedSort(), getRequestedQuery());
+      const params = appendStorefrontQueryParams(new URLSearchParams(), {
+        filter: getRequestedFilter(),
+        sort: getRequestedSort(),
+        q: getRequestedQuery()
+      });
+      appendAdvancedContextParams(params, {
+        minPrice: getRequestedNumberParam("minPrice"),
+        maxPrice: getRequestedNumberParam("maxPrice"),
+        size: getRequestedSize(),
+        stock: getRequestedStock(),
+        ratingMin: getRequestedNumberParam("ratingMin"),
+        pageSize: getRequestedPageSize()
+      });
+
+      const search = params.toString();
+      return search ? `${STOREFRONT_PATH}?${search}` : STOREFRONT_PATH;
     }
 
     function renderDetailEmptyState(backHref) {
@@ -6491,7 +6525,7 @@
 
       if (stockRoot) {
         const stockOptions = [
-          { value: STOCK_FILTER_KEY.ALL, label: "全部库存" },
+          { value: STOCK_FILTER_KEY.ALL, label: "库存总览" },
           { value: STOCK_FILTER_KEY.IN_STOCK, label: "现货" },
           { value: STOCK_FILTER_KEY.LOW_STOCK, label: "低库存" },
           { value: STOCK_FILTER_KEY.OUT_OF_STOCK, label: "缺货" }

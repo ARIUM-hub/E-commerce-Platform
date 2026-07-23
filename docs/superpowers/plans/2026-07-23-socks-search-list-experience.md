@@ -1170,7 +1170,7 @@ git commit -m "feat: add empty search recommendations"
 - Modify: `tests/socks-product-list.spec.js`
 - Modify: `socks-product-list.html`
 
-- [ ] **Step 1: Write failing detail context test**
+- [x] **Step 1: Write failing detail context test**
 
 Add:
 
@@ -1190,7 +1190,7 @@ test("preserves advanced filters when opening product detail and returning", asy
 });
 ```
 
-- [ ] **Step 2: Run detail context test and verify it fails if advanced params are not preserved**
+- [x] **Step 2: Run detail context test and verify it fails if advanced params are not preserved**
 
 Run:
 
@@ -1200,7 +1200,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL until detail links and back links include advanced params.
 
-- [ ] **Step 3: Extend storefront href helpers to include advanced params**
+- [x] **Step 3: Extend storefront href helpers to include advanced params**
 
 Update `getContextualDetailHref()` and `getStorefrontHref()` call sites so advanced params are preserved:
 
@@ -1217,7 +1217,7 @@ Update `getContextualDetailHref()` and `getStorefrontHref()` call sites so advan
 
 Call `appendAdvancedContextParams(params)` before returning detail and storefront hrefs.
 
-- [ ] **Step 4: Run detail context test and verify it passes**
+- [x] **Step 4: Run detail context test and verify it passes**
 
 Run:
 
@@ -1227,7 +1227,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 5: Run final API verification**
+- [x] **Step 5: Run final API verification**
 
 Run:
 
@@ -1237,7 +1237,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 6: Run final UI verification**
+- [x] **Step 6: Run final UI verification**
 
 Run:
 
@@ -1247,7 +1247,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS. If unrelated older tests fail because they seed `cart.json`, do not change this feature to restore JSON state reads. Update those tests in a separate task to seed cart through `/api/cart/items`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
