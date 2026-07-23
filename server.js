@@ -189,6 +189,31 @@ function normalizeSearchQuery(queryValue) {
   return typeof queryValue === "string" ? queryValue.trim() : "";
 }
 
+function normalizePositiveInteger(value, fallback, options = {}) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return options.max ? Math.min(parsed, options.max) : parsed;
+}
+
+function paginateItems(items, page, pageSize) {
+  const totalCount = items.length;
+  const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize);
+  const safePage = totalPages === 0 ? 1 : Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+
+  return {
+    page: safePage,
+    pageSize,
+    totalCount,
+    totalPages,
+    hasMore: safePage < totalPages,
+    items: items.slice(startIndex, startIndex + pageSize)
+  };
+}
+
 function matchesLocalizedProductQuery(product, query) {
   const normalizedQuery = query.toLocaleLowerCase();
 
@@ -197,7 +222,7 @@ function matchesLocalizedProductQuery(product, query) {
   });
 }
 
-function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue) {
+function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue, options = {}) {
   const filter = validFilters.has(filterValue) ? filterValue : "all";
   const sort = validSorts.has(sortValue) ? sortValue : "recommended";
   const locale = normalizeLocale(localeValue);
@@ -235,9 +260,22 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
     payloadMeta.q = q;
   }
 
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 8, { max: 24 });
+  const paginated = paginateItems(matchedItems, page, pageSize);
+
   return {
-    items: matchedItems,
-    meta: payloadMeta
+    items: paginated.items,
+    recommendations: [],
+    meta: {
+      ...payloadMeta,
+      count: paginated.items.length,
+      totalCount: paginated.totalCount,
+      page: paginated.page,
+      pageSize: paginated.pageSize,
+      totalPages: paginated.totalPages,
+      hasMore: paginated.hasMore
+    }
   };
 }
 
@@ -815,7 +853,11 @@ const server = http.createServer(async (request, response) => {
         requestUrl.searchParams.get("filter"),
         requestUrl.searchParams.get("sort"),
         requestUrl.searchParams.get("locale"),
-        requestUrl.searchParams.get("q")
+        requestUrl.searchParams.get("q"),
+        {
+          page: requestUrl.searchParams.get("page"),
+          pageSize: requestUrl.searchParams.get("pageSize")
+        }
       );
       sendJson(response, 200, payload);
       return;

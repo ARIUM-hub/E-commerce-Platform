@@ -734,15 +734,51 @@ test("returns products with default filter and recommended sort", async ({ reque
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload.meta).toEqual({
+  expect(payload.meta).toMatchObject({
     filter: "all",
     sort: "recommended",
-    count: 12
+    count: 8,
+    totalCount: 12,
+    page: 1,
+    pageSize: 8,
+    totalPages: 2,
+    hasMore: true
   });
-  expect(payload.items).toHaveLength(12);
+  expect(payload.items).toHaveLength(8);
   expect(payload.items[0].title).toBe("极简中筒袜");
   expect(payload.items[1].title).toBe("轻压运动袜");
   expect(payload.items[2].title).toBe("通勤罗口袜");
+});
+
+test("paginates products and returns load-more metadata", async ({ request }) => {
+  const response = await request.get("/api/products?page=1&pageSize=5&locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.items).toHaveLength(5);
+  expect(payload.meta).toMatchObject({
+    filter: "all",
+    sort: "recommended",
+    count: 5,
+    totalCount: 12,
+    page: 1,
+    pageSize: 5,
+    totalPages: 3,
+    hasMore: true
+  });
+
+  const secondResponse = await request.get("/api/products?page=3&pageSize=5&locale=en-US");
+  expect(secondResponse.ok()).toBe(true);
+  const secondPayload = await secondResponse.json();
+  expect(secondPayload.items).toHaveLength(2);
+  expect(secondPayload.meta).toMatchObject({
+    count: 2,
+    totalCount: 12,
+    page: 3,
+    pageSize: 5,
+    totalPages: 3,
+    hasMore: false
+  });
 });
 
 test("serves products from the SQLite seed database", async ({ request }) => {
@@ -769,10 +805,11 @@ test("returns English localized product content when locale=en-US is requested",
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload.meta).toEqual({
+  expect(payload.meta).toMatchObject({
     filter: "all",
     sort: "recommended",
-    count: 12,
+    count: 8,
+    totalCount: 12,
     locale: "en-US"
   });
   expect(payload.items[0]).toMatchObject({
@@ -793,10 +830,11 @@ test("searches localized product fields with q and locale", async ({ request }) 
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload.meta).toEqual({
+  expect(payload.meta).toMatchObject({
     filter: "all",
     sort: "recommended",
     count: 1,
+    totalCount: 1,
     locale: "en-US",
     q: "quick-dry"
   });
@@ -812,10 +850,11 @@ test("filters sport products and sorts by ascending price", async ({ request }) 
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload.meta).toEqual({
+  expect(payload.meta).toMatchObject({
     filter: "sport",
     sort: "price-asc",
-    count: 4
+    count: 4,
+    totalCount: 4
   });
   expect(payload.items.map((item) => item.title)).toEqual([
     "速干训练袜",
@@ -830,10 +869,11 @@ test("falls back to default filter and recommended sort for invalid query values
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload.meta).toEqual({
+  expect(payload.meta).toMatchObject({
     filter: "all",
     sort: "recommended",
-    count: 12
+    count: 8,
+    totalCount: 12
   });
   expect(payload.items.slice(0, 3).map((item) => item.title)).toEqual([
     "极简中筒袜",
@@ -1109,7 +1149,7 @@ test("removes a single cart item without clearing the rest", async ({ request })
 });
 
 test("returns rating metadata for every product card", async ({ request }) => {
-  const response = await request.get("/api/products");
+  const response = await request.get("/api/products?pageSize=24");
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
@@ -1277,7 +1317,7 @@ test("keeps social proof independent from recommended products", async ({ reques
 });
 
 test("returns structured stock quantity for low stock products", async ({ request }) => {
-  const response = await request.get("/api/products");
+  const response = await request.get("/api/products?pageSize=24");
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
