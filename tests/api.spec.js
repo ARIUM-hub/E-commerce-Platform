@@ -286,6 +286,23 @@ test("requires authentication for address management", async ({ request }) => {
   expect(payload.error.code).toBe("AUTH_REQUIRED");
 });
 
+test("returns standardized API error details for invalid cart quantity", async ({ request }) => {
+  const response = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 0 }
+  });
+  expect(response.status()).toBe(400);
+
+  const payload = await response.json();
+  expect(payload).toEqual({
+    ok: false,
+    error: {
+      code: "INVALID_QUANTITY",
+      message: expect.any(String),
+      details: {}
+    }
+  });
+});
+
 test("creates lists updates defaults and deletes user addresses", async ({ request }) => {
   const sessionCookie = await registerAndGetCookie(request);
 
@@ -532,6 +549,19 @@ test("returns 404 for missing order id", async ({ request }) => {
 
   const payload = await response.json();
   expect(payload.error.code).toBe("ORDER_NOT_FOUND");
+});
+
+test("returns standardized API error details for missing order", async ({ request }) => {
+  const response = await request.get("/api/orders/SOCK-20990101-9999");
+  expect(response.status()).toBe(404);
+
+  const payload = await response.json();
+  expect(payload.ok).toBe(false);
+  expect(payload.error).toMatchObject({
+    code: "ORDER_NOT_FOUND",
+    message: expect.any(String),
+    details: {}
+  });
 });
 
 test("advances order status through the allowed lifecycle", async ({ request }) => {

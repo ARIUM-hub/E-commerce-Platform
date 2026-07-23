@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { createApiError } = require("./lib/api-errors");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -78,11 +79,9 @@ function sendJsonWithHeaders(response, statusCode, payload, headers = {}) {
   response.end(JSON.stringify(payload));
 }
 
-function sendError(response, statusCode, code, message) {
-  sendJson(response, statusCode, {
-    ok: false,
-    error: { code, message }
-  });
+function sendError(response, statusCode, code, message, details = {}) {
+  const apiError = createApiError(code, { statusCode, message, details });
+  sendJson(response, apiError.statusCode, apiError.payload);
 }
 
 function validateDataDir() {
@@ -835,7 +834,8 @@ const server = http.createServer(async (request, response) => {
           error: {
             code: "AUTH_VALIDATION_FAILED",
             message: "Registration information is incomplete.",
-            fields: missingFields
+            fields: missingFields,
+            details: { fields: missingFields }
           }
         });
         return;
@@ -1054,7 +1054,8 @@ const server = http.createServer(async (request, response) => {
           error: {
             code: "ADDRESS_VALIDATION_FAILED",
             message: "Address information is incomplete.",
-            fields: missingFields
+            fields: missingFields,
+            details: { fields: missingFields }
           }
         });
         return;
@@ -1207,7 +1208,8 @@ const server = http.createServer(async (request, response) => {
           error: {
             code: "CHECKOUT_VALIDATION_FAILED",
             message: "Checkout information is incomplete.",
-            fields: missingFields
+            fields: missingFields,
+            details: { fields: missingFields }
           }
         });
         return;
