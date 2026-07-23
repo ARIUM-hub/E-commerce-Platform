@@ -305,6 +305,28 @@ function matchesProductRefinements(product, refinements) {
   return matchesStockFilter(product, refinements.stock, refinements.size);
 }
 
+function getNoResultRecommendations(products, locale, limit = 4) {
+  return products
+    .map((product) => localizeProduct(product, locale))
+    .filter((product) => hasSellableVariant(product))
+    .sort((left, right) => {
+      if (left.isBestSeller !== right.isBestSeller) {
+        return Number(right.isBestSeller) - Number(left.isBestSeller);
+      }
+
+      if (left.isRecommended !== right.isRecommended) {
+        return Number(right.isRecommended) - Number(left.isRecommended);
+      }
+
+      if (left.ratingValue !== right.ratingValue) {
+        return right.ratingValue - left.ratingValue;
+      }
+
+      return right.reviewCount - left.reviewCount;
+    })
+    .slice(0, limit);
+}
+
 function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue, options = {}) {
   const filter = validFilters.has(filterValue) ? filterValue : "all";
   const sort = validSorts.has(sortValue) ? sortValue : "recommended";
@@ -348,10 +370,13 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
   const page = normalizePositiveInteger(options.page, 1);
   const pageSize = normalizePositiveInteger(options.pageSize, 8, { max: 24 });
   const paginated = paginateItems(refinedItems, page, pageSize);
+  const recommendations = paginated.totalCount === 0
+    ? getNoResultRecommendations(products, locale)
+    : [];
 
   return {
     items: paginated.items,
-    recommendations: [],
+    recommendations,
     meta: {
       ...payloadMeta,
       count: paginated.items.length,

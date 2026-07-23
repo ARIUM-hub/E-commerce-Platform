@@ -923,6 +923,21 @@ test("filters products by minimum rating", async ({ request }) => {
   expect(payload.meta.filters.ratingMin).toBe(4.7);
 });
 
+test("returns recommendations when product search has no results", async ({ request }) => {
+  const response = await request.get("/api/products?q=not-a-real-sock-query&maxPrice=1&pageSize=8&locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.items).toEqual([]);
+  expect(payload.meta.totalCount).toBe(0);
+  expect(payload.recommendations.length).toBeGreaterThan(0);
+  expect(payload.recommendations.length).toBeLessThanOrEqual(4);
+  payload.recommendations.forEach((product) => {
+    expect(product.variants.some((variant) => variant.isAvailable && variant.stockQuantity > 0)).toBe(true);
+    expect(typeof product.title).toBe("string");
+  });
+});
+
 test("falls back to default filter and recommended sort for invalid query values", async ({ request }) => {
   const response = await request.get("/api/products?filter=business&sort=featured");
   expect(response.ok()).toBe(true);
