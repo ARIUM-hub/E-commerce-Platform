@@ -954,7 +954,7 @@ test("updates SKU-backed cart item quantities up to that SKU stock", async ({ re
   expect((await overLimitResponse.json()).error.code).toBe("INSUFFICIENT_STOCK");
 });
 
-test("counts legacy cart items when enforcing SKU stock limits", async ({ request }) => {
+test("ignores legacy JSON cart items when enforcing SQLite cart stock limits", async ({ request }) => {
   await fs.writeFile(cartFile, `${JSON.stringify({
     items: [{ productId: "sock-10", size: "35", quantity: 8 }]
   }, null, 2)}\n`, "utf8");
@@ -963,8 +963,13 @@ test("counts legacy cart items when enforcing SKU stock limits", async ({ reques
     data: { productId: "sock-10", size: "35", quantity: 1 }
   });
 
-  expect(response.status()).toBe(409);
-  expect((await response.json()).error.code).toBe("INSUFFICIENT_STOCK");
+  expect(response.ok()).toBe(true);
+
+  const cartResponse = await request.get("/api/cart");
+  await expect(cartResponse.json()).resolves.toEqual({
+    items: [{ productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 1 }],
+    meta: { itemCount: 1 }
+  });
 });
 
 test("updates an existing cart item quantity", async ({ request }) => {

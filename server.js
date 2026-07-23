@@ -19,7 +19,8 @@ const {
 const {
   ensureCart,
   getCart,
-  replaceCartItems
+  replaceCartItems,
+  mergeCarts
 } = require("./lib/repositories/carts");
 
 const host = "127.0.0.1";
@@ -720,39 +721,20 @@ function mergeCartItems(baseItems, incomingItems, products) {
   return { items: mergedItems, warnings };
 }
 
-async function mergeAnonymousCartIntoUserCart(user) {
-  const [products, anonymousCart, userCartsPayload] = await Promise.all([
-    readJsonFile(productsFile),
-    readJsonFile(cartFile),
-    readJsonFile(userCartsFile)
-  ]);
-  const cartIndex = findUserCartIndex(userCartsPayload, user.id);
-  const currentUserCart = cartIndex === -1
-    ? { userId: user.id, items: [] }
-    : userCartsPayload.carts[cartIndex];
-  const mergeResult = mergeCartItems(
-    Array.isArray(currentUserCart.items) ? currentUserCart.items : [],
-    Array.isArray(anonymousCart.items) ? anonymousCart.items : [],
-    products
-  );
-  const nextUserCart = {
-    userId: user.id,
-    items: mergeResult.items
-  };
+async function mergeAnonymousCartIntoUserCart(user, anonymousSessionId) {
+  const products = withDatabase((db) => listProducts(db));
+  return withDatabase((db) => {
+    const mergeResult = mergeCarts(db, {
+      anonymousSessionId,
+      userId: user.id,
+      mergeItems: (baseItems, incomingItems) => mergeCartItems(baseItems, incomingItems, products)
+    });
 
-  if (cartIndex === -1) {
-    userCartsPayload.carts.push(nextUserCart);
-  } else {
-    userCartsPayload.carts[cartIndex] = nextUserCart;
-  }
-
-  await writeJsonFile(userCartsFile, userCartsPayload);
-  await writeJsonFile(cartFile, { items: [] });
-
-  return {
-    cart: normalizeCartPayload(nextUserCart),
-    warnings: mergeResult.warnings
-  };
+    return {
+      cart: normalizeCartPayload(mergeResult.cart),
+      warnings: mergeResult.warnings
+    };
+  });
 }
 
 function getRequiredAddressFields(body) {
@@ -908,8 +890,9 @@ const server = http.createServer(async (request, response) => {
         addresses: []
       }));
 
+      const previousSessionId = getCookieValue(request, sessionCookieName);
       const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user);
+      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
       sendJsonWithHeaders(response, 201, {
         ok: true,
         user: createPublicUser(user),
@@ -946,8 +929,9 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      const previousSessionId = getCookieValue(request, sessionCookieName);
       const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user);
+      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
       sendJsonWithHeaders(response, 200, {
         ok: true,
         user: createPublicUser(user),
