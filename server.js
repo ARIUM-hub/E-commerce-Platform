@@ -22,6 +22,13 @@ const {
   replaceCartItems,
   mergeCarts
 } = require("./lib/repositories/carts");
+const {
+  createOrderTransaction,
+  countOrders,
+  listOrders,
+  findOrderById,
+  saveOrder
+} = require("./lib/repositories/orders");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -644,17 +651,23 @@ async function readActiveCart(request, options = {}) {
       user: null,
       sessionId,
       setCookieHeader,
-      cart: sessionId
-        ? normalizeCartPayload(withDatabase((db) => getCart(db, { sessionId })))
-        : { items: [] }
+      ...withDatabase((db) => {
+        const databaseCart = sessionId ? getCart(db, { sessionId }) : { items: [] };
+        return {
+          cartId: databaseCart.id || null,
+          cart: normalizeCartPayload(databaseCart)
+        };
+      })
     };
   }
 
+  const userDatabaseCart = withDatabase((db) => getCart(db, { userId: user.id }));
   return {
     user,
     sessionId: null,
     setCookieHeader: null,
-    cart: normalizeCartPayload(withDatabase((db) => getCart(db, { userId: user.id })))
+    cartId: userDatabaseCart.id || null,
+    cart: normalizeCartPayload(userDatabaseCart)
   };
 }
 
@@ -1217,10 +1230,9 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "POST" && requestUrl.pathname === "/api/orders") {
     try {
-      const products = await readJsonFile(productsFile);
+      const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request);
       const cart = activeCart.cart;
-      const ordersPayload = await readJsonFile(ordersFile);
       const body = await readRequestBody(request);
       const locale = normalizeLocale(body.locale);
 
@@ -1264,23 +1276,13 @@ const server = http.createServer(async (request, response) => {
           sendError(response, 409, "OUT_OF_STOCK", "Selected size is out of stock.");
           return;
         }
-        const stockValidation = validateSkuStockQuantity(
-          cart,
-          variant,
-          cartItem.quantity,
-          variant.skuId
-        );
-        if (stockValidation) {
-          sendError(response, stockValidation.statusCode, stockValidation.code, stockValidation.message);
-          return;
-        }
         cartItem.skuId = variant.skuId;
         cartItem.size = variant.size;
       }
 
       const orderItems = buildOrderItems(cart, products, locale);
       const order = {
-        id: buildOrderId(Array.isArray(ordersPayload.orders) ? ordersPayload.orders : []),
+        id: buildOrderId({ length: withDatabase((db) => countOrders(db)) }),
         userId: activeCart.user ? activeCart.user.id : null,
         status: "pending_payment",
         createdAt: new Date().toISOString(),
@@ -1302,24 +1304,27 @@ const server = http.createServer(async (request, response) => {
         timeline: [createTimelineEntry("pending_payment", locale)]
       };
 
-      const nextOrdersPayload = {
-        orders: Array.isArray(ordersPayload.orders) ? ordersPayload.orders : []
-      };
-      nextOrdersPayload.orders.push(order);
-      await writeJsonFile(ordersFile, nextOrdersPayload);
-
       const emptyCart = { items: [] };
-      await writeActiveCart(activeCart, emptyCart);
+      const savedOrder = withDatabase((db) => createOrderTransaction(db, {
+        cart,
+        cartId: activeCart.cartId,
+        order
+      }));
 
       sendJson(response, 201, {
         ok: true,
-        order,
+        order: savedOrder,
         cart: getCartPayload(emptyCart)
       });
       return;
     } catch (error) {
       if (error instanceof SyntaxError) {
         sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      if (error.code === "INSUFFICIENT_STOCK") {
+        sendError(response, 409, "INSUFFICIENT_STOCK", error.message);
         return;
       }
 
@@ -1333,10 +1338,7 @@ const server = http.createServer(async (request, response) => {
       const user = await requireUser(request, response);
       if (!user) return;
 
-      const ordersPayload = await readJsonFile(ordersFile);
-      const orders = (Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [])
-        .filter((order) => order.userId === user.id)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      const orders = withDatabase((db) => listOrders(db, user.id));
 
       sendJson(response, 200, { orders });
       return;
@@ -1349,9 +1351,7 @@ const server = http.createServer(async (request, response) => {
   const requestedOrderId = parseOrderIdFromPath(requestUrl.pathname);
   if (request.method === "GET" && requestedOrderId) {
     try {
-      const ordersPayload = await readJsonFile(ordersFile);
-      const order = (Array.isArray(ordersPayload.orders) ? ordersPayload.orders : [])
-        .find((entry) => entry.id === requestedOrderId);
+      const order = withDatabase((db) => findOrderById(db, requestedOrderId));
 
       if (!order) {
         sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
@@ -1375,7 +1375,6 @@ const server = http.createServer(async (request, response) => {
   const requestedStatusOrderId = parseOrderStatusPath(requestUrl.pathname);
   if (request.method === "PATCH" && requestedStatusOrderId) {
     try {
-      const ordersPayload = await readJsonFile(ordersFile);
       const body = await readRequestBody(request);
       const locale = normalizeLocale(body.locale);
       const nextStatus = String(body.status || "").trim();
@@ -1385,13 +1384,12 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const orderIndex = findOrderIndex(ordersPayload, requestedStatusOrderId);
-      if (orderIndex === -1) {
+      const order = withDatabase((db) => findOrderById(db, requestedStatusOrderId));
+      if (!order) {
         sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
         return;
       }
 
-      const order = ordersPayload.orders[orderIndex];
       const { user } = await getSessionContext(request);
       if (order.userId && (!user || user.id !== order.userId)) {
         sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
@@ -1409,7 +1407,7 @@ const server = http.createServer(async (request, response) => {
       order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
       order.timeline.push(createTimelineEntry(nextStatus, locale));
 
-      await writeJsonFile(ordersFile, ordersPayload);
+      withDatabase((db) => saveOrder(db, order));
       sendJson(response, 200, { ok: true, order });
       return;
     } catch (error) {

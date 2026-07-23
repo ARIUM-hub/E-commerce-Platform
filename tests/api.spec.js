@@ -479,11 +479,15 @@ test("creates a persisted order from the current cart and clears the cart", asyn
   expect(payload.order.timeline[0].status).toBe("pending_payment");
   expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
 
-  const persistedOrders = JSON.parse(await fs.readFile(ordersFile, "utf8"));
-  expect(persistedOrders.orders).toHaveLength(1);
-
-  const persistedCart = JSON.parse(await fs.readFile(cartFile, "utf8"));
-  expect(persistedCart).toEqual({ items: [] });
+  const db = createDatabase(testDbFile);
+  try {
+    const persistedOrder = db.prepare("SELECT id FROM orders WHERE id = ?").get(payload.order.id);
+    const cartItemCount = db.prepare("SELECT COUNT(*) AS count FROM cart_items").get();
+    expect(persistedOrder).toEqual({ id: payload.order.id });
+    expect(cartItemCount.count).toBe(0);
+  } finally {
+    db.close();
+  }
 });
 
 test("persists skuId on order items created from cart", async ({ request }) => {
@@ -501,6 +505,46 @@ test("persists skuId on order items created from cart", async ({ request }) => {
     size: "39",
     quantity: 1
   });
+});
+
+test("creates SQLite orders and decrements SKU stock in one checkout transaction", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 2 }
+  });
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+  expect(payload.order.items[0]).toMatchObject({ skuId: "sock-01-43", quantity: 2 });
+
+  const db = createDatabase(testDbFile);
+  try {
+    const stock = db.prepare("SELECT stock_quantity FROM product_variants WHERE sku_id = ?").get("sock-01-43");
+    const order = db.prepare("SELECT id FROM orders WHERE id = ?").get(payload.order.id);
+    expect(stock.stock_quantity).toBe(1);
+    expect(order).toEqual({ id: payload.order.id });
+  } finally {
+    db.close();
+  }
+});
+
+test("rolls back checkout when SKU stock is insufficient", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 3 }
+  });
+
+  const db = createDatabase(testDbFile);
+  db.prepare("UPDATE product_variants SET stock_quantity = ? WHERE sku_id = ?").run(2, "sock-01-43");
+  db.close();
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("INSUFFICIENT_STOCK");
+
+  const cartResponse = await request.get("/api/cart");
+  expect((await cartResponse.json()).items).toEqual([
+    expect.objectContaining({ skuId: "sock-01-43", quantity: 3 })
+  ]);
 });
 
 async function createOrderViaApi(request) {
