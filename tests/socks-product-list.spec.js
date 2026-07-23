@@ -1317,6 +1317,31 @@ test("applies advanced filters from the storefront url", async ({ page }) => {
   await expect(page.locator("[data-product-card]").first().locator("[data-size='43']")).toBeVisible();
 });
 
+test("changes price and size filters from the storefront controls", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await page.locator("[data-price-min]").fill("40");
+  await page.locator("[data-price-max]").fill("50");
+  await page.locator("[data-price-apply]").click();
+  await expect(page).toHaveURL(/minPrice=40/);
+  await expect(page).toHaveURL(/maxPrice=50/);
+
+  await page.locator('[data-size-filter="43"]').click();
+  await expect(page).toHaveURL(/size=43/);
+  await expect(page.locator("[data-active-filter-chip]")).toContainText(["¥40 - ¥50", "43"]);
+});
+
+test("loads more products without replacing the first page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?pageSize=5");
+  await expect(page.locator("[data-product-card]")).toHaveCount(5);
+
+  const firstProductId = await page.locator("[data-product-card]").first().getAttribute("data-product-id");
+  await page.locator("[data-load-more-products]").click();
+
+  await expect(page.locator("[data-product-card]")).toHaveCount(10);
+  await expect(page.locator("[data-product-card]").first()).toHaveAttribute("data-product-id", firstProductId);
+});
+
 test("submits q through the shared header search and filters the storefront results", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 

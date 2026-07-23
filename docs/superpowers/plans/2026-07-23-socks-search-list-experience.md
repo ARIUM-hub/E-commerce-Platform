@@ -816,7 +816,7 @@ git commit -m "feat: wire storefront advanced filter state"
 - Modify: `tests/socks-product-list.spec.js`
 - Modify: `socks-product-list.html`
 
-- [ ] **Step 1: Write failing UI interaction tests**
+- [x] **Step 1: Write failing UI interaction tests**
 
 Add:
 
@@ -847,7 +847,7 @@ test("loads more products without replacing the first page", async ({ page }) =>
 });
 ```
 
-- [ ] **Step 2: Run interaction tests and verify they fail**
+- [x] **Step 2: Run interaction tests and verify they fail**
 
 Run:
 
@@ -857,7 +857,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because controls and load-more behavior are not interactive yet.
 
-- [ ] **Step 3: Render size, stock, and rating controls**
+- [x] **Step 3: Render size, stock, and rating controls**
 
 Add:
 
@@ -906,7 +906,7 @@ Add:
     }
 ```
 
-- [ ] **Step 4: Add URL update helper for advanced filters**
+- [x] **Step 4: Add URL update helper for advanced filters**
 
 Add:
 
@@ -944,7 +944,7 @@ Add:
     }
 ```
 
-- [ ] **Step 5: Add click handlers for controls**
+- [x] **Step 5: Add click handlers for controls**
 
 Inside the main document click handler or near filter listeners, add:
 
@@ -981,7 +981,7 @@ Inside the main document click handler or near filter listeners, add:
       }
 ```
 
-- [ ] **Step 6: Add load-more button and append behavior**
+- [x] **Step 6: Add load-more button and append behavior**
 
 Add markup near the product grid:
 
@@ -1016,7 +1016,7 @@ Add click handling:
       }
 ```
 
-- [ ] **Step 7: Run interaction tests and verify they pass**
+- [x] **Step 7: Run interaction tests and verify they pass**
 
 Run:
 
@@ -1026,7 +1026,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 

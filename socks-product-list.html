@@ -518,6 +518,107 @@
       box-shadow: 0 8px 18px rgba(17, 17, 17, 0.05);
     }
 
+    .advanced-filters {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 18px;
+      padding: 18px 20px;
+      border: 1px solid #ebebeb;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.04);
+    }
+
+    .advanced-filters__title {
+      margin: 0;
+      color: #222222;
+      font-size: 15px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .advanced-filters__body {
+      display: grid;
+      grid-template-columns: minmax(240px, 1.2fr) repeat(3, minmax(160px, 1fr));
+      gap: 14px;
+    }
+
+    .advanced-filters__group {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .advanced-filters__label {
+      margin: 0;
+      color: #7a7a7a;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .advanced-filters__price-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+    }
+
+    .advanced-filters__input,
+    .advanced-filters__apply,
+    .advanced-filters__chip {
+      min-width: 0;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      background: #ffffff;
+      color: #333333;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .advanced-filters__apply,
+    .advanced-filters__chip {
+      cursor: pointer;
+    }
+
+    .advanced-filters__chip.is-active {
+      border-color: #111111;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .advanced-filters__chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .load-more-row {
+      display: flex;
+      justify-content: center;
+      margin-top: 22px;
+    }
+
+    .load-more-row__button {
+      min-width: 180px;
+      min-height: 44px;
+      border: 1px solid #111111;
+      border-radius: var(--radius-pill);
+      background: #111111;
+      color: #ffffff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .load-more-row__button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
     .cart-drawer__action {
       border: 1px solid #d4d4d4;
       border-radius: var(--radius-pill);
@@ -2350,6 +2451,10 @@
     }
 
     @media (max-width: 960px) {
+      .advanced-filters__body {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .product-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -2362,6 +2467,11 @@
 
       .toolbar {
         align-items: flex-start;
+      }
+
+      .advanced-filters__body,
+      .advanced-filters__price-row {
+        grid-template-columns: 1fr;
       }
 
       .product-grid {
@@ -2640,9 +2750,29 @@
         <p class="toolbar__result" data-result-count></p>
       </section>
 
+      <aside class="advanced-filters" data-advanced-filters>
+        <h2 class="advanced-filters__title">筛选</h2>
+        <div class="advanced-filters__body">
+          <div class="advanced-filters__group">
+            <label class="advanced-filters__label" for="filter-min-price">价格区间</label>
+            <div class="advanced-filters__price-row">
+              <input id="filter-min-price" class="advanced-filters__input" type="number" min="0" inputmode="numeric" placeholder="最低" data-price-min>
+              <input class="advanced-filters__input" type="number" min="0" inputmode="numeric" placeholder="最高" aria-label="最高价格" data-price-max>
+              <button class="advanced-filters__apply" type="button" data-price-apply>应用</button>
+            </div>
+          </div>
+          <div class="advanced-filters__group" data-size-filter-group></div>
+          <div class="advanced-filters__group" data-stock-filter-group></div>
+          <div class="advanced-filters__group" data-rating-filter-group></div>
+        </div>
+      </aside>
+
       <div class="active-filter-chips" data-active-filter-chips aria-label="当前筛选条件"></div>
 
       <section class="product-grid" data-product-grid></section>
+      <div class="load-more-row">
+        <button class="load-more-row__button" type="button" data-load-more-products hidden>加载更多</button>
+      </div>
     </div>
 
     <div class="detail-view" data-detail-view hidden>
@@ -2913,7 +3043,9 @@
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
+    const advancedFilters = document.querySelector("[data-advanced-filters]");
     const activeFilterChips = document.querySelector("[data-active-filter-chips]");
+    const loadMoreProductsButton = document.querySelector("[data-load-more-products]");
     const detailPagePanel = document.querySelector("[data-detail-page-panel]");
     const detailPageSeries = document.querySelector("[data-detail-page-series]");
     const detailPageTitle = document.querySelector("[data-detail-page-title]");
@@ -2983,6 +3115,8 @@
     let activeHasMore = false;
     let activeTotalCount = 0;
     let activeLocale = LOCALE_KEY.ZH_CN;
+    let visibleProducts = [];
+    let allProductsCache = [];
     let navigationContext = {
       storefrontHref: STOREFRONT_PATH,
       filter: FILTER_KEY.ALL,
@@ -3819,6 +3953,72 @@
       return search ? `${STOREFRONT_PATH}?${search}` : STOREFRONT_PATH;
     }
 
+    function appendAdvancedFilterParams(params) {
+      params.set("page", String(activePage));
+      params.set("pageSize", String(activePageSize));
+
+      if (activeMinPrice) {
+        params.set("minPrice", activeMinPrice);
+      }
+
+      if (activeMaxPrice) {
+        params.set("maxPrice", activeMaxPrice);
+      }
+
+      if (activeSize) {
+        params.set("size", activeSize);
+      }
+
+      if (activeStock !== STOCK_FILTER_KEY.ALL) {
+        params.set("stock", activeStock);
+      }
+
+      if (activeRatingMin) {
+        params.set("ratingMin", activeRatingMin);
+      }
+
+      return params;
+    }
+
+    function getStorefrontHrefWithAdvancedFilters(overrides = {}) {
+      const nextState = {
+        q: activeQuery,
+        minPrice: activeMinPrice,
+        maxPrice: activeMaxPrice,
+        size: activeSize,
+        stock: activeStock,
+        ratingMin: activeRatingMin,
+        pageSize: activePageSize,
+        ...overrides
+      };
+      const params = appendStorefrontQueryParams(new URLSearchParams(), {
+        filter: activeFilter,
+        sort: activeSort,
+        q: normalizeQueryValue(nextState.q)
+      });
+
+      if (nextState.minPrice) params.set("minPrice", nextState.minPrice);
+      if (nextState.maxPrice) params.set("maxPrice", nextState.maxPrice);
+      if (nextState.size) params.set("size", nextState.size);
+      if (nextState.stock && nextState.stock !== STOCK_FILTER_KEY.ALL) params.set("stock", nextState.stock);
+      if (nextState.ratingMin) params.set("ratingMin", nextState.ratingMin);
+      if (Number(nextState.pageSize) !== DEFAULT_PAGE_SIZE) params.set("pageSize", String(nextState.pageSize));
+
+      const search = params.toString();
+      return search ? `${STOREFRONT_PATH}?${search}` : STOREFRONT_PATH;
+    }
+
+    async function navigateToAdvancedFilterState(overrides = {}) {
+      window.history.pushState(null, "", getStorefrontHrefWithAdvancedFilters(overrides));
+      syncActiveStateFromUrl();
+      activePage = 1;
+      try {
+        await renderProducts();
+      } catch (error) {
+        showLoadFailureState();
+      }
+    }
+
     function getFilterLabel(filterValue) {
       return t(`filterLabels.${filterValue}`) || t("filterLabels.all");
     }
@@ -4368,7 +4568,8 @@
       const params = new URLSearchParams({
         filter: filterValue,
         sort: sortValue,
-        locale: activeLocale
+        locale: activeLocale,
+        pageSize: "24"
       });
 
       const normalizedQuery = normalizeQueryValue(queryValue);
@@ -5175,25 +5376,7 @@
         params.set("q", activeQuery);
       }
 
-      if (activeMinPrice) {
-        params.set("minPrice", activeMinPrice);
-      }
-
-      if (activeMaxPrice) {
-        params.set("maxPrice", activeMaxPrice);
-      }
-
-      if (activeSize) {
-        params.set("size", activeSize);
-      }
-
-      if (activeStock !== STOCK_FILTER_KEY.ALL) {
-        params.set("stock", activeStock);
-      }
-
-      if (activeRatingMin) {
-        params.set("ratingMin", activeRatingMin);
-      }
+      appendAdvancedFilterParams(params);
 
       const response = await fetch(`/api/products?${params.toString()}`);
 
@@ -6176,6 +6359,121 @@
       }).join("");
     }
 
+    function getAvailableSizesFromProducts(items = allProductsCache) {
+      return Array.from(new Set(items.flatMap((product) => {
+        return getProductVariants(product).map((variant) => variant.size);
+      }))).sort((left, right) => Number(left) - Number(right));
+    }
+
+    function syncAdvancedFilterInput(input, value) {
+      if (!input) {
+        return;
+      }
+
+      const previousSyncedValue = input.dataset.syncedValue || "";
+      const hasUserDraft = input.value !== "" && input.value !== previousSyncedValue && input.value !== value;
+
+      if (!hasUserDraft) {
+        input.value = value;
+      }
+
+      input.dataset.syncedValue = value;
+    }
+
+    function renderAdvancedFilterControls() {
+      if (!advancedFilters) {
+        return;
+      }
+
+      const minInput = advancedFilters.querySelector("[data-price-min]");
+      const maxInput = advancedFilters.querySelector("[data-price-max]");
+      const sizeRoot = advancedFilters.querySelector("[data-size-filter-group]");
+      const stockRoot = advancedFilters.querySelector("[data-stock-filter-group]");
+      const ratingRoot = advancedFilters.querySelector("[data-rating-filter-group]");
+
+      syncAdvancedFilterInput(minInput, activeMinPrice);
+      syncAdvancedFilterInput(maxInput, activeMaxPrice);
+
+      if (sizeRoot) {
+        const sizeButtons = getAvailableSizesFromProducts().map((size) => {
+          const isActive = activeSize === size;
+          return `<button class="advanced-filters__chip${isActive ? " is-active" : ""}" type="button" data-size-filter="${escapeHtml(size)}" aria-pressed="${isActive ? "true" : "false"}">${escapeHtml(size)}</button>`;
+        }).join("");
+        sizeRoot.innerHTML = `<p class="advanced-filters__label">尺码</p><div class="advanced-filters__chips">${sizeButtons}</div>`;
+      }
+
+      if (stockRoot) {
+        const stockOptions = [
+          { value: STOCK_FILTER_KEY.ALL, label: "全部库存" },
+          { value: STOCK_FILTER_KEY.IN_STOCK, label: "现货" },
+          { value: STOCK_FILTER_KEY.LOW_STOCK, label: "低库存" },
+          { value: STOCK_FILTER_KEY.OUT_OF_STOCK, label: "缺货" }
+        ];
+        stockRoot.innerHTML = `
+          <p class="advanced-filters__label">库存</p>
+          <div class="advanced-filters__chips">
+            ${stockOptions.map((option) => {
+              const isActive = activeStock === option.value;
+              return `<button class="advanced-filters__chip${isActive ? " is-active" : ""}" type="button" data-stock-filter="${option.value}" aria-pressed="${isActive ? "true" : "false"}">${option.label}</button>`;
+            }).join("")}
+          </div>
+        `;
+      }
+
+      if (ratingRoot) {
+        const ratingOptions = ["4", "4.5", "4.7"];
+        ratingRoot.innerHTML = `
+          <p class="advanced-filters__label">评分</p>
+          <div class="advanced-filters__chips">
+            ${ratingOptions.map((rating) => {
+              const isActive = activeRatingMin === rating;
+              return `<button class="advanced-filters__chip${isActive ? " is-active" : ""}" type="button" data-rating-filter="${rating}" aria-pressed="${isActive ? "true" : "false"}">${rating}+</button>`;
+            }).join("")}
+          </div>
+        `;
+      }
+    }
+
+    function syncLoadMoreButton() {
+      if (!loadMoreProductsButton) {
+        return;
+      }
+
+      loadMoreProductsButton.hidden = !activeHasMore;
+      loadMoreProductsButton.disabled = false;
+      loadMoreProductsButton.textContent = "加载更多";
+    }
+
+    function renderProductGridItems(products) {
+      const isEmpty = products.length === 0;
+
+      productGrid.classList.toggle("is-empty", isEmpty);
+      productGrid.innerHTML = isEmpty
+        ? `<div class="empty-state" data-empty-state>${t("listing.empty")}</div>`
+        : products.map(createCardMarkup).join("");
+      resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
+      syncToolbarState();
+      renderAdvancedFilterControls();
+      renderActiveFilterChips();
+      syncLoadMoreButton();
+      renderCartDrawer();
+
+      if (!isEmpty) {
+        bindCardInteractions();
+      }
+    }
+
+    async function loadMoreProducts() {
+      if (!activeHasMore) {
+        return;
+      }
+
+      activePage += 1;
+      const nextProducts = await fetchProducts();
+      visibleProducts = [...visibleProducts, ...nextProducts];
+      renderProductGridItems(visibleProducts);
+    }
+
     function bindCardInteractions() {
       const productCards = Array.from(productGrid.querySelectorAll("[data-product-card]"));
 
@@ -6218,26 +6516,15 @@
     }
 
     async function renderProducts() {
-      const [allProducts, visibleProducts] = await Promise.all([
+      const [allProducts, firstPageProducts] = await Promise.all([
         fetchAllProducts(),
         fetchProducts()
       ]);
       syncNavigationContext(activeFilter, activeSort, activeQuery);
+      allProductsCache = allProducts;
+      visibleProducts = firstPageProducts;
       syncProductCatalog(allProducts);
-      const isEmpty = visibleProducts.length === 0;
-
-      productGrid.classList.toggle("is-empty", isEmpty);
-      productGrid.innerHTML = isEmpty
-        ? `<div class="empty-state" data-empty-state>${t("listing.empty")}</div>`
-        : visibleProducts.map(createCardMarkup).join("");
-      resultCount.textContent = t("listing.resultCount", { count: activeTotalCount });
-      syncToolbarState();
-      renderActiveFilterChips();
-      renderCartDrawer();
-
-      if (!isEmpty) {
-        bindCardInteractions();
-      }
+      renderProductGridItems(visibleProducts);
     }
 
     siteSearchForm.addEventListener("submit", (event) => {
@@ -6273,6 +6560,49 @@
         } catch (error) {
           showLoadFailureState();
         }
+      }
+    });
+
+    advancedFilters.addEventListener("click", async (event) => {
+      const priceApply = event.target.closest("[data-price-apply]");
+      if (priceApply) {
+        await navigateToAdvancedFilterState({
+          minPrice: advancedFilters.querySelector("[data-price-min]")?.value.trim() || "",
+          maxPrice: advancedFilters.querySelector("[data-price-max]")?.value.trim() || ""
+        });
+        return;
+      }
+
+      const sizeFilter = event.target.closest("[data-size-filter]");
+      if (sizeFilter) {
+        await navigateToAdvancedFilterState({
+          size: activeSize === sizeFilter.dataset.sizeFilter ? "" : sizeFilter.dataset.sizeFilter
+        });
+        return;
+      }
+
+      const stockFilter = event.target.closest("[data-stock-filter]");
+      if (stockFilter) {
+        await navigateToAdvancedFilterState({ stock: stockFilter.dataset.stockFilter });
+        return;
+      }
+
+      const ratingFilter = event.target.closest("[data-rating-filter]");
+      if (ratingFilter) {
+        await navigateToAdvancedFilterState({
+          ratingMin: activeRatingMin === ratingFilter.dataset.ratingFilter ? "" : ratingFilter.dataset.ratingFilter
+        });
+      }
+    });
+
+    loadMoreProductsButton.addEventListener("click", async () => {
+      loadMoreProductsButton.disabled = true;
+      loadMoreProductsButton.textContent = "加载中...";
+      try {
+        await loadMoreProducts();
+      } catch (error) {
+        loadMoreProductsButton.disabled = false;
+        loadMoreProductsButton.textContent = "加载更多";
       }
     });
 
