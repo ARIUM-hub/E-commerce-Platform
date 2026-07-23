@@ -7,6 +7,13 @@ const ordersFile = path.join(__dirname, "fixtures", "test-data", "orders.json");
 const usersFile = path.join(__dirname, "fixtures", "test-data", "users.json");
 const sessionsFile = path.join(__dirname, "fixtures", "test-data", "sessions.json");
 const userCartsFile = path.join(__dirname, "fixtures", "test-data", "user-carts.json");
+const testDbFile = path.join(__dirname, "fixtures", "test-data", "socks-store.test.db");
+const {
+  createDatabase,
+  initializeDatabase,
+  resetDatabase,
+  getDatabasePath
+} = require("../lib/database");
 
 test.beforeEach(async () => {
   await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
@@ -14,6 +21,12 @@ test.beforeEach(async () => {
   await fs.writeFile(usersFile, `${JSON.stringify({ users: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(sessionsFile, `${JSON.stringify({ sessions: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(userCartsFile, `${JSON.stringify({ carts: [] }, null, 2)}\n`, "utf8");
+  await resetDatabase(testDbFile);
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.close();
 });
 
 test("returns an empty order collection fixture by default", async () => {
@@ -29,6 +42,29 @@ test("returns empty user session fixtures by default", async () => {
   expect(users).toEqual({ users: [] });
   expect(sessions).toEqual({ sessions: [] });
   expect(userCarts).toEqual({ carts: [] });
+});
+
+test("initializes a SQLite database with product and SKU tables", async () => {
+  await resetDatabase(testDbFile);
+  const db = createDatabase(testDbFile);
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const product = db.prepare("SELECT id FROM products WHERE id = ?").get("sock-01");
+    const sku = db.prepare("SELECT sku_id, stock_quantity FROM product_variants WHERE sku_id = ?").get("sock-01-43");
+
+    expect(product).toEqual({ id: "sock-01" });
+    expect(sku).toEqual({ sku_id: "sock-01-43", stock_quantity: 3 });
+  } finally {
+    db.close();
+  }
+});
+
+test("uses the configured SQLite database path", () => {
+  expect(getDatabasePath({ nodeEnv: "test" })).toContain("socks-store.test.db");
+  expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");
 });
 
 const checkoutPayload = {

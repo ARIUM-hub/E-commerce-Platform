@@ -2,3 +2,7 @@ node_modules/
 test-results/
 playwright-report/
 .superpowers/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
