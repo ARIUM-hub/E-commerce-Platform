@@ -4,6 +4,8 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createApiError } = require("./lib/api-errors");
+const { createDatabase, initializeDatabase, getDatabasePath } = require("./lib/database");
+const { listProducts } = require("./lib/repositories/products");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -116,6 +118,18 @@ async function readJsonFile(filePath) {
 
 async function writeJsonFile(filePath, payload) {
   await fsp.writeFile(filePath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+}
+
+function withDatabase(callback) {
+  const db = initializeDatabase(createDatabase(getDatabasePath({ dataDir })), {
+    productsSeedFile: productsFile
+  });
+
+  try {
+    return callback(db);
+  } finally {
+    db.close();
+  }
 }
 
 async function readRequestBody(request) {
@@ -794,7 +808,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && requestUrl.pathname === "/api/products") {
     try {
-      const products = await readJsonFile(productsFile);
+      const products = withDatabase((db) => listProducts(db));
       const payload = getProductsPayload(
         products,
         requestUrl.searchParams.get("filter"),

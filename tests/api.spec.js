@@ -628,6 +628,25 @@ test("returns products with default filter and recommended sort", async ({ reque
   expect(payload.items[2].title).toBe("通勤罗口袜");
 });
 
+test("serves products from the SQLite seed database", async ({ request }) => {
+  const db = createDatabase(testDbFile);
+  db.prepare("UPDATE product_variants SET stock_quantity = ? WHERE sku_id = ?").run(2, "sock-01-43");
+  db.close();
+
+  const response = await request.get("/api/products?locale=en-US");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  const product = payload.items.find((item) => item.id === "sock-01");
+
+  expect(product.title).toBe("Minimal Crew Socks");
+  expect(product.variants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ skuId: "sock-01-43", stockQuantity: 2 })
+    ])
+  );
+});
+
 test("returns English localized product content when locale=en-US is requested", async ({ request }) => {
   const response = await request.get("/api/products?locale=en-US");
   expect(response.ok()).toBe(true);
