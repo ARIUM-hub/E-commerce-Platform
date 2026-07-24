@@ -62,6 +62,40 @@ test("initializes a SQLite database with product and SKU tables", async () => {
   }
 });
 
+test("initializes SQLite marketing campaigns, coupons, bundles, and recent views", async () => {
+  const { createDatabase, initializeDatabase } = require("../lib/database");
+  const {
+    listActiveMarketingCampaigns,
+    findCouponByCode,
+    listActiveBundles
+  } = require("../lib/repositories/marketing");
+
+  const db = createDatabase(":memory:");
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+
+  const campaigns = listActiveMarketingCampaigns(db, new Date("2026-07-24T00:00:00.000Z"));
+  expect(campaigns.promotions.map((promotion) => promotion.id)).toEqual(
+    expect.arrayContaining(["threshold-99-save-15", "limited-sock-02"])
+  );
+
+  expect(findCouponByCode(db, " sock10 ")).toMatchObject({
+    code: "SOCK10",
+    type: "amount-off"
+  });
+
+  expect(listActiveBundles(db)).toEqual([
+    expect.objectContaining({
+      id: "daily-refresh-bundle",
+      discountAmount: 12
+    })
+  ]);
+
+  const recentViewTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recent_views'").get();
+  expect(recentViewTable).toEqual({ name: "recent_views" });
+});
+
 test("uses the configured SQLite database path", () => {
   expect(getDatabasePath({ nodeEnv: "test" })).toContain("socks-store.test.db");
   expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");

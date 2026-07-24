@@ -48,7 +48,7 @@
 - Create: `lib/repositories/marketing.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing database/repository test**
+- [x] **Step 1: Write failing database/repository test**
 
 Add near the existing SQLite initialization test in `tests/api.spec.js`:
 
@@ -88,7 +88,7 @@ test("initializes SQLite marketing campaigns, coupons, bundles, and recent views
 });
 ```
 
-- [ ] **Step 2: Run test and verify it fails**
+- [x] **Step 2: Run test and verify it fails**
 
 Run:
 
@@ -98,7 +98,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because `lib/repositories/marketing.js` does not exist.
 
-- [ ] **Step 3: Add schema and seed data in `lib/database.js`**
+- [x] **Step 3: Add schema and seed data in `lib/database.js`**
 
 Inside `runSchema(db)`, after the order tables, add:
 
@@ -250,7 +250,7 @@ Call it from `initializeDatabase(db, options = {})` after `seedProducts(...)`:
   seedMarketing(db);
 ```
 
-- [ ] **Step 4: Create `lib/repositories/marketing.js`**
+- [x] **Step 4: Create `lib/repositories/marketing.js`**
 
 Create this file:
 
@@ -337,7 +337,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 5: Run test and verify it passes**
+- [x] **Step 5: Run test and verify it passes**
 
 Run:
 
@@ -347,7 +347,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
