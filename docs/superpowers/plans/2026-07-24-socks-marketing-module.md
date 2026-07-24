@@ -863,7 +863,7 @@ git commit -m "feat: expose marketing pricing api"
 - Modify: `server.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing coupon API tests**
+- [x] **Step 1: Write failing coupon API tests**
 
 Add near cart tests in `tests/api.spec.js`:
 
@@ -910,7 +910,7 @@ test("rejects coupon that does not meet minimum spend", async ({ request }) => {
 });
 ```
 
-- [ ] **Step 2: Run coupon tests and verify they fail**
+- [x] **Step 2: Run coupon tests and verify they fail**
 
 Run:
 
@@ -920,7 +920,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because coupon endpoints do not exist.
 
-- [ ] **Step 3: Add coupon route helpers in `server.js`**
+- [x] **Step 3: Add coupon route helpers in `server.js`**
 
 Add near cart validation helpers:
 
@@ -947,7 +947,7 @@ function validateCouponForCart(coupon, cart, products) {
 }
 ```
 
-- [ ] **Step 4: Add `POST /api/cart/coupon` and `DELETE /api/cart/coupon`**
+- [x] **Step 4: Add `POST /api/cart/coupon` and `DELETE /api/cart/coupon`**
 
 In `server.js`, import `setCartCouponCode` from `lib/repositories/carts.js`.
 
@@ -1012,7 +1012,7 @@ Add routes before cart item routes:
   }
 ```
 
-- [ ] **Step 5: Run coupon tests and verify they pass**
+- [x] **Step 5: Run coupon tests and verify they pass**
 
 Run:
 

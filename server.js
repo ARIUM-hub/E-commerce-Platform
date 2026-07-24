@@ -19,9 +19,11 @@ const {
   ensureCart,
   getCart,
   replaceCartItems,
-  mergeCarts
+  mergeCarts,
+  setCartCouponCode
 } = require("./lib/repositories/carts");
 const {
+  findCouponByCode,
   listActiveMarketingCampaigns
 } = require("./lib/repositories/marketing");
 const {
@@ -501,6 +503,27 @@ function validateCartItemInput(products, body) {
   }
 
   return { product, variant, quantity };
+}
+
+function validateCouponForCart(coupon, cart, products) {
+  if (!coupon) {
+    return { ok: false, code: "COUPON_NOT_FOUND", message: "Coupon was not found." };
+  }
+
+  const itemTotal = cart.items.reduce((sum, item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    return product ? sum + product.price * item.quantity : sum;
+  }, 0);
+
+  if (itemTotal < coupon.minimumSubtotal) {
+    return {
+      ok: false,
+      code: "COUPON_MINIMUM_NOT_MET",
+      message: `Coupon requires at least ¥${coupon.minimumSubtotal}.`
+    };
+  }
+
+  return { ok: true };
 }
 
 function findCartItemIndex(cart, productId, size) {
@@ -1143,6 +1166,76 @@ const server = http.createServer(async (request, response) => {
     try {
       const { cart } = await readActiveCart(request);
       sendJson(response, 200, getCartPayload(cart));
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/cart/coupon") {
+    try {
+      const body = await readRequestBody(request);
+      const products = withDatabase((db) => listProducts(db));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const coupon = withDatabase((db) => findCouponByCode(db, body.code));
+      const validation = validateCouponForCart(coupon, activeCart.cart, products);
+
+      if (!validation.ok) {
+        sendError(response, 400, validation.code, validation.message);
+        return;
+      }
+
+      const cartId = activeCart.cartId || withDatabase((db) => {
+        return ensureCart(db, {
+          userId: activeCart.user?.id || null,
+          sessionId: activeCart.sessionId
+        }).id;
+      });
+      withDatabase((db) => setCartCouponCode(db, cartId, coupon.code));
+
+      const updatedCart = {
+        ...activeCart.cart,
+        couponCode: coupon.code
+      };
+
+      sendCartJson(response, 200, {
+        ok: true,
+        cart: getCartPayload(updatedCart, { products })
+      }, activeCart);
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "DELETE" && requestUrl.pathname === "/api/cart/coupon") {
+    try {
+      const products = withDatabase((db) => listProducts(db));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const cartId = activeCart.cartId || withDatabase((db) => {
+        return ensureCart(db, {
+          userId: activeCart.user?.id || null,
+          sessionId: activeCart.sessionId
+        }).id;
+      });
+      withDatabase((db) => setCartCouponCode(db, cartId, ""));
+
+      const updatedCart = {
+        ...activeCart.cart,
+        couponCode: ""
+      };
+
+      sendCartJson(response, 200, {
+        ok: true,
+        cart: getCartPayload(updatedCart, { products })
+      }, activeCart);
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");

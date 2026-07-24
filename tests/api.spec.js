@@ -242,6 +242,47 @@ test("returns marketing pricing in the cart payload", async ({ request }) => {
   });
 });
 
+test("applies and removes a valid cart coupon", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 2 }
+  });
+
+  const applyResponse = await request.post("/api/cart/coupon", {
+    data: { code: "sock10" }
+  });
+  expect(applyResponse.ok()).toBe(true);
+  const applyPayload = await applyResponse.json();
+  expect(applyPayload.cart.couponCode).toBe("SOCK10");
+  expect(applyPayload.cart.pricing.coupon).toMatchObject({
+    code: "SOCK10",
+    status: "applied"
+  });
+
+  const removeResponse = await request.delete("/api/cart/coupon");
+  expect(removeResponse.ok()).toBe(true);
+  const removePayload = await removeResponse.json();
+  expect(removePayload.cart.couponCode).toBe("");
+  expect(removePayload.cart.pricing.couponDiscount).toBe(0);
+});
+
+test("rejects coupon that does not meet minimum spend", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 1 }
+  });
+
+  const response = await request.post("/api/cart/coupon", {
+    data: { code: "SOCK20" }
+  });
+
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: false,
+    error: {
+      code: "COUPON_MINIMUM_NOT_MET"
+    }
+  });
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {
