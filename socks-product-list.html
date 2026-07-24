@@ -1247,6 +1247,18 @@
       gap: 6px;
     }
 
+    .site-footer__list a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .site-footer__list a:hover,
+    .site-footer__list a:focus-visible {
+      color: var(--text-main);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
     .site-footer__bottom {
       display: flex;
       align-items: center;
@@ -1256,6 +1268,129 @@
       border-top: 1px solid #ececec;
       color: #6a6a6a;
       font-size: 13px;
+    }
+
+    .support-view {
+      display: grid;
+      gap: 24px;
+    }
+
+    .support-hero,
+    .support-layout {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .support-hero {
+      padding: 24px;
+      border-radius: var(--radius-panel);
+    }
+
+    .support-breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+      color: var(--text-subtle);
+      font-size: 13px;
+    }
+
+    .support-breadcrumb a {
+      color: var(--text-main);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .support-hero__eyebrow,
+    .support-panel__eyebrow {
+      margin: 0 0 10px;
+      color: var(--text-subtle);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .support-hero__title,
+    .support-panel__title {
+      margin: 0;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .support-hero__title {
+      font-size: clamp(34px, 5vw, 62px);
+    }
+
+    .support-hero__copy,
+    .support-panel__summary {
+      max-width: 760px;
+      color: var(--text-subtle);
+      line-height: 1.7;
+    }
+
+    .support-layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      border-radius: var(--radius-panel);
+      overflow: hidden;
+    }
+
+    .support-nav {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      padding: 16px;
+      border-right: 1px solid var(--line);
+      background: #f7f7f7;
+    }
+
+    .support-nav__button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text-main);
+      cursor: pointer;
+      font-weight: 800;
+      padding: 12px 14px;
+      text-align: left;
+      text-decoration: none;
+    }
+
+    .support-nav__button.is-active {
+      border-color: var(--text-main);
+      background: var(--text-main);
+      color: var(--surface);
+    }
+
+    .support-panel {
+      padding: 24px;
+    }
+
+    .support-panel__title {
+      font-size: clamp(28px, 4vw, 44px);
+    }
+
+    .support-panel__bullets {
+      display: grid;
+      gap: 10px;
+      margin: 18px 0 0;
+      padding-left: 20px;
+      color: #333333;
+      line-height: 1.65;
+    }
+
+    .support-faq {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .support-contact,
+    .support-ticket {
+      margin-top: 20px;
     }
 
     .product-grid {
@@ -2841,6 +2976,18 @@
         grid-template-columns: 1fr;
       }
 
+      .support-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .support-nav {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
       .site-footer__bottom {
         flex-direction: column;
         align-items: flex-start;
@@ -3088,6 +3235,32 @@
       <section class="order-panel" data-order-history-panel></section>
     </div>
 
+    <div class="support-view" data-support-view hidden>
+      <section class="support-hero">
+        <nav class="support-breadcrumb" aria-label="breadcrumb">
+          <a href="/socks-product-list.html" data-support-home-link>首页</a>
+          <span aria-hidden="true">/</span>
+          <span data-support-breadcrumb-current>帮助中心</span>
+        </nav>
+        <p class="support-hero__eyebrow" data-support-eyebrow>Customer care</p>
+        <h1 class="support-hero__title" data-support-title>帮助中心</h1>
+        <p class="support-hero__copy" data-support-copy>查看退换、配送、隐私、条款和常见问题，也可以提交演示客服工单。</p>
+      </section>
+
+      <section class="support-layout">
+        <nav class="support-nav" data-support-nav aria-label="帮助中心栏目"></nav>
+        <article class="support-panel" data-support-panel>
+          <p class="support-panel__eyebrow" data-support-current-eyebrow></p>
+          <h2 class="support-panel__title" data-support-current-title></h2>
+          <p class="support-panel__summary" data-support-current-summary></p>
+          <ul class="support-panel__bullets" data-support-current-bullets></ul>
+          <div class="support-faq" data-support-faq hidden></div>
+          <form class="support-contact" data-support-contact-form hidden novalidate></form>
+          <div class="support-ticket" data-support-ticket hidden></div>
+        </article>
+      </section>
+    </div>
+
     <div class="order-view" data-order-view hidden>
       <section class="hero">
         <p class="hero__eyebrow" data-order-hero-eyebrow>演示订单</p>
@@ -3110,25 +3283,25 @@
       <section class="site-footer__column">
         <p class="site-footer__eyebrow" data-site-footer-help-title>购买帮助</p>
         <div class="site-footer__list" data-site-footer-help-list>
-          <span>尺码建议</span>
-          <span>面料说明</span>
-          <span>组合搭配</span>
+          <a href="/socks-product-list.html?view=support&section=faq" data-footer-help-link="faq">尺码建议</a>
+          <a href="/socks-product-list.html?view=support&section=faq" data-footer-help-link="product">面料说明</a>
+          <a href="/socks-product-list.html?view=support&section=contact" data-footer-help-link="contact">联系支持</a>
         </div>
       </section>
       <section class="site-footer__column">
         <p class="site-footer__eyebrow" data-site-footer-delivery-title>配送说明</p>
         <div class="site-footer__list" data-site-footer-delivery-list>
-          <span>匿名购物车同步</span>
-          <span>预计送达展示</span>
-          <span>包邮与优惠汇总</span>
+          <a href="/socks-product-list.html?view=support&section=delivery" data-footer-delivery-link="delivery">配送说明</a>
+          <a href="/socks-product-list.html?view=support&section=delivery" data-footer-delivery-link="estimate">预计送达展示</a>
+          <a href="/socks-product-list.html?view=support&section=faq" data-footer-delivery-link="shipping">包邮与优惠汇总</a>
         </div>
       </section>
       <section class="site-footer__column">
         <p class="site-footer__eyebrow" data-site-footer-support-title>支持与政策</p>
         <div class="site-footer__list" data-site-footer-support-list>
-          <span>退换说明</span>
-          <span>订单来源提示</span>
-          <span>中英双语切换</span>
+          <a href="/socks-product-list.html?view=support&section=returns" data-footer-support-link="returns">退换说明</a>
+          <a href="/socks-product-list.html?view=support&section=privacy" data-footer-support-link="privacy">隐私政策</a>
+          <a href="/socks-product-list.html?view=support&section=terms" data-footer-support-link="terms">服务条款</a>
         </div>
       </section>
     </div>
@@ -3236,6 +3409,9 @@
     const AUTH_VIEW_KEY = "auth";
     const ADDRESSES_VIEW_KEY = "addresses";
     const ORDERS_VIEW_KEY = "orders";
+    const SUPPORT_VIEW_KEY = "support";
+    const SUPPORT_DEFAULT_SECTION = "faq";
+    const SUPPORT_SECTION_IDS = ["returns", "delivery", "privacy", "terms", "faq", "contact"];
     const LOCALE_STORAGE_KEY = "socks-storefront-locale";
     const pageRoot = document.querySelector("[data-page]");
     const siteUtilityPromo = document.querySelector("[data-site-utility-promo]");
@@ -3280,6 +3456,7 @@
     const checkoutView = document.querySelector("[data-checkout-view]");
     const ordersView = document.querySelector("[data-orders-view]");
     const orderView = document.querySelector("[data-order-view]");
+    const supportView = document.querySelector("[data-support-view]");
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
@@ -3312,6 +3489,17 @@
     const orderPageTitle = document.querySelector("[data-page-title]");
     const orderPageCopy = document.querySelector("[data-page-copy]");
     const orderHistoryPanel = document.querySelector("[data-order-history-panel]");
+    const supportTitle = document.querySelector("[data-support-title]");
+    const supportCopy = document.querySelector("[data-support-copy]");
+    const supportBreadcrumbCurrent = document.querySelector("[data-support-breadcrumb-current]");
+    const supportNav = document.querySelector("[data-support-nav]");
+    const supportCurrentEyebrow = document.querySelector("[data-support-current-eyebrow]");
+    const supportCurrentTitle = document.querySelector("[data-support-current-title]");
+    const supportCurrentSummary = document.querySelector("[data-support-current-summary]");
+    const supportCurrentBullets = document.querySelector("[data-support-current-bullets]");
+    const supportFaq = document.querySelector("[data-support-faq]");
+    const supportContactForm = document.querySelector("[data-support-contact-form]");
+    const supportTicket = document.querySelector("[data-support-ticket]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -3370,6 +3558,12 @@
       promotions: [],
       coupons: [],
       bundles: []
+    };
+    let trustCenterState = {
+      sections: [],
+      faqs: [],
+      contactTopics: [],
+      updatedAt: ""
     };
     let recentlyViewedProducts = [];
     let currentUser = null;
@@ -3442,6 +3636,12 @@
           supportTitle: "支持与政策",
           localeNote: "当前页面支持中文与英文商城文案切换。",
           copyright: "© 2026 Socks Depot Demo"
+        },
+        support: {
+          title: "帮助中心",
+          copy: "查看退换、配送、隐私、条款和常见问题，也可以提交演示客服工单。",
+          breadcrumb: "帮助中心",
+          loadFailure: "帮助内容加载失败，请稍后重试。"
         },
         toolbar: {
           filterLabel: "分类",
@@ -3653,6 +3853,12 @@
           supportTitle: "Support and policy",
           localeNote: "This page supports both Chinese and English storefront copy.",
           copyright: "© 2026 Socks Depot Demo"
+        },
+        support: {
+          title: "Help Center",
+          copy: "Review returns, delivery, privacy, terms, and FAQ content, or submit a demo support ticket.",
+          breadcrumb: "Help Center",
+          loadFailure: "Help content failed to load. Please try again."
         },
         toolbar: {
           filterLabel: "Category",
@@ -4117,6 +4323,10 @@
         return ORDERS_VIEW_KEY;
       }
 
+      if (view === SUPPORT_VIEW_KEY) {
+        return SUPPORT_VIEW_KEY;
+      }
+
       return "storefront";
     }
 
@@ -4134,6 +4344,15 @@
 
     function getRequestedQuery() {
       return normalizeQueryValue(getSearchParams().get("q"));
+    }
+
+    function getRequestedSupportSection() {
+      const section = getSearchParams().get("section");
+      return SUPPORT_SECTION_IDS.includes(section) ? section : SUPPORT_DEFAULT_SECTION;
+    }
+
+    function createSupportPath(sectionId) {
+      return `${STOREFRONT_PATH}?view=${SUPPORT_VIEW_KEY}&section=${encodeURIComponent(sectionId)}`;
     }
 
     function getRequestedNumberParam(name) {
@@ -4302,7 +4521,9 @@
       siteUtilityPromo.textContent = t("shell.promo");
       siteUtilityService.textContent = t("shell.service");
       siteHelpLink.textContent = t("shell.help");
+      siteHelpLink.href = createSupportPath("faq");
       siteReturnsLink.textContent = t("shell.returns");
+      siteReturnsLink.href = createSupportPath("returns");
       siteBrandEyebrow.textContent = t("shell.brandEyebrow");
       siteBrandTitle.textContent = t("storefront.title");
       siteDepartmentLabel.textContent = t("shell.departmentLabel");
@@ -4405,6 +4626,9 @@
       checkoutHeroEyebrow.textContent = t("checkout.heroEyebrow");
       checkoutTitle.textContent = t("checkout.heroTitle");
       checkoutCopy.textContent = t("checkout.heroCopy");
+      supportTitle.textContent = t("support.title");
+      supportCopy.textContent = t("support.copy");
+      supportBreadcrumbCurrent.textContent = t("support.breadcrumb");
       cartDrawerTitle.textContent = t("cart.detailsTitle");
       cartDrawerEyebrow.textContent = activeLocale === LOCALE_KEY.EN_US ? "Cart State" : "购物车状态";
       cartCloseButton.textContent = t("cart.close");
@@ -4438,6 +4662,58 @@
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+    }
+
+    async function fetchTrustCenter() {
+      const response = await fetch(`/api/trust-center?locale=${encodeURIComponent(activeLocale)}`);
+      if (!response.ok) {
+        throw new Error("Trust center content failed to load");
+      }
+      trustCenterState = await response.json();
+      renderSupportView();
+    }
+
+    function renderSupportFaq(isVisible) {
+      supportFaq.hidden = !isVisible;
+      supportFaq.innerHTML = "";
+    }
+
+    function renderSupportContact(isVisible) {
+      supportContactForm.hidden = !isVisible;
+      supportTicket.hidden = true;
+    }
+
+    function renderSupportView() {
+      if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
+        return;
+      }
+
+      const activeSectionId = getRequestedSupportSection();
+      const activeSection = trustCenterState.sections.find((section) => section.id === activeSectionId)
+        || trustCenterState.sections.find((section) => section.id === SUPPORT_DEFAULT_SECTION)
+        || trustCenterState.sections[0];
+
+      supportTitle.textContent = t("support.title");
+      supportCopy.textContent = t("support.copy");
+      supportBreadcrumbCurrent.textContent = t("support.breadcrumb");
+      supportNav.innerHTML = trustCenterState.sections.map((section) => {
+        const isActive = section.id === activeSection.id;
+        return `
+          <a class="support-nav__button${isActive ? " is-active" : ""}"
+            href="${createSupportPath(section.id)}"
+            data-support-section="${escapeHtml(section.id)}"
+            ${isActive ? "aria-current=\"page\"" : ""}>
+            ${escapeHtml(section.title)}
+          </a>
+        `;
+      }).join("");
+      supportCurrentEyebrow.textContent = activeSection.eyebrow;
+      supportCurrentTitle.textContent = activeSection.title;
+      supportCurrentSummary.textContent = activeSection.summary;
+      supportCurrentBullets.innerHTML = activeSection.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("");
+
+      renderSupportFaq(activeSection.id === "faq");
+      renderSupportContact(activeSection.id === "contact");
     }
 
     function getAuthMode() {
@@ -6528,6 +6804,7 @@
       const isCheckoutView = currentView === CHECKOUT_VIEW_KEY;
       const isOrdersView = currentView === ORDERS_VIEW_KEY;
       const isOrderView = currentView === ORDER_VIEW_KEY;
+      const isSupportView = currentView === SUPPORT_VIEW_KEY;
 
       document.body.dataset.view = currentView;
       pageRoot.dataset.view = currentView;
@@ -6538,6 +6815,7 @@
       checkoutView.hidden = !isCheckoutView;
       ordersView.hidden = !isOrdersView;
       orderView.hidden = !isOrderView;
+      supportView.hidden = !isSupportView;
       const allowDrawer = !isOrderView;
       cartDrawer.hidden = !allowDrawer;
       cartBackdrop.hidden = !allowDrawer;
@@ -7450,6 +7728,12 @@
         return;
       }
 
+      if (getCurrentView() === SUPPORT_VIEW_KEY) {
+        await cartLoadPromise;
+        await fetchTrustCenter();
+        return;
+      }
+
       if (getCurrentView() === CHECKOUT_VIEW_KEY) {
         const allProducts = await fetchAllProducts();
         syncProductCatalog(allProducts);
@@ -7492,6 +7776,11 @@
 
       if (getCurrentView() === DETAIL_VIEW_KEY) {
         renderDetailEmptyState(createDetailBackHref());
+        return;
+      }
+
+      if (getCurrentView() === SUPPORT_VIEW_KEY) {
+        supportCurrentTitle.textContent = t("support.loadFailure");
         return;
       }
 

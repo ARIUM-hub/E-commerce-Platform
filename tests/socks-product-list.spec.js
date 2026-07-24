@@ -110,6 +110,32 @@ test("renders the shared storefront shell on storefront, detail, and order views
   await expect(page.locator("[data-site-search-form]")).toBeVisible();
 });
 
+test("opens the trust center from the header help link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-help-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=faq/);
+  await expect(page.locator("[data-support-view]")).toBeVisible();
+  await expect(page.locator("[data-support-title]")).toHaveText("帮助中心");
+});
+
+test("opens returns policy from the header returns link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-returns-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=returns/);
+  await expect(page.locator("[data-support-section='returns']")).toHaveClass(/is-active/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("退换政策");
+});
+
+test("footer policy links route to trust center sections", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-footer-support-link='privacy']").click();
+
+  await expect(page).toHaveURL(/view=support&section=privacy/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("隐私政策");
+});
+
 test("shows login and register entry points when the visitor is anonymous", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
