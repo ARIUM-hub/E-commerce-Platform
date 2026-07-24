@@ -1388,9 +1388,103 @@
       margin-top: 20px;
     }
 
+    .support-faq__item {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #f7f7f7;
+      overflow: hidden;
+    }
+
+    .support-faq__question {
+      width: 100%;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border: 0;
+      background: transparent;
+      color: var(--text-main);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+      padding: 14px 16px;
+      text-align: left;
+    }
+
+    .support-faq__answer {
+      margin: 0;
+      padding: 0 16px 16px;
+      color: var(--text-subtle);
+      line-height: 1.65;
+    }
+
     .support-contact,
     .support-ticket {
       margin-top: 20px;
+    }
+
+    .support-contact {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .support-field {
+      display: grid;
+      gap: 7px;
+      color: var(--text-main);
+      font-weight: 800;
+    }
+
+    .support-field--wide,
+    .support-contact__error,
+    .support-contact__submit,
+    .support-ticket {
+      grid-column: 1 / -1;
+    }
+
+    .support-field input,
+    .support-field select,
+    .support-field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text-main);
+      font: inherit;
+      padding: 12px;
+    }
+
+    .support-field small,
+    .support-contact__error {
+      min-height: 18px;
+      color: #9f1239;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .support-contact__submit {
+      min-height: 46px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--text-main);
+      color: var(--surface);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+    }
+
+    .support-contact__submit:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .support-ticket {
+      border: 1px solid var(--text-main);
+      border-radius: 18px;
+      background: #f7f7f7;
+      padding: 16px;
     }
 
     .product-grid {
@@ -2980,6 +3074,10 @@
         grid-template-columns: 1fr;
       }
 
+      .support-contact {
+        grid-template-columns: 1fr;
+      }
+
       .support-nav {
         grid-auto-flow: column;
         grid-auto-columns: max-content;
@@ -3565,6 +3663,7 @@
       contactTopics: [],
       updatedAt: ""
     };
+    let openFaqId = null;
     let recentlyViewedProducts = [];
     let currentUser = null;
     let addressBook = [];
@@ -3641,7 +3740,24 @@
           title: "帮助中心",
           copy: "查看退换、配送、隐私、条款和常见问题，也可以提交演示客服工单。",
           breadcrumb: "帮助中心",
-          loadFailure: "帮助内容加载失败，请稍后重试。"
+          loadFailure: "帮助内容加载失败，请稍后重试。",
+          contactName: "姓名",
+          contactContact: "联系方式",
+          contactTopic: "问题类型",
+          contactOrder: "订单号",
+          contactMessage: "问题描述",
+          submit: "提交工单",
+          submitting: "提交中...",
+          successTitle: "工单已创建",
+          responseTime: "预计 1 个工作日内响应",
+          errors: {
+            SUPPORT_NAME_REQUIRED: "请填写姓名",
+            SUPPORT_CONTACT_REQUIRED: "请填写联系方式",
+            SUPPORT_TOPIC_REQUIRED: "请选择问题类型",
+            SUPPORT_TOPIC_INVALID: "请选择有效的问题类型",
+            SUPPORT_MESSAGE_REQUIRED: "请填写问题描述",
+            SUPPORT_MESSAGE_TOO_LONG: "问题描述不能超过 1000 个字符"
+          }
         },
         toolbar: {
           filterLabel: "分类",
@@ -3858,7 +3974,24 @@
           title: "Help Center",
           copy: "Review returns, delivery, privacy, terms, and FAQ content, or submit a demo support ticket.",
           breadcrumb: "Help Center",
-          loadFailure: "Help content failed to load. Please try again."
+          loadFailure: "Help content failed to load. Please try again.",
+          contactName: "Name",
+          contactContact: "Contact",
+          contactTopic: "Topic",
+          contactOrder: "Order number",
+          contactMessage: "Message",
+          submit: "Submit ticket",
+          submitting: "Submitting...",
+          successTitle: "Ticket created",
+          responseTime: "Expected response within 1 business day",
+          errors: {
+            SUPPORT_NAME_REQUIRED: "Please enter your name",
+            SUPPORT_CONTACT_REQUIRED: "Please enter your contact",
+            SUPPORT_TOPIC_REQUIRED: "Please select a topic",
+            SUPPORT_TOPIC_INVALID: "Please select a valid topic",
+            SUPPORT_MESSAGE_REQUIRED: "Please enter your message",
+            SUPPORT_MESSAGE_TOO_LONG: "Message must be 1000 characters or fewer"
+          }
         },
         toolbar: {
           filterLabel: "Category",
@@ -4675,13 +4808,144 @@
 
     function renderSupportFaq(isVisible) {
       supportFaq.hidden = !isVisible;
-      supportFaq.innerHTML = "";
+      if (!isVisible) {
+        supportFaq.innerHTML = "";
+        return;
+      }
+
+      if (openFaqId === null && trustCenterState.faqs.length > 0) {
+        openFaqId = trustCenterState.faqs[0].id;
+      }
+
+      supportFaq.innerHTML = trustCenterState.faqs.map((faq) => {
+        const isOpen = faq.id === openFaqId;
+        return `
+          <section class="support-faq__item">
+            <button class="support-faq__question" type="button" data-support-faq-question="${escapeHtml(faq.id)}" aria-expanded="${isOpen}">
+              <span>${escapeHtml(faq.question)}</span>
+              <span aria-hidden="true">${isOpen ? "-" : "+"}</span>
+            </button>
+            <p class="support-faq__answer" ${isOpen ? "" : "hidden"}>${escapeHtml(faq.answer)}</p>
+          </section>
+        `;
+      }).join("");
     }
 
     function renderSupportContact(isVisible) {
       supportContactForm.hidden = !isVisible;
-      supportTicket.hidden = true;
+      if (!isVisible) {
+        supportTicket.hidden = true;
+        return;
+      }
+
+      supportContactForm.innerHTML = `
+        <label class="support-field">
+          <span>${t("support.contactName")}</span>
+          <input name="name" data-support-contact-field="name" autocomplete="name">
+          <small data-support-contact-error="name"></small>
+        </label>
+        <label class="support-field">
+          <span>${t("support.contactContact")}</span>
+          <input name="contact" data-support-contact-field="contact" autocomplete="email">
+          <small data-support-contact-error="contact"></small>
+        </label>
+        <label class="support-field">
+          <span>${t("support.contactTopic")}</span>
+          <select name="topic" data-support-contact-field="topic">
+            ${trustCenterState.contactTopics.map((topic) => `<option value="${escapeHtml(topic.id)}">${escapeHtml(topic.label)}</option>`).join("")}
+          </select>
+          <small data-support-contact-error="topic"></small>
+        </label>
+        <label class="support-field">
+          <span>${t("support.contactOrder")}</span>
+          <input name="orderId" data-support-contact-field="orderId" autocomplete="off">
+          <small data-support-contact-error="orderId"></small>
+        </label>
+        <label class="support-field support-field--wide">
+          <span>${t("support.contactMessage")}</span>
+          <textarea name="message" rows="5" data-support-contact-field="message"></textarea>
+          <small data-support-contact-error="message"></small>
+        </label>
+        <div class="support-contact__error" data-support-contact-error role="alert"></div>
+        <button class="support-contact__submit" type="submit" data-support-contact-submit>${t("support.submit")}</button>
+      `;
     }
+
+    function clearSupportContactErrors() {
+      supportContactForm.querySelectorAll("[data-support-contact-error]").forEach((node) => {
+        node.textContent = "";
+      });
+    }
+
+    function showSupportContactError(code) {
+      const errorText = t(`support.errors.${code}`);
+      const fieldMap = {
+        SUPPORT_NAME_REQUIRED: "name",
+        SUPPORT_CONTACT_REQUIRED: "contact",
+        SUPPORT_TOPIC_REQUIRED: "topic",
+        SUPPORT_TOPIC_INVALID: "topic",
+        SUPPORT_MESSAGE_REQUIRED: "message",
+        SUPPORT_MESSAGE_TOO_LONG: "message"
+      };
+      const fieldName = fieldMap[code];
+      const fieldError = fieldName ? supportContactForm.querySelector(`[data-support-contact-error='${fieldName}']`) : null;
+      if (fieldError) {
+        fieldError.textContent = errorText;
+      } else {
+        const formError = supportContactForm.querySelector("[data-support-contact-error][role='alert']");
+        formError.textContent = errorText;
+      }
+    }
+
+    supportFaq.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-support-faq-question]");
+      if (!button) return;
+
+      const faqId = button.dataset.supportFaqQuestion;
+      openFaqId = openFaqId === faqId ? "" : faqId;
+      renderSupportFaq(true);
+    });
+
+    supportContactForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearSupportContactErrors();
+      const submitButton = supportContactForm.querySelector("[data-support-contact-submit]");
+      const formData = new FormData(supportContactForm);
+      submitButton.disabled = true;
+      submitButton.textContent = t("support.submitting");
+
+      try {
+        const response = await fetch("/api/support/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.get("name"),
+            contact: formData.get("contact"),
+            topic: formData.get("topic"),
+            orderId: formData.get("orderId"),
+            message: formData.get("message"),
+            locale: activeLocale
+          })
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          showSupportContactError(payload.error?.code || "SUPPORT_MESSAGE_REQUIRED");
+          return;
+        }
+
+        supportTicket.hidden = false;
+        supportTicket.innerHTML = `
+          <strong>${t("support.successTitle")}</strong>
+          <p>${escapeHtml(payload.ticket.ticketNumber)}</p>
+          <p>${t("support.responseTime")}</p>
+        `;
+        supportContactForm.reset();
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = t("support.submit");
+      }
+    });
 
     function renderSupportView() {
       if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
