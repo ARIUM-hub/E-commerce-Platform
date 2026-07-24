@@ -101,6 +101,103 @@ test("uses the configured SQLite database path", () => {
   expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");
 });
 
+test("calculates marketing-aware cart pricing with threshold promotion and coupon", async () => {
+  const { createPricingSummary } = require("../lib/pricing");
+  const products = JSON.parse(await fs.readFile(path.join(__dirname, "fixtures", "test-data", "products.json"), "utf8"));
+  const cart = {
+    couponCode: "SOCK10",
+    items: [
+      { productId: "sock-01", skuId: "sock-01-43", size: "43", quantity: 1 },
+      { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 1 }
+    ]
+  };
+  const marketing = {
+    promotions: [
+      {
+        id: "threshold-99-save-15",
+        type: "threshold",
+        title: "满 ¥99 减 ¥15",
+        threshold: 99,
+        discountAmount: 15,
+        stackableWithCoupon: true
+      },
+      {
+        id: "limited-sock-02",
+        type: "limited-time-product",
+        title: "限时训练价",
+        productId: "sock-02",
+        promotionalPrice: 45
+      }
+    ],
+    coupons: [
+      {
+        code: "SOCK10",
+        type: "amount-off",
+        title: "新人袜券",
+        discountAmount: 10,
+        minimumSubtotal: 59,
+        eligibleCategoryKeys: ["daily", "sport", "crew", "no-show"]
+      }
+    ],
+    bundles: []
+  };
+
+  const summary = createPricingSummary({ cart, products, marketing, shippingFee: 0 });
+
+  expect(summary).toMatchObject({
+    subtotal: 128,
+    itemTotal: 84,
+    productDiscount: 44,
+    orderDiscount: 0,
+    couponDiscount: 10,
+    shipping: 0,
+    total: 74
+  });
+  expect(summary.appliedPromotions.map((promotion) => promotion.id)).toContain("limited-sock-02");
+  expect(summary.coupon).toMatchObject({ code: "SOCK10", status: "applied" });
+  expect(summary.thresholdProgress).toMatchObject({
+    threshold: 99,
+    remaining: 15,
+    isMet: false
+  });
+});
+
+test("calculates full-reduction promotion when cart crosses the threshold", async () => {
+  const { createPricingSummary } = require("../lib/pricing");
+  const products = JSON.parse(await fs.readFile(path.join(__dirname, "fixtures", "test-data", "products.json"), "utf8"));
+  const cart = {
+    items: [
+      { productId: "sock-01", skuId: "sock-01-43", size: "43", quantity: 2 },
+      { productId: "sock-05", skuId: "sock-05-43", size: "43", quantity: 1 }
+    ]
+  };
+  const marketing = {
+    promotions: [
+      {
+        id: "threshold-99-save-15",
+        type: "threshold",
+        title: "满 ¥99 减 ¥15",
+        threshold: 99,
+        discountAmount: 15
+      }
+    ],
+    coupons: [],
+    bundles: []
+  };
+
+  const summary = createPricingSummary({ cart, products, marketing, shippingFee: 0 });
+
+  expect(summary.orderDiscount).toBe(15);
+  expect(summary.thresholdProgress).toMatchObject({
+    threshold: 99,
+    remaining: 0,
+    isMet: true
+  });
+  expect(summary.appliedPromotions).toEqual([
+    expect.objectContaining({ id: "threshold-99-save-15", discount: 15 })
+  ]);
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {

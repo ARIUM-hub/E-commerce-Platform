@@ -364,7 +364,7 @@ git commit -m "feat: seed marketing campaigns"
 - Create: `lib/pricing.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing pricing tests**
+- [x] **Step 1: Write failing pricing tests**
 
 Add near cart/order pricing API tests in `tests/api.spec.js`:
 
@@ -467,7 +467,7 @@ test("calculates full-reduction promotion when cart crosses the threshold", asyn
 });
 ```
 
-- [ ] **Step 2: Run pricing tests and verify they fail**
+- [x] **Step 2: Run pricing tests and verify they fail**
 
 Run:
 
@@ -477,7 +477,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because `lib/pricing.js` does not exist.
 
-- [ ] **Step 3: Create `lib/pricing.js`**
+- [x] **Step 3: Create `lib/pricing.js`**
 
 Create this file:
 
@@ -643,7 +643,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Run pricing tests and verify they pass**
+- [x] **Step 4: Run pricing tests and verify they pass**
 
 Run:
 
@@ -653,7 +653,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
