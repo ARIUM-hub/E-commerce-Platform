@@ -25,6 +25,8 @@ const {
 const {
   findBundleById,
   findCouponByCode,
+  listRecentProductIds,
+  recordRecentView,
   listActiveMarketingCampaigns
 } = require("./lib/repositories/marketing");
 const {
@@ -1332,11 +1334,57 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  if (request.method === "POST" && requestUrl.pathname === "/api/recent-views") {
+    try {
+      const body = await readRequestBody(request);
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const products = withDatabase((db) => listProducts(db));
+      const product = products.find((item) => item.id === body.productId);
+      if (!product) {
+        sendError(response, 404, "PRODUCT_NOT_FOUND", "Product was not found.");
+        return;
+      }
+
+      withDatabase((db) => recordRecentView(db, {
+        id: `rv-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId,
+        productId: product.id
+      }));
+
+      sendCartJson(response, 200, { ok: true }, activeCart);
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/recommendations") {
     try {
       const scenario = requestUrl.searchParams.get("scenario") || "detail";
       const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
       const products = withDatabase((db) => listProducts(db));
+
+      if (scenario === "recently-viewed") {
+        const activeCart = await readActiveCart(request);
+        const productIds = withDatabase((db) => listRecentProductIds(db, {
+          userId: activeCart.user ? activeCart.user.id : null,
+          sessionId: activeCart.sessionId
+        }));
+        const items = productIds
+          .map((productId) => products.find((product) => product.id === productId))
+          .filter(Boolean)
+          .map((product) => localizeProduct(product, locale));
+        sendJson(response, 200, { scenario, items });
+        return;
+      }
+
       const items = getRecommendationItems(products, scenario, {
         productId: requestUrl.searchParams.get("productId"),
         excludeProductIds: requestUrl.searchParams.getAll("excludeProductId")

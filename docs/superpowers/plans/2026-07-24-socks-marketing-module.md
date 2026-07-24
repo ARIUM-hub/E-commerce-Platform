@@ -1354,7 +1354,7 @@ git commit -m "feat: add bundles and recommendation api"
 - Modify: `lib/repositories/marketing.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing recent-view API test**
+- [x] **Step 1: Write failing recent-view API test**
 
 Add near recommendation API tests in `tests/api.spec.js`:
 
@@ -1372,7 +1372,7 @@ test("records and returns recently viewed products for the session", async ({ re
 });
 ```
 
-- [ ] **Step 2: Run test and verify it fails**
+- [x] **Step 2: Run test and verify it fails**
 
 Run:
 
@@ -1382,7 +1382,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because recent-view endpoints are not implemented.
 
-- [ ] **Step 3: Add recent-view repository functions**
+- [x] **Step 3: Add recent-view repository functions**
 
 In `lib/repositories/marketing.js`, add:
 
@@ -1428,7 +1428,7 @@ function listRecentProductIds(db, { userId = null, sessionId = null, limit = 8 }
 
 Export both functions.
 
-- [ ] **Step 4: Add recent-view route and recommendation scenario**
+- [x] **Step 4: Add recent-view route and recommendation scenario**
 
 In `server.js`, import `recordRecentView` and `listRecentProductIds`.
 
@@ -1480,7 +1480,7 @@ In `/api/recommendations`, before default recommendation logic:
       }
 ```
 
-- [ ] **Step 5: Run test and verify it passes**
+- [x] **Step 5: Run test and verify it passes**
 
 Run:
 

@@ -314,6 +314,18 @@ test("returns scenario-based recommendations", async ({ request }) => {
   expect(cartPayload.items.length).toBeGreaterThan(0);
 });
 
+test("records and returns recently viewed products for the session", async ({ request }) => {
+  const firstRecord = await request.post("/api/recent-views", { data: { productId: "sock-01" } });
+  expect(firstRecord.ok()).toBe(true);
+  const secondRecord = await request.post("/api/recent-views", { data: { productId: "sock-02" } });
+  expect(secondRecord.ok()).toBe(true);
+
+  const response = await request.get("/api/recommendations?scenario=recently-viewed");
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.items.map((item) => item.id)).toEqual(["sock-02", "sock-01"]);
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {
