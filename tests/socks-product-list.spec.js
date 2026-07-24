@@ -166,6 +166,34 @@ test("submits trust center contact form and shows ticket number", async ({ page 
   await expect(page.locator("[data-support-ticket]")).toContainText(/SUP-\d{8}-\d{4}/);
 });
 
+test("renders trust center in English", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=privacy&locale=en-US");
+
+  await expect(page.locator("[data-support-title]")).toHaveText("Help Center");
+  await expect(page.locator("[data-support-current-title]")).toHaveText("Privacy Policy");
+});
+
+test("keeps global shell on detail checkout order and support views", async ({ page }) => {
+  for (const path of [
+    "/socks-product-list.html?view=detail&id=sock-01",
+    "/socks-product-list.html?view=checkout",
+    "/socks-product-list.html?view=order",
+    "/socks-product-list.html?view=support&section=faq"
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("[data-site-header]")).toBeVisible();
+    await expect(page.locator("[data-site-footer]")).toBeVisible();
+  }
+});
+
+test("trust center has no horizontal overflow on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+
+  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasOverflow).toBe(false);
+});
+
 test("shows login and register entry points when the visitor is anonymous", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 

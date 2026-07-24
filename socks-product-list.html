@@ -4156,6 +4156,11 @@
       return normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY));
     }
 
+    function readRequestedLocale() {
+      const requestedLocale = getSearchParams().get("locale");
+      return requestedLocale ? normalizeLocale(requestedLocale) : null;
+    }
+
     function saveLocale(localeValue) {
       window.localStorage.setItem(LOCALE_STORAGE_KEY, normalizeLocale(localeValue));
     }
@@ -5202,6 +5207,12 @@
 
       if (getCurrentView() === ORDERS_VIEW_KEY) {
         await renderOrdersView();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === SUPPORT_VIEW_KEY) {
+        await fetchTrustCenter();
         renderCartState();
         return;
       }
@@ -7948,7 +7959,7 @@
     });
 
     async function initializePage() {
-      activeLocale = readStoredLocale();
+      activeLocale = readRequestedLocale() || readStoredLocale();
       syncActiveStateFromUrl();
       initializeNavigationContext();
       renderLocaleControls();
