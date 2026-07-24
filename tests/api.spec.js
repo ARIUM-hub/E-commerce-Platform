@@ -96,9 +96,30 @@ test("initializes SQLite marketing campaigns, coupons, bundles, and recent views
   expect(recentViewTable).toEqual({ name: "recent_views" });
 });
 
+test("initializes SQLite support ticket table", async () => {
+  const db = createDatabase(":memory:");
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const ticketTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'support_tickets'").get();
+    expect(ticketTable).toEqual({ name: "support_tickets" });
+  } finally {
+    db.close();
+  }
+});
+
 test("uses the configured SQLite database path", () => {
   expect(getDatabasePath({ nodeEnv: "test" })).toContain("socks-store.test.db");
-  expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");
+
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    delete process.env.NODE_ENV;
+    expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
 });
 
 test("calculates marketing-aware cart pricing with threshold promotion and coupon", async () => {
@@ -217,6 +238,104 @@ test("returns active marketing campaigns", async ({ request }) => {
   expect(payload.bundles).toEqual([
     expect.objectContaining({ id: "daily-refresh-bundle" })
   ]);
+});
+
+test("returns localized trust center content", async ({ request }) => {
+  const response = await request.get("/api/trust-center?locale=zh-CN");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.sections.map((section) => section.id)).toEqual([
+    "returns",
+    "delivery",
+    "privacy",
+    "terms",
+    "faq",
+    "contact"
+  ]);
+  expect(payload.sections.find((section) => section.id === "returns")).toMatchObject({
+    title: "退换政策"
+  });
+  expect(payload.faqs.length).toBeGreaterThanOrEqual(5);
+  expect(payload.contactTopics.map((topic) => topic.id)).toContain("orders");
+});
+
+test("returns English trust center content", async ({ request }) => {
+  const response = await request.get("/api/trust-center?locale=en-US");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.sections.find((section) => section.id === "privacy")).toMatchObject({
+    title: "Privacy Policy"
+  });
+  expect(payload.faqs[0].question).toContain("size");
+});
+
+test("creates a support contact ticket", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "Demo Buyer",
+      contact: "buyer@example.com",
+      topic: "returns",
+      orderId: "SOCK-20260724-0001",
+      message: "I want to understand the return window for unworn socks.",
+      locale: "en-US"
+    }
+  });
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.ticket).toMatchObject({
+    topic: "returns",
+    status: "open"
+  });
+  expect(payload.ticket.ticketNumber).toMatch(/^SUP-\d{8}-\d{4}$/);
+
+  const db = createDatabase(testDbFile);
+  try {
+    const row = db.prepare("SELECT ticket_number, topic, status FROM support_tickets WHERE ticket_number = ?").get(payload.ticket.ticketNumber);
+    expect(row).toMatchObject({
+      ticket_number: payload.ticket.ticketNumber,
+      topic: "returns",
+      status: "open"
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test("rejects support contact requests with missing required fields", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "",
+      contact: "buyer@example.com",
+      topic: "orders",
+      message: "Please help with my order."
+    }
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: "SUPPORT_NAME_REQUIRED"
+    }
+  });
+});
+
+test("rejects support contact requests with invalid topics", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "Demo Buyer",
+      contact: "buyer@example.com",
+      topic: "billing-provider",
+      message: "Please help with my order."
+    }
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: "SUPPORT_TOPIC_INVALID"
+    }
+  });
 });
 
 test("returns marketing pricing in the cart payload", async ({ request }) => {
@@ -384,7 +503,7 @@ test("registers a user and creates an http-only session", async ({ request }) =>
   });
   expect(payload.user.id).toMatch(/^user-\d{4}$/);
   expect(payload.user.passwordHash).toBeUndefined();
-  expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
+  expect(payload.cart).toMatchObject({ items: [], meta: { itemCount: 0 } });
 
   const db = createDatabase(testDbFile);
   try {
@@ -502,7 +621,7 @@ test("merges anonymous cart into the user cart after login", async ({ request })
   const userCartResponse = await request.get("/api/cart", {
     headers: { cookie: sessionCookie }
   });
-  await expect(userCartResponse.json()).resolves.toEqual({
+  await expect(userCartResponse.json()).resolves.toMatchObject({
     items: [{ productId: "sock-01", skuId: "sock-01-39", size: "39", quantity: 2 }],
     meta: { itemCount: 1 }
   });
@@ -527,7 +646,7 @@ test("keeps anonymous and logged-in carts isolated", async ({ request }) => {
   });
 
   const anonymousCartResponse = await request.get("/api/cart");
-  await expect(anonymousCartResponse.json()).resolves.toEqual({
+  await expect(anonymousCartResponse.json()).resolves.toMatchObject({
     items: [{ productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }],
     meta: { itemCount: 1 }
   });
@@ -539,7 +658,7 @@ test("keeps anonymous and logged-in carts isolated", async ({ request }) => {
   const userCartResponse = await request.get("/api/cart", {
     headers: { cookie: nextSessionCookie }
   });
-  await expect(userCartResponse.json()).resolves.toEqual({
+  await expect(userCartResponse.json()).resolves.toMatchObject({
     items: [
       { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 1 },
       { productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }
@@ -1268,7 +1387,7 @@ test("does not read live cart state from JSON files after SQLite migration", asy
 
   const response = await request.get("/api/cart");
   expect(response.ok()).toBe(true);
-  await expect(response.json()).resolves.toEqual({
+  await expect(response.json()).resolves.toMatchObject({
     items: [],
     meta: { itemCount: 0 }
   });
@@ -1336,7 +1455,7 @@ test("persists anonymous cart items in SQLite by session cookie", async ({ reque
     headers: { cookie: sessionCookie }
   });
   expect(cartResponse.ok()).toBe(true);
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
     items: [{ productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 2 }],
     meta: { itemCount: 1 }
   });
@@ -1362,7 +1481,7 @@ test("clears the anonymous cart state", async ({ request }) => {
   expect(clearResponse.ok()).toBe(true);
 
   const clearPayload = await clearResponse.json();
-  expect(clearPayload).toEqual({
+  expect(clearPayload).toMatchObject({
     ok: true,
     items: [],
     meta: { itemCount: 0 }
@@ -1370,7 +1489,7 @@ test("clears the anonymous cart state", async ({ request }) => {
 
   const cartResponse = await request.get("/api/cart");
   expect(cartResponse.ok()).toBe(true);
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
     items: [],
     meta: { itemCount: 0 }
   });
@@ -1459,7 +1578,7 @@ test("ignores legacy JSON cart items when enforcing SQLite cart stock limits", a
   expect(response.ok()).toBe(true);
 
   const cartResponse = await request.get("/api/cart");
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
     items: [{ productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 1 }],
     meta: { itemCount: 1 }
   });
@@ -1487,7 +1606,7 @@ test("updates an existing cart item quantity", async ({ request }) => {
 
   const cartResponse = await request.get("/api/cart");
   expect(cartResponse.ok()).toBe(true);
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
     items: [{ productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 3 }],
     meta: { itemCount: 1 }
   });

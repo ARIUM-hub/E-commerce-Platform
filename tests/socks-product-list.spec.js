@@ -110,6 +110,90 @@ test("renders the shared storefront shell on storefront, detail, and order views
   await expect(page.locator("[data-site-search-form]")).toBeVisible();
 });
 
+test("opens the trust center from the header help link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-help-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=faq/);
+  await expect(page.locator("[data-support-view]")).toBeVisible();
+  await expect(page.locator("[data-support-title]")).toHaveText("帮助中心");
+});
+
+test("opens returns policy from the header returns link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-returns-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=returns/);
+  await expect(page.locator("[data-support-section='returns']")).toHaveClass(/is-active/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("退换政策");
+});
+
+test("footer policy links route to trust center sections", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-footer-support-link='privacy']").click();
+
+  await expect(page).toHaveURL(/view=support&section=privacy/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("隐私政策");
+});
+
+test("expands and collapses trust center FAQ items", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=faq");
+
+  const firstQuestion = page.locator("[data-support-faq-question]").first();
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
+  await firstQuestion.click();
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "false");
+  await firstQuestion.press("Enter");
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
+});
+
+test("validates trust center contact form", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+  await page.locator("[data-support-contact-submit]").click();
+
+  await expect(page.locator("[data-support-contact-error='name']")).toHaveText("请填写姓名");
+});
+
+test("submits trust center contact form and shows ticket number", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+  await page.locator("[data-support-contact-field='name']").fill("演示买家");
+  await page.locator("[data-support-contact-field='contact']").fill("buyer@example.com");
+  await page.locator("[data-support-contact-field='topic']").selectOption("returns");
+  await page.locator("[data-support-contact-field='message']").fill("想了解未穿着袜子的退换流程。");
+  await page.locator("[data-support-contact-submit]").click();
+
+  await expect(page.locator("[data-support-ticket]")).toBeVisible();
+  await expect(page.locator("[data-support-ticket]")).toContainText(/SUP-\d{8}-\d{4}/);
+});
+
+test("renders trust center in English", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=privacy&locale=en-US");
+
+  await expect(page.locator("[data-support-title]")).toHaveText("Help Center");
+  await expect(page.locator("[data-support-current-title]")).toHaveText("Privacy Policy");
+});
+
+test("keeps global shell on detail checkout order and support views", async ({ page }) => {
+  for (const path of [
+    "/socks-product-list.html?view=detail&id=sock-01",
+    "/socks-product-list.html?view=checkout",
+    "/socks-product-list.html?view=order",
+    "/socks-product-list.html?view=support&section=faq"
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("[data-site-header]")).toBeVisible();
+    await expect(page.locator("[data-site-footer]")).toBeVisible();
+  }
+});
+
+test("trust center has no horizontal overflow on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+
+  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasOverflow).toBe(false);
+});
+
 test("shows login and register entry points when the visitor is anonymous", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
