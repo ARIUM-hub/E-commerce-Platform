@@ -1263,6 +1263,39 @@ test("does not show bestseller for recommended products that are not bestsellers
   await expect(sock05Card.locator("[data-bestseller-badge]")).toHaveCount(0);
 });
 
+test("shows marketing campaigns and applies a coupon in the cart drawer", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await expect(page.locator("[data-marketing-strip]")).toContainText("SOCK10");
+  const sock01Card = page.locator('[data-product-card][data-product-id="sock-01"]');
+  await sock01Card.locator('[data-size="43"]').click();
+  await sock01Card.locator("[data-cart-button]").click();
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+  await sock01Card.locator("[data-cart-button]").click();
+  await expect(page.locator("[data-cart-count]")).toHaveText("2");
+  await page.locator("[data-cart-toggle]").click();
+
+  await expect(page.locator("[data-threshold-progress]")).toContainText(/还差|Need/);
+  await page.locator("[data-coupon-input]").fill("SOCK10");
+  await page.locator("[data-coupon-apply]").click();
+  await expect(page.locator("[data-applied-coupon]")).toContainText("SOCK10");
+  await expect(page.locator("[data-cart-coupon-discount]")).toHaveText("-¥10");
+});
+
+test("adds a bundle from the detail page and shows recently viewed products", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  await expect(page.locator("[data-bundle-card]")).toContainText(/组合|Bundle/);
+  await page.locator("[data-add-bundle]").click();
+  await expect(page.locator("[data-detail-cart-count]")).toHaveText("2");
+
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  await expect(page.locator("[data-detail-page-title]")).toContainText(/极简|Minimal/);
+  await page.goto("/socks-product-list.html");
+  await expect(page.locator("[data-recently-viewed]")).toBeVisible();
+  await expect(page.locator("[data-recently-viewed]")).toContainText(/sock-01|极简|Minimal/);
+});
+
 test("keeps the social proof row readable on a mobile viewport", async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto("/socks-product-list.html");

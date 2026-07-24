@@ -2527,6 +2527,144 @@
       line-height: 1.7;
     }
 
+    .marketing-strip,
+    .recently-viewed,
+    .bundle-card,
+    .cart-coupon {
+      border: 1px solid #e8e8e8;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      padding: 16px;
+      box-shadow: 0 12px 28px rgba(17, 17, 17, 0.05);
+    }
+
+    .marketing-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .marketing-strip p,
+    .cart-threshold,
+    .cart-coupon__applied,
+    .cart-coupon__error {
+      margin: 0;
+      color: #555555;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .marketing-strip strong {
+      display: block;
+      color: #111111;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .marketing-strip__chips,
+    .recently-viewed__items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .marketing-strip__chip,
+    .recently-viewed__link {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d8d8d8;
+      border-radius: 999px;
+      padding: 0 12px;
+      color: #111111;
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+      background: #f7f7f7;
+    }
+
+    .cart-coupon {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cart-coupon__label {
+      color: #111111;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .cart-coupon__row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .cart-coupon__input,
+    .cart-coupon__button,
+    .bundle-card__button {
+      min-height: 44px;
+      border: 1px solid #d8d8d8;
+      border-radius: 999px;
+      padding: 0 14px;
+      font: inherit;
+    }
+
+    .cart-coupon__button,
+    .bundle-card__button {
+      background: #111111;
+      color: #ffffff;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .cart-coupon__button:disabled,
+    .bundle-card__button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .cart-threshold {
+      border-radius: 16px;
+      background: #f3f3f3;
+      padding: 10px 12px;
+    }
+
+    .cart-coupon__error {
+      color: #9f1239;
+      min-height: 18px;
+    }
+
+    .recently-viewed {
+      margin-top: 20px;
+    }
+
+    .recently-viewed__title,
+    .bundle-card__title {
+      margin: 0 0 10px;
+      color: #111111;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .bundle-card {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .bundle-card__eyebrow,
+    .bundle-card__copy {
+      margin: 0;
+      color: #666666;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
     @media (max-width: 960px) {
       .advanced-filters__body {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2805,11 +2943,13 @@
           </a>
         </section>
 
-        <section class="hero">
+      <section class="hero">
         <p class="hero__eyebrow">Cotton Daily</p>
         <h1 class="hero__title" data-storefront-title>袜子专区</h1>
         <p class="hero__description" data-storefront-description>精选黑白灰日常袜、运动袜与轻量通勤款，延续简约电商风格，专注舒适穿着与基础百搭感。</p>
       </section>
+
+      <section class="marketing-strip" data-marketing-strip hidden></section>
 
       <section class="toolbar" data-toolbar>
         <div class="toolbar__group">
@@ -2858,6 +2998,7 @@
       <div class="load-more-row">
         <button class="load-more-row__button" type="button" data-load-more-products hidden>加载更多</button>
       </div>
+      <section class="recently-viewed" data-recently-viewed hidden></section>
     </div>
 
     <div class="detail-view" data-detail-view hidden>
@@ -3010,6 +3151,16 @@
       <div class="cart-drawer__empty" data-cart-empty-state>购物车还是空的</div>
     </div>
     <div class="cart-drawer__footer">
+      <div class="cart-coupon" data-cart-coupon>
+        <label class="cart-coupon__label" for="cart-coupon-code">优惠券</label>
+        <div class="cart-coupon__row">
+          <input id="cart-coupon-code" class="cart-coupon__input" data-coupon-input autocomplete="off" placeholder="SOCK10">
+          <button class="cart-coupon__button" type="button" data-coupon-apply>应用</button>
+        </div>
+        <p class="cart-coupon__error" data-coupon-error role="alert"></p>
+        <p class="cart-coupon__applied" data-applied-coupon></p>
+      </div>
+      <p class="cart-threshold" data-threshold-progress></p>
       <div class="cart-drawer__summary" data-cart-summary-breakdown>
         <div class="cart-drawer__summary-row">
           <span data-cart-subtotal-label>原价小计</span>
@@ -3018,6 +3169,10 @@
         <div class="cart-drawer__summary-row">
           <span data-cart-savings-label>优惠</span>
           <span class="cart-drawer__summary-value cart-drawer__summary-value--savings" data-cart-savings>¥0</span>
+        </div>
+        <div class="cart-drawer__summary-row">
+          <span>优惠券</span>
+          <span class="cart-drawer__summary-value cart-drawer__summary-value--savings" data-cart-coupon-discount>-¥0</span>
         </div>
         <div class="cart-drawer__summary-row">
           <span data-cart-shipping-label>配送</span>
@@ -3211,6 +3366,12 @@
     };
     const productCatalog = new Map();
     let cartState = { items: [] };
+    let marketingState = {
+      promotions: [],
+      coupons: [],
+      bundles: []
+    };
+    let recentlyViewedProducts = [];
     let currentUser = null;
     let addressBook = [];
     let isCartDrawerOpen = false;
@@ -5296,6 +5457,23 @@
       };
     }
 
+    function createBundleCardMarkup() {
+      const bundle = Array.isArray(marketingState.bundles) ? marketingState.bundles[0] : null;
+      if (!bundle) {
+        return "";
+      }
+
+      const title = activeLocale === LOCALE_KEY.EN_US ? bundle.title : (bundle.titleZh || bundle.title);
+      return `
+        <section class="bundle-card" data-bundle-card>
+          <p class="bundle-card__eyebrow">${activeLocale === LOCALE_KEY.EN_US ? "Bundle deal" : "组合购买"}</p>
+          <h3 class="bundle-card__title">${escapeHtml(title)}</h3>
+          <p class="bundle-card__copy">${activeLocale === LOCALE_KEY.EN_US ? "Save" : "立省"} ${formatCurrency(bundle.discountAmount)}</p>
+          <button class="bundle-card__button" type="button" data-add-bundle="${escapeHtml(bundle.id)}">${activeLocale === LOCALE_KEY.EN_US ? "Add bundle" : "加入组合"}</button>
+        </section>
+      `;
+    }
+
     function createDetailPagePanelMarkup(product, options = {}) {
       const localizedProduct = getLocalizedProduct(product);
       const previousProduct = options.previousProduct || null;
@@ -5338,6 +5516,7 @@
               <div class="detail-content__cart-actions" data-cart-actions>
                 <button class="detail-content__cta" type="button" data-detail-cart-button>${t("cart.addToCart")}</button>
               </div>
+              ${createBundleCardMarkup()}
             </section>
           </div>
           <div class="detail-sections">
@@ -5977,6 +6156,19 @@
         });
       });
 
+      detailRoot.querySelectorAll("[data-add-bundle]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            await addBundle(button.dataset.addBundle);
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+
       if (!cartButton) {
         return;
       }
@@ -6040,6 +6232,8 @@
         renderDetailEmptyState(backHref);
         return;
       }
+
+      await recordRecentView(product.id).catch(() => {});
 
       const { previousProduct, nextProduct } = getDetailNavigationState(
         requestedProductId,
@@ -6159,6 +6353,81 @@
       });
     }
 
+    function getCartPricingForDisplay(items) {
+      const fallback = getCartPricingSummary(items);
+      const pricing = cartState.pricing || {};
+      const subtotal = typeof pricing.subtotal === "number" ? pricing.subtotal : fallback.subtotal;
+      const total = typeof pricing.total === "number" ? pricing.total : fallback.total;
+      const productDiscount = typeof pricing.productDiscount === "number"
+        ? pricing.productDiscount
+        : Math.max(0, fallback.subtotal - fallback.total);
+      const thresholdPromotion = Array.isArray(marketingState.promotions)
+        ? marketingState.promotions.find((promotion) => promotion.type === "threshold")
+        : null;
+      const fallbackThresholdProgress = thresholdPromotion
+        ? {
+            id: thresholdPromotion.id,
+            title: thresholdPromotion.title,
+            threshold: thresholdPromotion.threshold,
+            remaining: Math.max(0, thresholdPromotion.threshold - total),
+            isMet: total >= thresholdPromotion.threshold
+          }
+        : null;
+
+      return {
+        subtotal,
+        total,
+        productDiscount,
+        orderDiscount: typeof pricing.orderDiscount === "number" ? pricing.orderDiscount : 0,
+        couponDiscount: typeof pricing.couponDiscount === "number" ? pricing.couponDiscount : 0,
+        shipping: typeof pricing.shipping === "number" ? pricing.shipping : 0,
+        coupon: pricing.coupon || null,
+        thresholdProgress: pricing.thresholdProgress || fallbackThresholdProgress,
+        appliedPromotions: Array.isArray(pricing.appliedPromotions) ? pricing.appliedPromotions : []
+      };
+    }
+
+    function renderMarketingStrip() {
+      const strip = document.querySelector("[data-marketing-strip]");
+      if (!strip) {
+        return;
+      }
+
+      const promotions = Array.isArray(marketingState.promotions) ? marketingState.promotions : [];
+      const coupons = Array.isArray(marketingState.coupons) ? marketingState.coupons : [];
+      const threshold = promotions.find((promotion) => promotion.type === "threshold");
+      strip.hidden = promotions.length === 0 && coupons.length === 0;
+      strip.innerHTML = `
+        <p>
+          <strong>${escapeHtml(threshold?.title || (activeLocale === LOCALE_KEY.EN_US ? "Weekly sock offers" : "本周袜子优惠"))}</strong>
+          ${activeLocale === LOCALE_KEY.EN_US ? "Apply coupons in the live cart drawer." : "优惠券会在真实购物车价格中生效。"}
+        </p>
+        <div class="marketing-strip__chips">
+          ${coupons.slice(0, 3).map((coupon) => `<span class="marketing-strip__chip" data-coupon-chip>${escapeHtml(coupon.code)}</span>`).join("")}
+        </div>
+      `;
+    }
+
+    function renderRecentlyViewed() {
+      const root = document.querySelector("[data-recently-viewed]");
+      if (!root) {
+        return;
+      }
+
+      root.hidden = recentlyViewedProducts.length === 0;
+      root.innerHTML = recentlyViewedProducts.length === 0
+        ? ""
+        : `
+          <h2 class="recently-viewed__title">${activeLocale === LOCALE_KEY.EN_US ? "Recently viewed" : "最近浏览"}</h2>
+          <div class="recently-viewed__items">
+            ${recentlyViewedProducts.map((product) => {
+              const localizedProduct = getLocalizedProduct(product);
+              return `<a class="recently-viewed__link" href="${getActiveDetailHref(product.id)}">${escapeHtml(localizedProduct.title)} · ${escapeHtml(product.id)}</a>`;
+            }).join("")}
+          </div>
+        `;
+    }
+
     function getEarliestDeliveryDate(items) {
       const deliveryCandidates = items
         .map((item) => {
@@ -6195,9 +6464,13 @@
 
     function renderCartDrawer() {
       const quantity = getCartQuantity(cartState.items);
-      const pricingSummary = getCartPricingSummary(cartState.items);
-      const savingsValue = pricingSummary.subtotal - pricingSummary.total;
+      const pricingSummary = getCartPricingForDisplay(cartState.items);
+      const savingsValue = pricingSummary.productDiscount + pricingSummary.orderDiscount + pricingSummary.couponDiscount;
       const earliestDelivery = getEarliestDeliveryDate(cartState.items);
+      const thresholdProgress = document.querySelector("[data-threshold-progress]");
+      const appliedCoupon = document.querySelector("[data-applied-coupon]");
+      const couponDiscount = document.querySelector("[data-cart-coupon-discount]");
+      const couponInput = document.querySelector("[data-coupon-input]");
 
       cartDrawerMeta.textContent = orderConfirmationState
         ? t("cart.orderComplete")
@@ -6209,8 +6482,28 @@
           : cartState.items.map(createCartItemMarkup).join("");
       cartSubtotal.textContent = formatCurrency(pricingSummary.subtotal);
       cartSavings.textContent = formatSavingsValue(savingsValue);
+      if (couponDiscount) {
+        couponDiscount.textContent = formatSavingsValue(pricingSummary.couponDiscount);
+      }
       cartShipping.textContent = t("commerce.shippingFree");
       cartDrawerTotal.textContent = formatCurrency(pricingSummary.total);
+      if (thresholdProgress) {
+        thresholdProgress.textContent = pricingSummary.thresholdProgress
+          ? pricingSummary.thresholdProgress.isMet
+            ? activeLocale === LOCALE_KEY.EN_US ? "Threshold offer applied." : "已满足满减优惠。"
+            : activeLocale === LOCALE_KEY.EN_US
+              ? `Need ¥${pricingSummary.thresholdProgress.remaining} more for threshold savings.`
+              : `还差 ¥${pricingSummary.thresholdProgress.remaining} 可享满减`
+          : "";
+      }
+      if (appliedCoupon) {
+        appliedCoupon.textContent = pricingSummary.coupon?.status === "applied"
+          ? `${activeLocale === LOCALE_KEY.EN_US ? "Applied" : "已使用"} ${pricingSummary.coupon.code}`
+          : "";
+      }
+      if (couponInput && !couponInput.value && cartState.couponCode) {
+        couponInput.value = cartState.couponCode;
+      }
       cartDeliverySummary.textContent = earliestDelivery
         ? t("commerce.earliestDelivery", { label: formatAbsoluteDeliveryDate(earliestDelivery.date) })
         : t("commerce.addItemsDelivery");
@@ -6272,6 +6565,15 @@
       syncOpenCardRemoveDialog();
     }
 
+    function setCartStateFromPayload(payload = {}) {
+      const cartPayload = payload.cart || payload;
+      cartState = {
+        items: Array.isArray(cartPayload.items) ? cartPayload.items : [],
+        couponCode: cartPayload.couponCode || "",
+        pricing: cartPayload.pricing || null
+      };
+    }
+
     async function fetchCart() {
       const response = await fetch("/api/cart");
 
@@ -6280,9 +6582,7 @@
       }
 
       const payload = await response.json();
-      cartState = {
-        items: Array.isArray(payload.items) ? payload.items : []
-      };
+      setCartStateFromPayload(payload);
       renderCartState();
       return payload;
     }
@@ -6305,7 +6605,76 @@
         });
       }
 
+      cartState.pricing = null;
       renderCartState();
+    }
+
+    async function fetchMarketing() {
+      const response = await fetch("/api/marketing");
+      if (!response.ok) {
+        throw new Error("Failed to load marketing");
+      }
+      marketingState = await response.json();
+      return marketingState;
+    }
+
+    async function applyCoupon(code) {
+      const response = await fetch("/api/cart/coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to apply coupon");
+      }
+
+      const payload = await response.json();
+      setCartStateFromPayload(payload);
+      renderCartState();
+      return payload;
+    }
+
+    async function addBundle(bundleId) {
+      setCartMutationPending(true);
+      try {
+        const response = await fetch(`/api/cart/bundles/${encodeURIComponent(bundleId)}`, {
+          method: "POST"
+        });
+
+        if (!response.ok) {
+          throw await createCartRequestError(response, "Failed to add bundle");
+        }
+
+        const payload = await response.json();
+        clearOrderConfirmationState();
+        clearStoredOrderConfirmationSnapshot();
+        setCartStateFromPayload(payload);
+        renderCartState();
+        return payload;
+      } finally {
+        setCartMutationPending(false);
+      }
+    }
+
+    async function recordRecentView(productId) {
+      await fetch("/api/recent-views", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId })
+      });
+    }
+
+    async function fetchRecentlyViewed() {
+      const response = await fetch(`/api/recommendations?scenario=recently-viewed&locale=${encodeURIComponent(activeLocale)}`);
+      if (!response.ok) {
+        recentlyViewedProducts = [];
+        return recentlyViewedProducts;
+      }
+
+      const payload = await response.json();
+      recentlyViewedProducts = Array.isArray(payload.items) ? payload.items : [];
+      return recentlyViewedProducts;
     }
 
     async function addCartItem(productId, size) {
@@ -6380,9 +6749,7 @@
         }
 
         const payload = await response.json();
-        cartState = {
-          items: Array.isArray(payload.items) ? payload.items : []
-        };
+        setCartStateFromPayload(payload);
         renderCartState();
         return payload;
       } finally {
@@ -6403,9 +6770,7 @@
         }
 
         const payload = await response.json();
-        cartState = {
-          items: Array.isArray(payload.items) ? payload.items : []
-        };
+        setCartStateFromPayload(payload);
         renderCartState();
         return payload;
       } finally {
@@ -6609,6 +6974,8 @@
       renderAdvancedFilterControls();
       renderActiveFilterChips();
       syncLoadMoreButton();
+      renderMarketingStrip();
+      renderRecentlyViewed();
       renderCartDrawer();
 
       if (!isEmpty) {
@@ -6671,7 +7038,8 @@
     async function renderProducts() {
       const [allProducts, firstPageProducts] = await Promise.all([
         fetchAllProducts(),
-        fetchProducts()
+        fetchProducts(),
+        fetchRecentlyViewed().catch(() => [])
       ]);
       syncNavigationContext(activeFilter, activeSort, activeQuery);
       allProductsCache = allProducts;
@@ -6816,9 +7184,7 @@
       try {
         const payload = await submitAuthForm(authForm);
         currentUser = payload.user;
-        cartState = {
-          items: Array.isArray(payload.cart?.items) ? payload.cart.items : []
-        };
+        setCartStateFromPayload(payload);
         renderAuthShell();
         renderCartState();
         window.history.replaceState({}, "", STOREFRONT_PATH);
@@ -6899,9 +7265,7 @@
 
       try {
         const payload = await createOrder(getCheckoutFormPayload(form));
-        cartState = {
-          items: Array.isArray(payload.cart?.items) ? payload.cart.items : []
-        };
+        setCartStateFromPayload(payload);
         renderCartState();
         window.location.href = `${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(payload.order.id)}`;
       } catch (error) {
@@ -6959,6 +7323,26 @@
       const continueShoppingButton = event.target.closest("[data-continue-shopping]");
       if (continueShoppingButton) {
         setCartDrawerOpen(false);
+        return;
+      }
+
+      const couponApply = event.target.closest("[data-coupon-apply]");
+      if (couponApply) {
+        const input = cartDrawer.querySelector("[data-coupon-input]");
+        const errorNode = cartDrawer.querySelector("[data-coupon-error]");
+        if (errorNode) {
+          errorNode.textContent = "";
+        }
+        couponApply.disabled = true;
+        try {
+          await applyCoupon(input?.value || "");
+        } catch (error) {
+          if (errorNode) {
+            errorNode.textContent = error.message;
+          }
+        } finally {
+          couponApply.disabled = false;
+        }
         return;
       }
 
@@ -7027,6 +7411,9 @@
       initializeNavigationContext();
       renderLocaleControls();
       renderStaticCopy();
+      await fetchMarketing().catch(() => {
+        marketingState = { promotions: [], coupons: [], bundles: [] };
+      });
       syncPageView();
       if (getCurrentView() === "storefront") {
         syncNavigationContext(activeFilter, activeSort, activeQuery);

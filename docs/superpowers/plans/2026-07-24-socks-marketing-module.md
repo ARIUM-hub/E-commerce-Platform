@@ -1507,7 +1507,7 @@ git commit -m "feat: track recently viewed products"
 - Modify: `socks-product-list.html`
 - Modify: `tests/socks-product-list.spec.js`
 
-- [ ] **Step 1: Write failing UI tests**
+- [x] **Step 1: Write failing UI tests**
 
 Add near storefront/cart UI tests in `tests/socks-product-list.spec.js`:
 
@@ -1541,7 +1541,7 @@ test("adds a bundle from the detail page and shows recently viewed products", as
 });
 ```
 
-- [ ] **Step 2: Run UI tests and verify they fail**
+- [x] **Step 2: Run UI tests and verify they fail**
 
 Run:
 
@@ -1551,7 +1551,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because marketing UI does not exist.
 
-- [ ] **Step 3: Add marketing state and fetch helpers**
+- [x] **Step 3: Add marketing state and fetch helpers**
 
 In `socks-product-list.html`, near existing state variables, add:
 
@@ -1631,7 +1631,7 @@ Add helpers near fetch functions:
     }
 ```
 
-- [ ] **Step 4: Add marketing strip and recently viewed markup**
+- [x] **Step 4: Add marketing strip and recently viewed markup**
 
 In the storefront view after the hero, add:
 
@@ -1669,7 +1669,7 @@ Add render functions:
     }
 ```
 
-- [ ] **Step 5: Add coupon UI to cart drawer**
+- [x] **Step 5: Add coupon UI to cart drawer**
 
 In cart drawer footer before summary rows, add:
 
@@ -1718,7 +1718,7 @@ And set:
       document.querySelector("[data-cart-coupon-discount]").textContent = formatSavingsValue(pricing.couponDiscount || 0);
 ```
 
-- [ ] **Step 6: Add bundle card to detail**
+- [x] **Step 6: Add bundle card to detail**
 
 Inside detail page buy section after size buttons, render:
 
@@ -1752,7 +1752,7 @@ Add click handling near detail interactions:
       }
 ```
 
-- [ ] **Step 7: Wire initialization and events**
+- [x] **Step 7: Wire initialization and events**
 
 In `initializePage()`, after `renderStaticCopy();`, call:
 
@@ -1793,7 +1793,7 @@ Add coupon apply click handler:
       }
 ```
 
-- [ ] **Step 8: Add minimal CSS**
+- [x] **Step 8: Add minimal CSS**
 
 Add styles near cart/detail/storefront sections:
 
@@ -1841,7 +1841,7 @@ Add styles near cart/detail/storefront sections:
     }
 ```
 
-- [ ] **Step 9: Run UI tests and verify they pass**
+- [x] **Step 9: Run UI tests and verify they pass**
 
 Run:
 
@@ -1850,6 +1850,8 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 ```
 
 Expected: PASS.
+
+Actual: PASS for `npm test -- tests/socks-product-list.spec.js --grep "socks category page shell|marketing campaigns|bundle from the detail"`. A separate legacy cart drawer test still seeds cart through JSON fixtures and fails because SQLite is now the source of truth; do not reintroduce JSON cart reads.
 
 - [ ] **Step 10: Commit**
 
