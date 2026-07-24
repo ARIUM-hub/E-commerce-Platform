@@ -672,7 +672,7 @@ git commit -m "feat: calculate marketing pricing"
 - Modify: `lib/repositories/marketing.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing API tests for marketing listing and cart pricing**
+- [x] **Step 1: Write failing API tests for marketing listing and cart pricing**
 
 Add near product/cart API tests in `tests/api.spec.js`:
 
@@ -722,7 +722,7 @@ test("returns marketing pricing in the cart payload", async ({ request }) => {
 });
 ```
 
-- [ ] **Step 2: Run API tests and verify they fail**
+- [x] **Step 2: Run API tests and verify they fail**
 
 Run:
 
@@ -732,7 +732,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because `/api/marketing` and `cart.pricing` do not exist.
 
-- [ ] **Step 3: Extend cart persistence for coupon code**
+- [x] **Step 3: Extend cart persistence for coupon code**
 
 In `lib/database.js`, add to `carts` table schema:
 
@@ -768,7 +768,7 @@ function setCartCouponCode(db, cartId, couponCode) {
 }
 ```
 
-- [ ] **Step 4: Wire marketing APIs in `server.js`**
+- [x] **Step 4: Wire marketing APIs in `server.js`**
 
 At the top of `server.js`, import:
 
@@ -824,7 +824,7 @@ Add route before `/api/cart`:
   }
 ```
 
-- [ ] **Step 5: Run API tests and verify they pass**
+- [x] **Step 5: Run API tests and verify they pass**
 
 Run:
 
@@ -834,7 +834,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 6: Run cart regression tests**
+- [x] **Step 6: Run cart regression tests**
 
 Run:
 
@@ -843,6 +843,8 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 ```
 
 Expected: PASS.
+
+Actual: The broad grep also matched slower order/concurrency cases and timed out locally; the focused cart/pricing/stock regression passed with `npm test -- tests/api.spec.js --grep "returns marketing pricing in the cart payload|invalid cart quantity|exceed SKU stock quantity"`.
 
 - [ ] **Step 7: Commit**
 

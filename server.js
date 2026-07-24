@@ -22,12 +22,16 @@ const {
   mergeCarts
 } = require("./lib/repositories/carts");
 const {
+  listActiveMarketingCampaigns
+} = require("./lib/repositories/marketing");
+const {
   createOrderTransaction,
   countOrders,
   listOrders,
   findOrderById,
   saveOrder
 } = require("./lib/repositories/orders");
+const { createPricingSummary } = require("./lib/pricing");
 
 const host = "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "4173", 10);
@@ -390,9 +394,24 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
   };
 }
 
-function getCartPayload(cart) {
+function getMarketingPayload() {
+  return withDatabase((db) => listActiveMarketingCampaigns(db));
+}
+
+function getCartPayload(cart, options = {}) {
+  const products = options.products || withDatabase((db) => listProducts(db));
+  const marketing = options.marketing || getMarketingPayload();
+  const pricing = createPricingSummary({
+    cart,
+    products,
+    marketing,
+    shippingFee: options.shippingFee || 0
+  });
+
   return {
     items: cart.items,
+    couponCode: cart.couponCode || "",
+    pricing,
     meta: {
       itemCount: cart.items.length
     }
@@ -736,6 +755,7 @@ function validateAuthPayload(body, mode) {
 
 function normalizeCartPayload(cart) {
   return {
+    couponCode: cart.couponCode || "",
     items: Array.isArray(cart.items) ? cart.items : []
   };
 }
@@ -990,6 +1010,16 @@ const server = http.createServer(async (request, response) => {
         authenticated: Boolean(user),
         user: createPublicUser(user)
       });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/marketing") {
+    try {
+      sendJson(response, 200, getMarketingPayload());
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");

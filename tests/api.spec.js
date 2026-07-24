@@ -198,6 +198,50 @@ test("calculates full-reduction promotion when cart crosses the threshold", asyn
   ]);
 });
 
+test("returns active marketing campaigns", async ({ request }) => {
+  const response = await request.get("/api/marketing");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.coupons).toEqual([
+    expect.objectContaining({ code: "SOCK10" }),
+    expect.objectContaining({ code: "SOCK20" }),
+    expect.objectContaining({ code: "FREESHIP" })
+  ]);
+  expect(payload.promotions).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: "threshold-99-save-15" }),
+      expect.objectContaining({ id: "limited-sock-02" })
+    ])
+  );
+  expect(payload.bundles).toEqual([
+    expect.objectContaining({ id: "daily-refresh-bundle" })
+  ]);
+});
+
+test("returns marketing pricing in the cart payload", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 2 }
+  });
+
+  const response = await request.get("/api/cart");
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+
+  expect(payload.pricing).toMatchObject({
+    subtotal: 118,
+    itemTotal: 78,
+    orderDiscount: 0,
+    couponDiscount: 0,
+    total: 78
+  });
+  expect(payload.pricing.thresholdProgress).toMatchObject({
+    threshold: 99,
+    remaining: 21,
+    isMet: false
+  });
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {
@@ -1557,9 +1601,13 @@ test("rejects cart additions that exceed SKU stock quantity", async ({ request }
 
   const cartResponse = await request.get("/api/cart");
   expect(cartResponse.ok()).toBe(true);
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
+    couponCode: "",
     items: [{ productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 8 }],
-    meta: { itemCount: 1 }
+    meta: { itemCount: 1 },
+    pricing: expect.objectContaining({
+      total: expect.any(Number)
+    })
   });
 });
 
@@ -1579,10 +1627,14 @@ test("rejects cart quantity updates that exceed SKU stock quantity", async ({ re
 
   const cartResponse = await request.get("/api/cart");
   expect(cartResponse.ok()).toBe(true);
-  await expect(cartResponse.json()).resolves.toEqual({
+  await expect(cartResponse.json()).resolves.toMatchObject({
+    couponCode: "",
     items: [
       { productId: "sock-10", skuId: "sock-10-35", size: "35", quantity: 7 }
     ],
-    meta: { itemCount: 1 }
+    meta: { itemCount: 1 },
+    pricing: expect.objectContaining({
+      total: expect.any(Number)
+    })
   });
 });
