@@ -1532,6 +1532,13 @@ const server = http.createServer(async (request, response) => {
       }
 
       const orderItems = buildOrderItems(cart, products, locale);
+      const marketing = getMarketingPayload();
+      const pricing = createPricingSummary({
+        cart,
+        products,
+        marketing,
+        shippingFee: shippingMethod.fee
+      });
       const order = {
         id: buildOrderId({ length: withDatabase((db) => countOrders(db)) }),
         userId: activeCart.user ? activeCart.user.id : null,
@@ -1551,7 +1558,21 @@ const server = http.createServer(async (request, response) => {
         },
         shippingMethod,
         items: orderItems,
-        totals: calculateOrderTotals(orderItems, shippingMethod.fee),
+        totals: {
+          subtotal: pricing.subtotal,
+          savings: pricing.productDiscount + pricing.orderDiscount + pricing.couponDiscount,
+          productDiscount: pricing.productDiscount,
+          orderDiscount: pricing.orderDiscount,
+          couponDiscount: pricing.couponDiscount,
+          shipping: pricing.shipping,
+          total: pricing.total
+        },
+        marketing: {
+          coupon: pricing.coupon,
+          couponDiscount: pricing.couponDiscount,
+          appliedPromotions: pricing.appliedPromotions,
+          thresholdProgress: pricing.thresholdProgress
+        },
         timeline: [createTimelineEntry("pending_payment", locale)]
       };
 

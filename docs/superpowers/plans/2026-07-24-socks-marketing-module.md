@@ -1039,7 +1039,7 @@ git commit -m "feat: apply cart coupons"
 - Modify: `server.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing order snapshot test**
+- [x] **Step 1: Write failing order snapshot test**
 
 Add near order API tests in `tests/api.spec.js`:
 
@@ -1069,7 +1069,7 @@ test("saves marketing snapshot on order creation", async ({ request }) => {
 });
 ```
 
-- [ ] **Step 2: Run order snapshot test and verify it fails**
+- [x] **Step 2: Run order snapshot test and verify it fails**
 
 Run:
 
@@ -1079,7 +1079,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because orders do not save `marketing`.
 
-- [ ] **Step 3: Use unified pricing in order creation**
+- [x] **Step 3: Use unified pricing in order creation**
 
 In `/api/orders`, after `orderItems` are built, add:
 
@@ -1119,7 +1119,7 @@ with:
         },
 ```
 
-- [ ] **Step 4: Run order snapshot test and verify it passes**
+- [x] **Step 4: Run order snapshot test and verify it passes**
 
 Run:
 
@@ -1129,7 +1129,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: PASS.
 
-- [ ] **Step 5: Run order regression tests**
+- [x] **Step 5: Run order regression tests**
 
 Run:
 

@@ -656,6 +656,30 @@ test("rejects order creation when required checkout fields are missing", async (
   ]);
 });
 
+test("saves marketing snapshot on order creation", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "43", quantity: 2 }
+  });
+  await request.post("/api/cart/coupon", {
+    data: { code: "SOCK10" }
+  });
+
+  const response = await request.post("/api/orders", { data: checkoutPayload });
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.order.marketing).toMatchObject({
+    coupon: {
+      code: "SOCK10",
+      status: "applied"
+    },
+    couponDiscount: 10
+  });
+  expect(payload.order.totals).toMatchObject({
+    couponDiscount: 10
+  });
+});
+
 test("creates a persisted order from the current cart and clears the cart", async ({ request }) => {
   await request.post("/api/cart/items", {
     data: { productId: "sock-01", size: "39", quantity: 2 }
@@ -693,7 +717,14 @@ test("creates a persisted order from the current cart and clears the cart", asyn
     }
   ]);
   expect(payload.order.timeline[0].status).toBe("pending_payment");
-  expect(payload.cart).toEqual({ items: [], meta: { itemCount: 0 } });
+  expect(payload.cart).toMatchObject({
+    couponCode: "",
+    items: [],
+    meta: { itemCount: 0 },
+    pricing: expect.objectContaining({
+      total: 0
+    })
+  });
 
   const db = createDatabase(testDbFile);
   try {
@@ -1177,9 +1208,13 @@ test("returns an empty anonymous cart by default", async ({ request }) => {
   expect(response.ok()).toBe(true);
 
   const payload = await response.json();
-  expect(payload).toEqual({
+  expect(payload).toMatchObject({
+    couponCode: "",
     items: [],
-    meta: { itemCount: 0 }
+    meta: { itemCount: 0 },
+    pricing: expect.objectContaining({
+      total: 0
+    })
   });
 });
 
