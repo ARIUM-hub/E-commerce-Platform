@@ -1487,6 +1487,98 @@
       padding: 16px;
     }
 
+    .return-view,
+    .returns-view {
+      display: grid;
+      gap: 22px;
+    }
+
+    .return-form,
+    .return-history,
+    .return-detail {
+      display: grid;
+      gap: 16px;
+    }
+
+    .return-form__grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .return-field {
+      display: grid;
+      gap: 7px;
+      color: var(--text-main);
+      font-weight: 800;
+    }
+
+    .return-field--wide,
+    .return-error,
+    .return-actions {
+      grid-column: 1 / -1;
+    }
+
+    .return-field input,
+    .return-field select,
+    .return-field textarea,
+    .return-quantity {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text-main);
+      font: inherit;
+      padding: 12px;
+    }
+
+    .return-line-item,
+    .return-status-card {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #f7f7f7;
+      padding: 16px;
+    }
+
+    .return-line-item {
+      grid-template-columns: auto minmax(0, 1fr) 120px;
+      align-items: center;
+    }
+
+    .return-status-card {
+      background: var(--surface);
+    }
+
+    .return-line-item__title,
+    .return-status-card__title {
+      margin: 0;
+      color: var(--text-main);
+      font-weight: 900;
+    }
+
+    .return-line-item__meta,
+    .return-status-card__meta {
+      margin: 0;
+      color: var(--text-subtle);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .return-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .return-error {
+      min-height: 20px;
+      color: #9f1239;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
     .product-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3367,7 +3459,24 @@
       </section>
 
       <section class="order-panel" data-order-page-panel></section>
-      </div>
+    </div>
+
+    <div class="return-view" data-return-view hidden>
+      <section class="hero hero--compact">
+        <p class="hero__eyebrow" data-return-hero-eyebrow>After-sales</p>
+        <h1 class="hero__title" data-return-title>申请售后</h1>
+        <p class="hero__description" data-return-copy>选择订单商品、数量和售后原因。</p>
+      </section>
+      <section class="order-panel" data-return-panel></section>
+    </div>
+
+    <div class="returns-view" data-returns-view hidden>
+      <section class="hero hero--compact">
+        <p class="hero__eyebrow" data-returns-hero-eyebrow>Return history</p>
+        <h1 class="hero__title" data-returns-title>售后进度</h1>
+        <p class="hero__description" data-returns-copy>查看已提交的退换货申请。</p>
+      </section>
+      <section class="order-panel" data-returns-panel></section>
     </div>
   </main>
 
@@ -3508,6 +3617,8 @@
     const ADDRESSES_VIEW_KEY = "addresses";
     const ORDERS_VIEW_KEY = "orders";
     const SUPPORT_VIEW_KEY = "support";
+    const RETURN_VIEW_KEY = "return";
+    const RETURNS_VIEW_KEY = "returns";
     const SUPPORT_DEFAULT_SECTION = "faq";
     const SUPPORT_SECTION_IDS = ["returns", "delivery", "privacy", "terms", "faq", "contact"];
     const LOCALE_STORAGE_KEY = "socks-storefront-locale";
@@ -3555,6 +3666,8 @@
     const ordersView = document.querySelector("[data-orders-view]");
     const orderView = document.querySelector("[data-order-view]");
     const supportView = document.querySelector("[data-support-view]");
+    const returnView = document.querySelector("[data-return-view]");
+    const returnsView = document.querySelector("[data-returns-view]");
     const toolbar = document.querySelector("[data-toolbar]");
     const productGrid = document.querySelector("[data-product-grid]");
     const resultCount = document.querySelector("[data-result-count]");
@@ -3570,6 +3683,8 @@
     const detailCartCount = document.querySelector("[data-detail-cart-count]");
     const detailCartSummary = document.querySelector("[data-detail-cart-summary]");
     const orderPagePanel = document.querySelector("[data-order-page-panel]");
+    const returnPagePanel = document.querySelector("[data-return-panel]");
+    const returnsPagePanel = document.querySelector("[data-returns-panel]");
     const checkoutPagePanel = document.querySelector("[data-checkout-panel]");
     const checkoutHeroEyebrow = document.querySelector("[data-checkout-hero-eyebrow]");
     const checkoutTitle = document.querySelector("[data-checkout-title]");
@@ -3587,6 +3702,12 @@
     const orderPageTitle = document.querySelector("[data-page-title]");
     const orderPageCopy = document.querySelector("[data-page-copy]");
     const orderHistoryPanel = document.querySelector("[data-order-history-panel]");
+    const returnHeroEyebrow = document.querySelector("[data-return-hero-eyebrow]");
+    const returnTitle = document.querySelector("[data-return-title]");
+    const returnCopy = document.querySelector("[data-return-copy]");
+    const returnsHeroEyebrow = document.querySelector("[data-returns-hero-eyebrow]");
+    const returnsTitle = document.querySelector("[data-returns-title]");
+    const returnsCopy = document.querySelector("[data-returns-copy]");
     const supportTitle = document.querySelector("[data-support-title]");
     const supportCopy = document.querySelector("[data-support-copy]");
     const supportBreadcrumbCurrent = document.querySelector("[data-support-breadcrumb-current]");
@@ -3910,6 +4031,63 @@
           processDemo: "模拟处理中",
           shipDemo: "模拟发货",
           deliverDemo: "模拟送达"
+        },
+        returns: {
+          request: "申请售后",
+          fromOrders: "从订单发起售后",
+          viewHistory: "查看售后进度",
+          heroEyebrow: "售后服务",
+          heroTitle: "申请售后",
+          heroCopy: "选择订单商品、数量和售后原因，提交后会生成可追踪售后单。",
+          historyEyebrow: "售后记录",
+          historyTitle: "售后进度",
+          historyCopy: "查看当前账户已提交的退换货申请。",
+          empty: "暂无售后申请",
+          signInRequired: "请先登录后查看或提交售后申请。",
+          orderNotEligible: "当前订单暂不可申请售后。",
+          type: "售后类型",
+          reason: "售后原因",
+          contact: "联系方式",
+          note: "补充说明",
+          submit: "提交售后申请",
+          submitting: "提交中...",
+          returnNumber: "售后单号",
+          status: "状态",
+          quantity: "申请数量",
+          availableQuantity: ({ count }) => `可申请 ${count} 件`,
+          itemSummary: ({ count }) => `${count} 件商品`,
+          detail: "查看详情",
+          cancel: "取消申请",
+          types: {
+            return_refund: "退货退款",
+            exchange: "换货",
+            refund_only: "仅退款"
+          },
+          reasons: {
+            size_issue: "尺码不合适",
+            quality_issue: "质量问题",
+            wrong_item: "错发漏发",
+            changed_mind: "不喜欢/改变主意",
+            other: "其他"
+          },
+          statuses: {
+            submitted: "已提交",
+            reviewing: "审核中",
+            approved: "已通过",
+            rejected: "已拒绝",
+            completed: "已完成",
+            cancelled: "已取消"
+          },
+          errors: {
+            itemsRequired: "请选择至少一件商品",
+            RETURN_ORDER_NOT_ELIGIBLE: "当前订单暂不可申请售后",
+            RETURN_ITEM_NOT_FOUND: "请选择有效的订单商品",
+            RETURN_QUANTITY_INVALID: "请填写有效的售后数量",
+            RETURN_QUANTITY_EXCEEDED: "售后数量超过可申请数量",
+            RETURN_REASON_REQUIRED: "请选择售后原因",
+            RETURN_TYPE_INVALID: "请选择售后类型",
+            RETURN_CONTACT_REQUIRED: "请填写联系方式"
+          }
         }
       },
       [LOCALE_KEY.EN_US]: {
@@ -4144,6 +4322,63 @@
           processDemo: "Simulate processing",
           shipDemo: "Simulate shipping",
           deliverDemo: "Simulate delivery"
+        },
+        returns: {
+          request: "Request return",
+          fromOrders: "Start from orders",
+          viewHistory: "View return history",
+          heroEyebrow: "After-sales",
+          heroTitle: "Request after-sales service",
+          heroCopy: "Choose order items, quantity, and reason to create a trackable return request.",
+          historyEyebrow: "Return history",
+          historyTitle: "Return progress",
+          historyCopy: "Review return and exchange requests submitted by this account.",
+          empty: "No return requests yet",
+          signInRequired: "Please sign in to view or submit return requests.",
+          orderNotEligible: "This order is not eligible for after-sales service yet.",
+          type: "Return type",
+          reason: "Reason",
+          contact: "Contact",
+          note: "Note",
+          submit: "Submit return request",
+          submitting: "Submitting...",
+          returnNumber: "Return number",
+          status: "Status",
+          quantity: "Request quantity",
+          availableQuantity: ({ count }) => `${count} available`,
+          itemSummary: ({ count }) => `${count} items`,
+          detail: "View detail",
+          cancel: "Cancel request",
+          types: {
+            return_refund: "Return and refund",
+            exchange: "Exchange",
+            refund_only: "Refund only"
+          },
+          reasons: {
+            size_issue: "Size issue",
+            quality_issue: "Quality issue",
+            wrong_item: "Wrong item",
+            changed_mind: "Changed mind",
+            other: "Other"
+          },
+          statuses: {
+            submitted: "Submitted",
+            reviewing: "In review",
+            approved: "Approved",
+            rejected: "Rejected",
+            completed: "Completed",
+            cancelled: "Cancelled"
+          },
+          errors: {
+            itemsRequired: "Select at least one item",
+            RETURN_ORDER_NOT_ELIGIBLE: "This order is not eligible for returns",
+            RETURN_ITEM_NOT_FOUND: "Select a valid order item",
+            RETURN_QUANTITY_INVALID: "Enter a valid return quantity",
+            RETURN_QUANTITY_EXCEEDED: "Return quantity exceeds the available quantity",
+            RETURN_REASON_REQUIRED: "Select a return reason",
+            RETURN_TYPE_INVALID: "Select a return type",
+            RETURN_CONTACT_REQUIRED: "Enter a contact"
+          }
         }
       }
     };
@@ -4465,6 +4700,14 @@
         return SUPPORT_VIEW_KEY;
       }
 
+      if (view === RETURN_VIEW_KEY) {
+        return RETURN_VIEW_KEY;
+      }
+
+      if (view === RETURNS_VIEW_KEY) {
+        return RETURNS_VIEW_KEY;
+      }
+
       return "storefront";
     }
 
@@ -4764,6 +5007,12 @@
       checkoutHeroEyebrow.textContent = t("checkout.heroEyebrow");
       checkoutTitle.textContent = t("checkout.heroTitle");
       checkoutCopy.textContent = t("checkout.heroCopy");
+      returnHeroEyebrow.textContent = t("returns.heroEyebrow");
+      returnTitle.textContent = t("returns.heroTitle");
+      returnCopy.textContent = t("returns.heroCopy");
+      returnsHeroEyebrow.textContent = t("returns.historyEyebrow");
+      returnsTitle.textContent = t("returns.historyTitle");
+      returnsCopy.textContent = t("returns.historyCopy");
       supportTitle.textContent = t("support.title");
       supportCopy.textContent = t("support.copy");
       supportBreadcrumbCurrent.textContent = t("support.breadcrumb");
@@ -5176,6 +5425,203 @@
       renderOrderHistory(Array.isArray(payload.orders) ? payload.orders : []);
     }
 
+    const customerReturnableOrderStatuses = new Set(["paid", "processing", "shipped", "delivered"]);
+    const countedReturnStatuses = new Set(["submitted", "reviewing", "approved", "completed"]);
+
+    function isCustomerReturnableOrder(order) {
+      return order && customerReturnableOrderStatuses.has(order.status);
+    }
+
+    function getReturnStatusText(status) {
+      return t(`returns.statuses.${status}`);
+    }
+
+    function getReturnTypeOptionsMarkup() {
+      return ["return_refund", "exchange", "refund_only"].map((type) => {
+        return `<option value="${type}">${t(`returns.types.${type}`)}</option>`;
+      }).join("");
+    }
+
+    function getReturnReasonOptionsMarkup() {
+      return ["size_issue", "quality_issue", "wrong_item", "changed_mind", "other"].map((reason) => {
+        return `<option value="${reason}">${t(`returns.reasons.${reason}`)}</option>`;
+      }).join("");
+    }
+
+    async function fetchReturns() {
+      const response = await fetch("/api/me/returns");
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to load returns");
+      }
+      return response.json();
+    }
+
+    async function submitReturnRequest(payload) {
+      const response = await fetch("/api/returns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, locale: activeLocale })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const error = new Error(result.error?.message || "Failed to submit return");
+        error.code = result.error?.code;
+        throw error;
+      }
+      return result;
+    }
+
+    async function cancelReturnRequest(returnRequestId) {
+      const response = await fetch(`/api/returns/${encodeURIComponent(returnRequestId)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled", locale: activeLocale })
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to cancel return");
+      }
+      return response.json();
+    }
+
+    function getReturnedQuantityBySku(returnRequests, orderId) {
+      return returnRequests.reduce((summary, returnRequest) => {
+        if (returnRequest.orderId !== orderId || !countedReturnStatuses.has(returnRequest.status)) {
+          return summary;
+        }
+
+        returnRequest.items.forEach((item) => {
+          summary.set(item.skuId, (summary.get(item.skuId) || 0) + item.quantity);
+        });
+        return summary;
+      }, new Map());
+    }
+
+    function renderReturnAuthRequired(panel) {
+      panel.innerHTML = `
+        <div class="empty-state" data-auth-required>
+          <p>${t("returns.signInRequired")}</p>
+          <a class="order-button order-button--primary" href="${STOREFRONT_PATH}?view=auth&mode=login">${t("shell.accountLabel")}</a>
+        </div>
+      `;
+    }
+
+    function createReturnFormMarkup(order, returnRequests) {
+      const returnedBySku = getReturnedQuantityBySku(returnRequests, order.id);
+      const returnableItems = order.items.map((item) => {
+        const returnedQuantity = returnedBySku.get(item.skuId) || 0;
+        return {
+          ...item,
+          returnableQuantity: Math.max(0, item.quantity - returnedQuantity)
+        };
+      }).filter((item) => item.returnableQuantity > 0);
+
+      if (!isCustomerReturnableOrder(order) || !returnableItems.length) {
+        return `<div class="empty-state" data-return-empty>${t("returns.orderNotEligible")}</div>`;
+      }
+
+      return `
+        <form class="return-form" data-return-form novalidate>
+          <div class="checkout-summary" data-return-items>
+            ${returnableItems.map((item) => `
+              <label class="return-line-item" data-return-line-item data-sku-id="${escapeHtml(item.skuId)}">
+                <input type="checkbox" data-return-item-checkbox>
+                <span>
+                  <strong class="return-line-item__title">${escapeHtml(item.title)}</strong>
+                  <span class="return-line-item__meta">${escapeHtml(item.size)} · ${t("returns.availableQuantity", { count: item.returnableQuantity })}</span>
+                </span>
+                <input class="return-quantity" type="number" min="1" max="${item.returnableQuantity}" value="1" data-return-quantity aria-label="${t("returns.quantity")}">
+              </label>
+            `).join("")}
+          </div>
+          <div class="return-form__grid">
+            <label class="return-field">
+              <span>${t("returns.type")}</span>
+              <select data-return-type>${getReturnTypeOptionsMarkup()}</select>
+            </label>
+            <label class="return-field">
+              <span>${t("returns.reason")}</span>
+              <select data-return-reason>${getReturnReasonOptionsMarkup()}</select>
+            </label>
+            <label class="return-field">
+              <span>${t("returns.contact")}</span>
+              <input data-return-contact value="${escapeHtml(order.customer?.contact || currentUser?.email || "")}">
+            </label>
+            <label class="return-field return-field--wide">
+              <span>${t("returns.note")}</span>
+              <textarea rows="4" data-return-note></textarea>
+            </label>
+            <div class="return-error" data-return-form-error role="alert"></div>
+            <div class="return-actions">
+              <button class="order-button order-button--primary" type="submit" data-return-submit>${t("returns.submit")}</button>
+              <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(order.id)}">${t("common.orderNumber")}</a>
+            </div>
+          </div>
+        </form>
+      `;
+    }
+
+    async function renderReturnView() {
+      if (!currentUser) {
+        renderReturnAuthRequired(returnPagePanel);
+        return;
+      }
+
+      const orderId = getRequestedOrderId();
+      if (!orderId) {
+        returnPagePanel.innerHTML = `<div class="empty-state" data-return-empty>${t("returns.orderNotEligible")}</div>`;
+        return;
+      }
+
+      const [orderPayload, returnsPayload] = await Promise.all([
+        fetchOrder(orderId),
+        fetchReturns()
+      ]);
+      returnPagePanel.innerHTML = createReturnFormMarkup(
+        orderPayload.order,
+        Array.isArray(returnsPayload.returnRequests) ? returnsPayload.returnRequests : []
+      );
+    }
+
+    function createReturnHistoryMarkup(returnRequests) {
+      if (!currentUser) {
+        return `<div class="empty-state" data-auth-required>${t("returns.signInRequired")}</div>`;
+      }
+
+      if (!returnRequests.length) {
+        return `<div class="empty-state" data-return-history-empty>${t("returns.empty")}</div>`;
+      }
+
+      return `
+        <div class="return-history">
+          ${returnRequests.map((returnRequest) => {
+            const itemCount = returnRequest.items.reduce((total, item) => total + item.quantity, 0);
+            const itemTitles = returnRequest.items.map((item) => `${escapeHtml(item.title)} / ${escapeHtml(item.size)} x${item.quantity}`).join(", ");
+            return `
+              <article class="return-status-card" data-return-history-card data-return-id="${escapeHtml(returnRequest.id)}">
+                <p class="return-status-card__title">${escapeHtml(returnRequest.returnNumber)}</p>
+                <p class="return-status-card__meta">${escapeHtml(returnRequest.orderId)} · ${getReturnStatusText(returnRequest.status)} · ${t("returns.itemSummary", { count: itemCount })}</p>
+                <p class="return-status-card__meta">${itemTitles}</p>
+                <div class="return-actions">
+                  <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(returnRequest.orderId)}">${t("common.orderNumber")}</a>
+                  ${returnRequest.canCancel ? `<button class="order-button order-button--secondary" type="button" data-return-cancel="${escapeHtml(returnRequest.id)}">${t("returns.cancel")}</button>` : ""}
+                </div>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    async function renderReturnsView() {
+      if (!currentUser) {
+        returnsPagePanel.innerHTML = createReturnHistoryMarkup([]);
+        return;
+      }
+
+      const payload = await fetchReturns();
+      returnsPagePanel.innerHTML = createReturnHistoryMarkup(Array.isArray(payload.returnRequests) ? payload.returnRequests : []);
+    }
+
     async function rerenderActiveViewForLocale() {
       renderLocaleControls();
       renderStaticCopy();
@@ -5213,6 +5659,18 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         await fetchTrustCenter();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === RETURN_VIEW_KEY) {
+        await renderReturnView();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === RETURNS_VIEW_KEY) {
+        await renderReturnsView();
         renderCartState();
         return;
       }
@@ -5751,6 +6209,15 @@
           </div>
           <div class="order-actions">
             ${createOrderSourceSummaryMarkup()}
+            ${isCustomerReturnableOrder(order) ? `
+              <a
+                class="order-button order-button--primary"
+                href="${STOREFRONT_PATH}?view=return&id=${encodeURIComponent(order.id)}"
+                data-order-return-link
+              >
+                ${t("returns.request")}
+              </a>
+            ` : ""}
             <a
               class="order-button order-button--secondary"
               href="${getContinueShoppingHref()}"
@@ -7080,6 +7547,8 @@
       const isOrdersView = currentView === ORDERS_VIEW_KEY;
       const isOrderView = currentView === ORDER_VIEW_KEY;
       const isSupportView = currentView === SUPPORT_VIEW_KEY;
+      const isReturnView = currentView === RETURN_VIEW_KEY;
+      const isReturnsView = currentView === RETURNS_VIEW_KEY;
 
       document.body.dataset.view = currentView;
       pageRoot.dataset.view = currentView;
@@ -7091,6 +7560,8 @@
       ordersView.hidden = !isOrdersView;
       orderView.hidden = !isOrderView;
       supportView.hidden = !isSupportView;
+      returnView.hidden = !isReturnView;
+      returnsView.hidden = !isReturnsView;
       const allowDrawer = !isOrderView;
       cartDrawer.hidden = !allowDrawer;
       cartBackdrop.hidden = !allowDrawer;
@@ -7850,6 +8321,66 @@
       }
     });
 
+    returnPagePanel.addEventListener("submit", async (event) => {
+      const form = event.target.closest("[data-return-form]");
+      if (!form) {
+        return;
+      }
+
+      event.preventDefault();
+      const errorNode = form.querySelector("[data-return-form-error]");
+      const submitButton = form.querySelector("[data-return-submit]");
+      errorNode.textContent = "";
+      const checkedItems = [...form.querySelectorAll("[data-return-item-checkbox]:checked")];
+
+      if (!checkedItems.length) {
+        errorNode.textContent = t("returns.errors.itemsRequired");
+        return;
+      }
+
+      const items = checkedItems.map((checkbox) => {
+        const row = checkbox.closest("[data-return-line-item]");
+        return {
+          skuId: row.dataset.skuId,
+          quantity: Number.parseInt(row.querySelector("[data-return-quantity]").value, 10)
+        };
+      });
+
+      submitButton.disabled = true;
+      submitButton.textContent = t("returns.submitting");
+
+      try {
+        const payload = await submitReturnRequest({
+          orderId: getRequestedOrderId(),
+          type: form.querySelector("[data-return-type]").value,
+          reason: form.querySelector("[data-return-reason]").value,
+          contact: form.querySelector("[data-return-contact]").value,
+          note: form.querySelector("[data-return-note]").value,
+          items
+        });
+        window.location.href = `${STOREFRONT_PATH}?view=returns&created=${encodeURIComponent(payload.returnRequest.id)}`;
+      } catch (error) {
+        errorNode.textContent = t(`returns.errors.${error.code}`) || t("checkout.submitError");
+        submitButton.disabled = false;
+        submitButton.textContent = t("returns.submit");
+      }
+    });
+
+    returnsPagePanel.addEventListener("click", async (event) => {
+      const cancelButton = event.target.closest("[data-return-cancel]");
+      if (!cancelButton) {
+        return;
+      }
+
+      cancelButton.disabled = true;
+      try {
+        await cancelReturnRequest(cancelButton.dataset.returnCancel);
+        await renderReturnsView();
+      } catch (error) {
+        cancelButton.disabled = false;
+      }
+    });
+
     cartCloseButton.addEventListener("click", () => {
       setCartDrawerOpen(false);
     });
@@ -8009,6 +8540,18 @@
         return;
       }
 
+      if (getCurrentView() === RETURN_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderReturnView();
+        return;
+      }
+
+      if (getCurrentView() === RETURNS_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderReturnsView();
+        return;
+      }
+
       if (getCurrentView() === CHECKOUT_VIEW_KEY) {
         const allProducts = await fetchAllProducts();
         syncProductCatalog(allProducts);
@@ -8056,6 +8599,16 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         supportCurrentTitle.textContent = t("support.loadFailure");
+        return;
+      }
+
+      if (getCurrentView() === RETURN_VIEW_KEY) {
+        returnPagePanel.innerHTML = `<div class="empty-state">${t("returns.orderNotEligible")}</div>`;
+        return;
+      }
+
+      if (getCurrentView() === RETURNS_VIEW_KEY) {
+        returnsPagePanel.innerHTML = `<div class="empty-state">${t("returns.empty")}</div>`;
         return;
       }
 

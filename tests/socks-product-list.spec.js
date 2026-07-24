@@ -51,13 +51,20 @@ async function fillCheckoutForm(page) {
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
 }
 
-async function registerFromUi(page) {
+let registerSequence = 0;
+
+async function registerFromUi(page, user = {}) {
+  registerSequence += 1;
+  const name = user.name || "Alex Chen";
+  const email = user.email || `alex-${Date.now()}-${registerSequence}@example.com`;
+  const password = user.password || "demo1234";
+
   await page.goto("/socks-product-list.html?view=auth&mode=register");
-  await page.locator('[data-auth-field="name"]').fill("Alex Chen");
-  await page.locator('[data-auth-field="email"]').fill("alex@example.com");
-  await page.locator('[data-auth-field="password"]').fill("demo1234");
+  await page.locator('[data-auth-field="name"]').fill(name);
+  await page.locator('[data-auth-field="email"]').fill(email);
+  await page.locator('[data-auth-field="password"]').fill(password);
   await page.locator("[data-auth-submit]").click();
-  await expect(page.locator("[data-auth-user-name]")).toHaveText("Alex Chen");
+  await expect(page.locator("[data-auth-user-name]")).toHaveText(name);
 }
 
 test.use({ viewport: { width: 1280, height: 960 } });
@@ -407,6 +414,49 @@ test("advances persisted order status from the order detail page", async ({ page
   await page.locator('[data-order-status-action][data-next-status="delivered"]').click();
   await expect(page.locator("[data-order-status]")).toHaveText("Delivered");
   await expect(page.locator("[data-order-timeline]")).toContainText("Delivered");
+});
+
+test("submits a return request from persisted order detail", async ({ page }) => {
+  await registerFromUi(page);
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=order&id=/);
+  await page.locator("[data-order-status-action][data-next-status='paid']").click();
+
+  await page.locator("[data-order-return-link]").click();
+  await expect(page).toHaveURL(/view=return/);
+  await expect(page.locator("[data-return-view]")).toBeVisible();
+  await page.locator("[data-return-item-checkbox]").first().check();
+  await page.locator("[data-return-type]").selectOption("return_refund");
+  await page.locator("[data-return-reason]").selectOption("size_issue");
+  await page.locator("[data-return-contact]").fill("alex@example.com");
+  await page.locator("[data-return-note]").fill("尺码偏紧，申请退货退款。");
+  await page.locator("[data-return-submit]").click();
+
+  await expect(page).toHaveURL(/view=returns/);
+  await expect(page.locator("[data-return-history-card]").first()).toContainText(/RET-\d{8}-\d{4}/);
+  await expect(page.locator("[data-return-history-card]").first()).toContainText("已提交");
+});
+
+test("shows return quantity validation in the return form", async ({ page }) => {
+  await registerFromUi(page, { name: "Mia Wong" });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await page.locator("[data-order-status-action][data-next-status='paid']").click();
+  await page.locator("[data-order-return-link]").click();
+
+  await page.locator("[data-return-submit]").click();
+  await expect(page.locator("[data-return-form-error]")).toContainText("请选择至少一件商品");
 });
 
 test("switches the storefront copy to English and persists the locale preference", async ({ page }) => {
