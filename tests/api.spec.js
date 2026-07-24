@@ -96,6 +96,20 @@ test("initializes SQLite marketing campaigns, coupons, bundles, and recent views
   expect(recentViewTable).toEqual({ name: "recent_views" });
 });
 
+test("initializes SQLite support ticket table", async () => {
+  const db = createDatabase(":memory:");
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const ticketTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'support_tickets'").get();
+    expect(ticketTable).toEqual({ name: "support_tickets" });
+  } finally {
+    db.close();
+  }
+});
+
 test("uses the configured SQLite database path", () => {
   expect(getDatabasePath({ nodeEnv: "test" })).toContain("socks-store.test.db");
   expect(getDatabasePath({ nodeEnv: "production" })).toContain("socks-store.db");
@@ -217,6 +231,104 @@ test("returns active marketing campaigns", async ({ request }) => {
   expect(payload.bundles).toEqual([
     expect.objectContaining({ id: "daily-refresh-bundle" })
   ]);
+});
+
+test("returns localized trust center content", async ({ request }) => {
+  const response = await request.get("/api/trust-center?locale=zh-CN");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.sections.map((section) => section.id)).toEqual([
+    "returns",
+    "delivery",
+    "privacy",
+    "terms",
+    "faq",
+    "contact"
+  ]);
+  expect(payload.sections.find((section) => section.id === "returns")).toMatchObject({
+    title: "退换政策"
+  });
+  expect(payload.faqs.length).toBeGreaterThanOrEqual(5);
+  expect(payload.contactTopics.map((topic) => topic.id)).toContain("orders");
+});
+
+test("returns English trust center content", async ({ request }) => {
+  const response = await request.get("/api/trust-center?locale=en-US");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.sections.find((section) => section.id === "privacy")).toMatchObject({
+    title: "Privacy Policy"
+  });
+  expect(payload.faqs[0].question).toContain("size");
+});
+
+test("creates a support contact ticket", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "Demo Buyer",
+      contact: "buyer@example.com",
+      topic: "returns",
+      orderId: "SOCK-20260724-0001",
+      message: "I want to understand the return window for unworn socks.",
+      locale: "en-US"
+    }
+  });
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  expect(payload.ticket).toMatchObject({
+    topic: "returns",
+    status: "open"
+  });
+  expect(payload.ticket.ticketNumber).toMatch(/^SUP-\d{8}-\d{4}$/);
+
+  const db = createDatabase(testDbFile);
+  try {
+    const row = db.prepare("SELECT ticket_number, topic, status FROM support_tickets WHERE ticket_number = ?").get(payload.ticket.ticketNumber);
+    expect(row).toMatchObject({
+      ticket_number: payload.ticket.ticketNumber,
+      topic: "returns",
+      status: "open"
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test("rejects support contact requests with missing required fields", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "",
+      contact: "buyer@example.com",
+      topic: "orders",
+      message: "Please help with my order."
+    }
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: "SUPPORT_NAME_REQUIRED"
+    }
+  });
+});
+
+test("rejects support contact requests with invalid topics", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "Demo Buyer",
+      contact: "buyer@example.com",
+      topic: "billing-provider",
+      message: "Please help with my order."
+    }
+  });
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: "SUPPORT_TOPIC_INVALID"
+    }
+  });
 });
 
 test("returns marketing pricing in the cart payload", async ({ request }) => {
