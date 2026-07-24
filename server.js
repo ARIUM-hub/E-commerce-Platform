@@ -40,6 +40,12 @@ const {
   findOrderById,
   saveOrder
 } = require("./lib/repositories/orders");
+const {
+  createReturnRequest,
+  findReturnRequestById,
+  listReturnRequestsByUser,
+  updateReturnRequestStatus
+} = require("./lib/repositories/returns");
 const { createPricingSummary } = require("./lib/pricing");
 
 const host = "127.0.0.1";
@@ -1028,6 +1034,16 @@ function parseOrderStatusPath(pathname) {
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
 }
 
+function parseReturnIdFromPath(pathname) {
+  const match = pathname.match(/^\/api\/returns\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseReturnStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/returns\/([^/]+)\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
 
@@ -1879,6 +1895,125 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/me/returns") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+
+      const returnRequests = withDatabase((db) => listReturnRequestsByUser(db, user.id));
+      sendJson(response, 200, { returnRequests });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/returns") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+
+      const body = await readRequestBody(request);
+      const order = withDatabase((db) => findOrderById(db, String(body.orderId || "")));
+      if (!order || order.userId !== user.id) {
+        sendError(response, 404, "RETURN_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => createReturnRequest(db, order, user, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 201, { ok: true, returnRequest: result.returnRequest });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReturnStatusId = parseReturnStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedReturnStatusId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true";
+      if (!user && !isDemoAdmin) {
+        sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+        return;
+      }
+
+      const returnRequest = withDatabase((db) => findReturnRequestById(db, requestedReturnStatusId));
+      if (!returnRequest) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+      if (!isDemoAdmin && returnRequest.userId !== user.id) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+
+      const nextStatus = String(body.status || "").trim();
+      if (!isDemoAdmin && nextStatus !== "cancelled") {
+        sendError(response, 403, "RETURN_FORBIDDEN", "Only demo admins can review return requests.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateReturnRequestStatus(db, returnRequest, nextStatus, body.locale));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, returnRequest: result.returnRequest });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReturnId = parseReturnIdFromPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedReturnId) {
+    try {
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true";
+      if (!user && !isDemoAdmin) {
+        sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+        return;
+      }
+
+      const returnRequest = withDatabase((db) => findReturnRequestById(db, requestedReturnId));
+      if (!returnRequest) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+      if (!isDemoAdmin && returnRequest.userId !== user.id) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { returnRequest });
+      return;
+    } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }

@@ -110,6 +110,25 @@ test("initializes SQLite support ticket table", async () => {
   }
 });
 
+test("initializes SQLite return request tables", async () => {
+  const db = createDatabase(":memory:");
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const requestTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'return_requests'").get();
+    const itemTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'return_request_items'").get();
+    const eventTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'return_request_events'").get();
+
+    expect(requestTable).toEqual({ name: "return_requests" });
+    expect(itemTable).toEqual({ name: "return_request_items" });
+    expect(eventTable).toEqual({ name: "return_request_events" });
+  } finally {
+    db.close();
+  }
+});
+
 test("uses the configured SQLite database path", () => {
   expect(getDatabasePath({ nodeEnv: "test" })).toContain("socks-store.test.db");
 
@@ -1011,6 +1030,149 @@ async function createLoggedInOrder(request, userPayload = registerPayload) {
     order: (await response.json()).order
   };
 }
+
+test("creates a return request and stores selected order item quantities", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request);
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: sessionCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+
+  const response = await request.post("/api/returns", {
+    headers: { cookie: sessionCookie },
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "size_issue",
+      contact: "alex@example.com",
+      note: "尺码偏紧，申请退货退款。",
+      items: [{ skuId: "sock-01-39", quantity: 1 }]
+    }
+  });
+
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+  expect(payload.returnRequest).toMatchObject({
+    orderId: order.id,
+    userId: order.userId,
+    type: "return_refund",
+    reason: "size_issue",
+    status: "submitted"
+  });
+  expect(payload.returnRequest.returnNumber).toMatch(/^RET-\d{8}-\d{4}$/);
+  expect(payload.returnRequest.items).toEqual([
+    expect.objectContaining({
+      productId: "sock-01",
+      skuId: "sock-01-39",
+      size: "39",
+      quantity: 1
+    })
+  ]);
+  expect(payload.returnRequest.timeline[0]).toMatchObject({ status: "submitted" });
+});
+
+test("rejects a return request that exceeds remaining returnable quantity", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request);
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: sessionCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+
+  await request.post("/api/returns", {
+    headers: { cookie: sessionCookie },
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "size_issue",
+      contact: "alex@example.com",
+      items: [{ skuId: "sock-01-39", quantity: 1 }]
+    }
+  });
+
+  const response = await request.post("/api/returns", {
+    headers: { cookie: sessionCookie },
+    data: {
+      orderId: order.id,
+      type: "exchange",
+      reason: "wrong_item",
+      contact: "alex@example.com",
+      items: [{ skuId: "sock-01-39", quantity: 1 }]
+    }
+  });
+
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("RETURN_QUANTITY_EXCEEDED");
+});
+
+test("requires login before creating or listing return requests", async ({ request }) => {
+  const listResponse = await request.get("/api/me/returns");
+  expect(listResponse.status()).toBe(401);
+  expect((await listResponse.json()).error.code).toBe("AUTH_REQUIRED");
+
+  const createResponse = await request.post("/api/returns", {
+    data: { orderId: "SOCK-20990101-0001", type: "return_refund", reason: "size_issue", contact: "guest@example.com", items: [] }
+  });
+  expect(createResponse.status()).toBe(401);
+  expect((await createResponse.json()).error.code).toBe("AUTH_REQUIRED");
+});
+
+test("lists current user's return requests only", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request);
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: sessionCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const createResponse = await request.post("/api/returns", {
+    headers: { cookie: sessionCookie },
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "size_issue",
+      contact: "alex@example.com",
+      items: [{ skuId: "sock-01-39", quantity: 1 }]
+    }
+  });
+  const created = (await createResponse.json()).returnRequest;
+
+  const listResponse = await request.get("/api/me/returns", {
+    headers: { cookie: sessionCookie }
+  });
+
+  expect(listResponse.ok()).toBe(true);
+  const payload = await listResponse.json();
+  expect(payload.returnRequests).toEqual([
+    expect.objectContaining({ id: created.id, orderId: order.id })
+  ]);
+});
+
+test("allows owner to cancel a submitted return request", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request);
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: sessionCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const createResponse = await request.post("/api/returns", {
+    headers: { cookie: sessionCookie },
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "size_issue",
+      contact: "alex@example.com",
+      items: [{ skuId: "sock-01-39", quantity: 1 }]
+    }
+  });
+  const created = (await createResponse.json()).returnRequest;
+
+  const cancelResponse = await request.patch(`/api/returns/${created.id}/status`, {
+    headers: { cookie: sessionCookie },
+    data: { status: "cancelled", locale: "zh-CN" }
+  });
+
+  expect(cancelResponse.ok()).toBe(true);
+  const payload = await cancelResponse.json();
+  expect(payload.returnRequest.status).toBe("cancelled");
+  expect(payload.returnRequest.timeline.map((entry) => entry.status)).toEqual(["submitted", "cancelled"]);
+});
 
 test("creates orders with the logged-in user id and lists user order history", async ({ request }) => {
   const { sessionCookie, order } = await createLoggedInOrder(request);
