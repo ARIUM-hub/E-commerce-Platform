@@ -30,6 +30,10 @@ const {
   listActiveMarketingCampaigns
 } = require("./lib/repositories/marketing");
 const {
+  createSupportTicket,
+  getTrustCenterContent
+} = require("./lib/repositories/support");
+const {
   createOrderTransaction,
   countOrders,
   listOrders,
@@ -1081,6 +1085,39 @@ const server = http.createServer(async (request, response) => {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/trust-center") {
+    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+    sendJson(response, 200, getTrustCenterContent(locale));
+    return;
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/support/contact") {
+    try {
+      const body = await readRequestBody(request);
+      const { session, user } = await getSessionContext(request);
+      const result = withDatabase((db) => createSupportTicket(db, body, {
+        sessionId: session?.id || null,
+        userId: user?.id || null
+      }));
+
+      if (result.validationError) {
+        sendError(response, 400, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 201, { ticket: result.ticket });
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      console.error(error);
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+    }
+    return;
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
