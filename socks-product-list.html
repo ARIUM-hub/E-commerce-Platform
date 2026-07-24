@@ -5232,6 +5232,16 @@
 
       renderSupportFaq(activeSection.id === "faq");
       renderSupportContact(activeSection.id === "contact");
+
+      if (activeSection.id === "returns") {
+        supportTicket.hidden = false;
+        supportTicket.innerHTML = `
+          <div class="return-actions">
+            <a class="order-button order-button--primary" href="${STOREFRONT_PATH}?view=orders" data-support-return-orders-link>${t("returns.fromOrders")}</a>
+            <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=returns" data-support-return-history-link>${t("returns.viewHistory")}</a>
+          </div>
+        `;
+      }
     }
 
     function getAuthMode() {
@@ -5456,6 +5466,14 @@
       return response.json();
     }
 
+    async function fetchReturnRequest(returnRequestId) {
+      const response = await fetch(`/api/returns/${encodeURIComponent(returnRequestId)}`);
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to load return request");
+      }
+      return response.json();
+    }
+
     async function submitReturnRequest(payload) {
       const response = await fetch("/api/returns", {
         method: "POST",
@@ -5494,6 +5512,10 @@
         });
         return summary;
       }, new Map());
+    }
+
+    function getRequestedReturnMode() {
+      return getSearchParams().get("mode") || "";
     }
 
     function renderReturnAuthRequired(panel) {
@@ -5560,13 +5582,53 @@
       `;
     }
 
+    function createReturnDetailMarkup(returnRequest) {
+      return `
+        <section class="order-stack return-detail" data-return-detail>
+          <div class="order-summary">
+            <div class="order-summary__row"><span>${t("returns.returnNumber")}</span><span class="order-summary__value">${escapeHtml(returnRequest.returnNumber)}</span></div>
+            <div class="order-summary__row"><span>${t("common.orderNumber")}</span><span class="order-summary__value">${escapeHtml(returnRequest.orderId)}</span></div>
+            <div class="order-summary__row"><span>${t("returns.status")}</span><span class="order-summary__value">${getReturnStatusText(returnRequest.status)}</span></div>
+          </div>
+          <div class="checkout-summary" data-return-detail-items>
+            ${returnRequest.items.map((item) => `
+              <article class="checkout-summary__item">
+                <span>${escapeHtml(item.title)}</span>
+                <span>${escapeHtml(item.size)}</span>
+                <span>x${item.quantity}</span>
+              </article>
+            `).join("")}
+          </div>
+          <div class="order-source" data-return-detail-timeline>
+            ${returnRequest.timeline.map((entry) => `<p>${escapeHtml(entry.label)}</p>`).join("")}
+          </div>
+          <div class="return-actions">
+            <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=returns">${t("returns.viewHistory")}</a>
+            <a class="order-button order-button--primary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(returnRequest.orderId)}">${t("common.orderNumber")}</a>
+          </div>
+        </section>
+      `;
+    }
+
     async function renderReturnView() {
       if (!currentUser) {
         renderReturnAuthRequired(returnPagePanel);
         return;
       }
 
-      const orderId = getRequestedOrderId();
+      const requestedId = getRequestedOrderId();
+      if (getRequestedReturnMode() === "detail") {
+        if (!requestedId) {
+          returnPagePanel.innerHTML = `<div class="empty-state" data-return-empty>${t("returns.empty")}</div>`;
+          return;
+        }
+
+        const payload = await fetchReturnRequest(requestedId);
+        returnPagePanel.innerHTML = createReturnDetailMarkup(payload.returnRequest);
+        return;
+      }
+
+      const orderId = requestedId;
       if (!orderId) {
         returnPagePanel.innerHTML = `<div class="empty-state" data-return-empty>${t("returns.orderNotEligible")}</div>`;
         return;
@@ -5602,6 +5664,7 @@
                 <p class="return-status-card__meta">${escapeHtml(returnRequest.orderId)} · ${getReturnStatusText(returnRequest.status)} · ${t("returns.itemSummary", { count: itemCount })}</p>
                 <p class="return-status-card__meta">${itemTitles}</p>
                 <div class="return-actions">
+                  <a class="order-button order-button--primary" href="${STOREFRONT_PATH}?view=return&id=${encodeURIComponent(returnRequest.id)}&mode=detail" data-return-history-detail-link>${t("returns.detail")}</a>
                   <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(returnRequest.orderId)}">${t("common.orderNumber")}</a>
                   ${returnRequest.canCancel ? `<button class="order-button order-button--secondary" type="button" data-return-cancel="${escapeHtml(returnRequest.id)}">${t("returns.cancel")}</button>` : ""}
                 </div>

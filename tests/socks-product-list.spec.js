@@ -459,6 +459,37 @@ test("shows return quantity validation in the return form", async ({ page }) => 
   await expect(page.locator("[data-return-form-error]")).toContainText("请选择至少一件商品");
 });
 
+test("links returns policy to order history and returns history", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=returns");
+
+  await expect(page.locator("[data-support-return-orders-link]")).toHaveAttribute("href", /view=orders/);
+  await expect(page.locator("[data-support-return-history-link]")).toHaveAttribute("href", /view=returns/);
+});
+
+test("opens a return request detail from return history", async ({ page }) => {
+  await registerFromUi(page, { name: "Noah Lin" });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await page.locator("[data-order-status-action][data-next-status='paid']").click();
+  await page.locator("[data-order-return-link]").click();
+  await page.locator("[data-return-item-checkbox]").first().check();
+  await page.locator("[data-return-type]").selectOption("return_refund");
+  await page.locator("[data-return-reason]").selectOption("size_issue");
+  await page.locator("[data-return-contact]").fill("alex@example.com");
+  await page.locator("[data-return-submit]").click();
+
+  await page.locator("[data-return-history-detail-link]").first().click();
+  await expect(page).toHaveURL(/view=return&id=/);
+  await expect(page).toHaveURL(/mode=detail/);
+  await expect(page.locator("[data-return-detail]")).toContainText(/RET-\d{8}-\d{4}/);
+  await expect(page.locator("[data-return-detail]")).toContainText("极简中筒袜");
+});
+
 test("switches the storefront copy to English and persists the locale preference", async ({ page }) => {
   await page.goto("/socks-product-list.html");
 
