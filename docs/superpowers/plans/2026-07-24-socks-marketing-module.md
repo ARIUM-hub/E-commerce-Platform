@@ -1157,7 +1157,7 @@ git commit -m "feat: snapshot marketing on orders"
 - Modify: `lib/repositories/marketing.js`
 - Modify: `tests/api.spec.js`
 
-- [ ] **Step 1: Write failing bundle and recommendation API tests**
+- [x] **Step 1: Write failing bundle and recommendation API tests**
 
 Add near recommendation/product API tests in `tests/api.spec.js`:
 
@@ -1194,7 +1194,7 @@ test("returns scenario-based recommendations", async ({ request }) => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run:
 
@@ -1204,7 +1204,7 @@ chcp 65001 > $null; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $Out
 
 Expected: FAIL because endpoints do not exist.
 
-- [ ] **Step 3: Add bundle lookup repository function**
+- [x] **Step 3: Add bundle lookup repository function**
 
 In `lib/repositories/marketing.js`, add:
 
@@ -1217,7 +1217,7 @@ function findBundleById(db, bundleId) {
 
 Export it.
 
-- [ ] **Step 4: Add recommendation helper in `server.js`**
+- [x] **Step 4: Add recommendation helper in `server.js`**
 
 Add near product recommendation helpers:
 
@@ -1247,7 +1247,7 @@ function getRecommendationItems(products, scenario, options = {}) {
 }
 ```
 
-- [ ] **Step 5: Add bundle and recommendation routes**
+- [x] **Step 5: Add bundle and recommendation routes**
 
 In `server.js`, import `findBundleById`.
 
@@ -1326,7 +1326,7 @@ Add route:
   }
 ```
 
-- [ ] **Step 6: Run tests and verify they pass**
+- [x] **Step 6: Run tests and verify they pass**
 
 Run:
 

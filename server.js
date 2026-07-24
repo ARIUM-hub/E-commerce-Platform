@@ -23,6 +23,7 @@ const {
   setCartCouponCode
 } = require("./lib/repositories/carts");
 const {
+  findBundleById,
   findCouponByCode,
   listActiveMarketingCampaigns
 } = require("./lib/repositories/marketing");
@@ -331,6 +332,36 @@ function getNoResultRecommendations(products, locale, limit = 4) {
       return right.reviewCount - left.reviewCount;
     })
     .slice(0, limit);
+}
+
+function getRecommendationItems(products, scenario, options = {}) {
+  const excludedIds = new Set();
+  if (options.productId) {
+    excludedIds.add(options.productId);
+  }
+  if (Array.isArray(options.excludeProductIds)) {
+    options.excludeProductIds.forEach((id) => excludedIds.add(id));
+  }
+
+  return products
+    .filter((product) => !excludedIds.has(product.id))
+    .filter((product) => hasSellableVariant(product))
+    .sort((left, right) => {
+      if (scenario === "cart" && left.isBestSeller !== right.isBestSeller) {
+        return Number(right.isBestSeller) - Number(left.isBestSeller);
+      }
+
+      if (left.isRecommended !== right.isRecommended) {
+        return Number(right.isRecommended) - Number(left.isRecommended);
+      }
+
+      if (left.ratingValue !== right.ratingValue) {
+        return right.ratingValue - left.ratingValue;
+      }
+
+      return right.reviewCount - left.reviewCount;
+    })
+    .slice(0, scenario === "cart" ? 4 : 3);
 }
 
 function getProductsPayload(products, filterValue, sortValue, localeValue, queryValue, options = {}) {
@@ -1236,6 +1267,81 @@ const server = http.createServer(async (request, response) => {
         ok: true,
         cart: getCartPayload(updatedCart, { products })
       }, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const bundleMatch = requestUrl.pathname.match(/^\/api\/cart\/bundles\/([^/]+)$/);
+  if (request.method === "POST" && bundleMatch) {
+    try {
+      const bundleId = decodeURIComponent(bundleMatch[1]);
+      const products = withDatabase((db) => listProducts(db));
+      const bundle = withDatabase((db) => findBundleById(db, bundleId));
+      if (!bundle) {
+        sendError(response, 404, "BUNDLE_NOT_FOUND", "Bundle was not found.");
+        return;
+      }
+
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      for (const productId of bundle.productIds) {
+        const size = bundle.defaultSizes?.[productId];
+        const validation = validateCartItemInput(products, { productId, size, quantity: 1 });
+        if (validation.statusCode) {
+          sendError(response, 409, "BUNDLE_OUT_OF_STOCK", "Bundle item is not available.");
+          return;
+        }
+
+        const variant = validation.variant;
+        const stockValidation = validateSkuStockQuantity(activeCart.cart, variant, 1);
+        if (stockValidation) {
+          sendError(response, 409, "BUNDLE_OUT_OF_STOCK", "Bundle item is out of stock.");
+          return;
+        }
+
+        const existingItem = activeCart.cart.items.find((item) => item.skuId === variant.skuId);
+        if (existingItem) {
+          existingItem.quantity += 1;
+        } else {
+          activeCart.cart.items.push({
+            productId,
+            skuId: variant.skuId,
+            size: variant.size,
+            quantity: 1
+          });
+        }
+      }
+
+      await writeActiveCart(activeCart, activeCart.cart);
+      const cartPayload = getCartPayload(activeCart.cart, { products });
+      cartPayload.pricing.appliedPromotions.push({
+        id: bundle.id,
+        type: "bundle",
+        title: bundle.titleZh || bundle.title,
+        discount: bundle.discountAmount
+      });
+      cartPayload.pricing.total = Math.max(0, cartPayload.pricing.total - bundle.discountAmount);
+
+      sendCartJson(response, 200, { ok: true, cart: cartPayload, bundle }, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/recommendations") {
+    try {
+      const scenario = requestUrl.searchParams.get("scenario") || "detail";
+      const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+      const products = withDatabase((db) => listProducts(db));
+      const items = getRecommendationItems(products, scenario, {
+        productId: requestUrl.searchParams.get("productId"),
+        excludeProductIds: requestUrl.searchParams.getAll("excludeProductId")
+      }).map((product) => localizeProduct(product, locale));
+      sendJson(response, 200, { scenario, items });
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");

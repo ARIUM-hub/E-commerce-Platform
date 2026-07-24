@@ -283,6 +283,37 @@ test("rejects coupon that does not meet minimum spend", async ({ request }) => {
   });
 });
 
+test("adds an active bundle to the cart", async ({ request }) => {
+  const response = await request.post("/api/cart/bundles/daily-refresh-bundle");
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.cart.items).toEqual([
+    expect.objectContaining({ productId: "sock-01", size: "43", quantity: 1 }),
+    expect.objectContaining({ productId: "sock-05", size: "43", quantity: 1 })
+  ]);
+  expect(payload.cart.pricing.appliedPromotions).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: "daily-refresh-bundle", discount: 12 })
+    ])
+  );
+});
+
+test("returns scenario-based recommendations", async ({ request }) => {
+  const detailResponse = await request.get("/api/recommendations?scenario=detail&productId=sock-02");
+  expect(detailResponse.ok()).toBe(true);
+  const detailPayload = await detailResponse.json();
+  expect(detailPayload.items).toHaveLength(3);
+  detailPayload.items.forEach((product) => {
+    expect(product.id).not.toBe("sock-02");
+  });
+
+  const cartResponse = await request.get("/api/recommendations?scenario=cart");
+  expect(cartResponse.ok()).toBe(true);
+  const cartPayload = await cartResponse.json();
+  expect(cartPayload.items.length).toBeGreaterThan(0);
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {
