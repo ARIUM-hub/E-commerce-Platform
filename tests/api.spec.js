@@ -1313,6 +1313,87 @@ test("rejects invalid order status transitions", async ({ request }) => {
   expect(payload.error.code).toBe("INVALID_ORDER_TRANSITION");
 });
 
+test("creates a successful payment attempt and marks the order paid", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const response = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+  expect(payload.payment).toMatchObject({
+    orderId: order.id,
+    method: "card",
+    status: "succeeded",
+    amount: order.totals.total
+  });
+  expect(payload.order.status).toBe("paid");
+  expect(payload.order.payment).toMatchObject({
+    status: "succeeded",
+    method: "card"
+  });
+  expect(payload.order.timeline.map((entry) => entry.status)).toEqual([
+    "pending_payment",
+    "paid"
+  ]);
+});
+
+test("lists payment attempts for an order", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "paypal", outcome: "failed", locale: "en-US" }
+  });
+
+  const response = await request.get(`/api/orders/${order.id}/payments`);
+  expect(response.ok()).toBe(true);
+
+  const payload = await response.json();
+  expect(payload.payments).toHaveLength(1);
+  expect(payload.payments[0]).toMatchObject({
+    orderId: order.id,
+    method: "paypal",
+    status: "failed"
+  });
+});
+
+test("keeps pending payment orders payable after a failed payment attempt", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const response = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "gift_card", outcome: "failed", locale: "en-US" }
+  });
+
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+  expect(payload.payment).toMatchObject({
+    orderId: order.id,
+    method: "gift_card",
+    status: "failed"
+  });
+  expect(payload.order.status).toBe("pending_payment");
+  expect(payload.order.payment).toMatchObject({
+    status: "failed",
+    method: "gift_card"
+  });
+});
+
+test("rejects payment attempts for cancelled orders", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "cancelled", locale: "en-US" }
+  });
+
+  const response = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+
+  expect(response.status()).toBe(409);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("PAYMENT_ORDER_NOT_PAYABLE");
+});
+
 test("returns products with default filter and recommended sort", async ({ request }) => {
   const response = await request.get("/api/products");
   expect(response.ok()).toBe(true);

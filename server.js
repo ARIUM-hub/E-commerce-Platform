@@ -46,6 +46,10 @@ const {
   listReturnRequestsByUser,
   updateReturnRequestStatus
 } = require("./lib/repositories/returns");
+const {
+  createPaymentAttempt,
+  listPaymentAttemptsByOrder
+} = require("./lib/repositories/payments");
 const { createPricingSummary } = require("./lib/pricing");
 
 const host = "127.0.0.1";
@@ -1034,6 +1038,11 @@ function parseOrderStatusPath(pathname) {
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
 }
 
+function parseOrderPaymentsPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/payments$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function parseReturnIdFromPath(pathname) {
   const match = pathname.match(/^\/api\/returns\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -1840,6 +1849,74 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { orders });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedPaymentOrderId = parseOrderPaymentsPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedPaymentOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedPaymentOrderId));
+      if (!order) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const payments = withDatabase((db) => listPaymentAttemptsByOrder(db, requestedPaymentOrderId));
+      sendJson(response, 200, { payments });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestedPaymentOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+      const order = withDatabase((db) => findOrderById(db, requestedPaymentOrderId));
+
+      if (!order) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => createPaymentAttempt(db, {
+        order,
+        method: body.method,
+        outcome: body.outcome,
+        locale,
+        createTimelineEntry,
+        saveOrder
+      }));
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 201, { ok: true, payment: result.payment, order: result.order });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
