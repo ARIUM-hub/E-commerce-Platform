@@ -51,6 +51,15 @@ async function fillCheckoutForm(page) {
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
 }
 
+async function payCurrentOrderFromPaymentPage(page) {
+  const paymentResponse = page.waitForResponse((response) => {
+    return response.url().includes("/payments") && response.request().method() === "POST";
+  });
+  await page.locator("[data-payment-submit]").click();
+  expect((await paymentResponse).status()).toBe(201);
+  await expect(page).toHaveURL(/view=order&id=SOCK-/);
+}
+
 async function seedCartFromApi(page, items) {
   for (const item of items) {
     const response = await page.request.post("/api/cart/items", { data: item });
@@ -295,6 +304,8 @@ test("uses a default saved address during checkout", async ({ page }) => {
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page).toHaveURL(/view=order&id=SOCK-/);
   await expect(page.locator("[data-order-address]")).toContainText("100 Demo Street");
 });
@@ -314,7 +325,7 @@ test("shows the logged-in user's order history after checkout", async ({ page })
   });
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
-  await expect(page).toHaveURL(/view=order&id=SOCK-/);
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
 
   await page.goto("/socks-product-list.html?view=orders");
   await expect(page.locator("[data-order-history-card]")).toHaveCount(1);
@@ -377,14 +388,72 @@ test("submits checkout, clears cart, and opens the persisted order detail", asyn
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
-  await expect(page).toHaveURL(/view=order&id=SOCK-/);
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await expect(page.locator("[data-cart-count]")).toHaveText("0");
+  await payCurrentOrderFromPaymentPage(page);
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-items]")).toContainText("Minimal Crew Socks");
   await expect(page.locator("[data-cart-count]")).toHaveText("0");
 
   await page.reload();
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-items]")).toContainText("Minimal Crew Socks");
+});
+
+test("opens the payment view after checkout submit", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await expect(page.locator("[data-payment-view]")).toBeVisible();
+  await expect(page.locator("[data-payment-method='card']")).toBeVisible();
+  await expect(page.locator("[data-payment-submit]")).toContainText("Pay now");
+});
+
+test("simulates a successful payment from the payment view", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  const paymentResponse = page.waitForResponse((response) => {
+    return response.url().includes("/payments") && response.request().method() === "POST";
+  });
+  await page.locator("[data-payment-submit]").click();
+  expect((await paymentResponse).status()).toBe(201);
+
+  await expect(page).toHaveURL(/view=order&id=SOCK-/);
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
+  await expect(page.locator("[data-order-payment]")).toContainText("Card");
+});
+
+test("shows retry state after a failed demo payment", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await page.locator("[data-payment-fail-demo]").click();
+
+  await expect(page.locator("[data-payment-error]")).toContainText("Payment failed");
+  await expect(page.locator("[data-payment-submit]")).toContainText("Retry payment");
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
 });
 
 test("advances persisted order status from the order detail page", async ({ page }) => {
@@ -402,9 +471,8 @@ test("advances persisted order status from the order detail page", async ({ page
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
   await page.locator("[data-checkout-submit]").click();
 
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
-
-  await page.locator('[data-order-status-action][data-next-status="paid"]').click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page.locator("[data-order-status]")).toHaveText("Paid");
 
   await page.locator('[data-order-status-action][data-next-status="processing"]').click();
@@ -427,8 +495,9 @@ test("submits a return request from persisted order detail", async ({ page }) =>
   await page.locator("[data-cart-checkout]").click();
   await fillCheckoutForm(page);
   await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page).toHaveURL(/view=order&id=/);
-  await page.locator("[data-order-status-action][data-next-status='paid']").click();
 
   await page.locator("[data-order-return-link]").click();
   await expect(page).toHaveURL(/view=return/);
@@ -454,7 +523,8 @@ test("shows return quantity validation in the return form", async ({ page }) => 
   await page.locator("[data-cart-checkout]").click();
   await fillCheckoutForm(page);
   await page.locator("[data-checkout-submit]").click();
-  await page.locator("[data-order-status-action][data-next-status='paid']").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await page.locator("[data-order-return-link]").click();
 
   await page.locator("[data-return-submit]").click();
@@ -477,7 +547,8 @@ test("opens a return request detail from return history", async ({ page }) => {
   await page.locator("[data-cart-checkout]").click();
   await fillCheckoutForm(page);
   await page.locator("[data-checkout-submit]").click();
-  await page.locator("[data-order-status-action][data-next-status='paid']").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await page.locator("[data-order-return-link]").click();
   await page.locator("[data-return-item-checkbox]").first().check();
   await page.locator("[data-return-type]").selectOption("return_refund");
@@ -1195,6 +1266,8 @@ test("keeps English cart and order copy after switching locale", async ({ page }
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page.getByRole("heading", { name: "Order confirmed" })).toBeVisible();
   await expect(page.locator("[data-order-source-title]")).toHaveText("Go back to your last results");
   await expect(page.locator("[data-order-source-copy]")).toHaveText("Socks / Sport Socks / Price high to low");
@@ -1562,6 +1635,8 @@ test("preserves advanced filters when opening product detail and returning", asy
   await expect(page).toHaveURL(/view=detail/);
   await expect(page).toHaveURL(/minPrice=40/);
   await expect(page).toHaveURL(/size=43/);
+  await expect(page.locator("[data-detail-back-link]")).toHaveAttribute("href", /minPrice=40/);
+  await expect(page.locator("[data-detail-back-link]")).toHaveAttribute("href", /size=43/);
 
   await page.locator("[data-detail-back-link]").click();
   await expect(page).toHaveURL(/minPrice=40/);

@@ -3415,6 +3415,16 @@
       <section class="order-panel" data-checkout-panel></section>
     </div>
 
+    <div class="payment-view" data-payment-view hidden>
+      <section class="hero">
+        <p class="hero__eyebrow" data-payment-hero-eyebrow>Payment</p>
+        <h1 class="hero__title" data-payment-title>支付订单</h1>
+        <p class="hero__description" data-payment-copy>选择演示支付方式并完成支付。</p>
+      </section>
+
+      <section class="order-panel" data-payment-panel></section>
+    </div>
+
     <div class="orders-view" data-orders-view hidden>
       <section class="hero">
         <p class="hero__eyebrow">Order History</p>
@@ -3612,6 +3622,7 @@
     const CHECKOUT_VIEW_PATH = "/socks-product-list.html?view=checkout";
     const DETAIL_VIEW_KEY = "detail";
     const CHECKOUT_VIEW_KEY = "checkout";
+    const PAYMENT_VIEW_KEY = "payment";
     const ORDER_VIEW_KEY = "order";
     const AUTH_VIEW_KEY = "auth";
     const ADDRESSES_VIEW_KEY = "addresses";
@@ -3663,6 +3674,7 @@
     const authView = document.querySelector("[data-auth-view]");
     const addressesView = document.querySelector("[data-addresses-view]");
     const checkoutView = document.querySelector("[data-checkout-view]");
+    const paymentView = document.querySelector("[data-payment-view]");
     const ordersView = document.querySelector("[data-orders-view]");
     const orderView = document.querySelector("[data-order-view]");
     const supportView = document.querySelector("[data-support-view]");
@@ -3689,6 +3701,10 @@
     const checkoutHeroEyebrow = document.querySelector("[data-checkout-hero-eyebrow]");
     const checkoutTitle = document.querySelector("[data-checkout-title]");
     const checkoutCopy = document.querySelector("[data-checkout-copy]");
+    const paymentPanel = document.querySelector("[data-payment-panel]");
+    const paymentHeroEyebrow = document.querySelector("[data-payment-hero-eyebrow]");
+    const paymentTitle = document.querySelector("[data-payment-title]");
+    const paymentCopy = document.querySelector("[data-payment-copy]");
     const authForm = document.querySelector("[data-auth-form]");
     const authTitle = document.querySelector("[data-auth-title]");
     const authCopy = document.querySelector("[data-auth-copy]");
@@ -4013,6 +4029,24 @@
           validationError: "请补全收货信息后再提交。",
           submitError: "订单提交失败，请稍后重试。"
         },
+        payment: {
+          heroEyebrow: "安全支付",
+          heroTitle: "支付订单",
+          heroCopy: "选择演示支付方式。系统会记录支付尝试并同步订单状态。",
+          method: "支付方式",
+          card: "银行卡",
+          paypal: "PayPal",
+          giftCard: "礼品卡",
+          payNow: "立即支付",
+          retry: "重试支付",
+          failDemo: "模拟失败",
+          attempts: "支付记录",
+          attemptEmpty: "暂无支付记录",
+          succeeded: "支付成功",
+          failed: "支付失败，请重试。",
+          unavailable: "当前订单不可支付。",
+          backToOrder: "返回订单"
+        },
         order: {
           heroEyebrow: "演示订单",
           heroTitle: "订单已确认",
@@ -4303,6 +4337,24 @@
           submitOrder: "Place order",
           validationError: "Complete the shipping information before placing the order.",
           submitError: "Order submission failed. Please try again."
+        },
+        payment: {
+          heroEyebrow: "Secure Payment",
+          heroTitle: "Pay your order",
+          heroCopy: "Choose a demo payment method. The backend records each attempt and syncs the order status.",
+          method: "Payment method",
+          card: "Card",
+          paypal: "PayPal",
+          giftCard: "Gift card",
+          payNow: "Pay now",
+          retry: "Retry payment",
+          failDemo: "Simulate failure",
+          attempts: "Payment attempts",
+          attemptEmpty: "No payment attempts yet",
+          succeeded: "Payment succeeded",
+          failed: "Payment failed, please try again.",
+          unavailable: "This order cannot be paid.",
+          backToOrder: "Back to order"
         },
         order: {
           heroEyebrow: "Demo Order",
@@ -4678,6 +4730,10 @@
 
       if (view === CHECKOUT_VIEW_KEY) {
         return CHECKOUT_VIEW_KEY;
+      }
+
+      if (view === PAYMENT_VIEW_KEY) {
+        return PAYMENT_VIEW_KEY;
       }
 
       if (view === ORDER_VIEW_KEY) {
@@ -5702,6 +5758,12 @@
         return;
       }
 
+      if (getCurrentView() === PAYMENT_VIEW_KEY) {
+        await renderPaymentPage();
+        renderCartState();
+        return;
+      }
+
       if (getCurrentView() === AUTH_VIEW_KEY) {
         renderAuthView();
         renderCartState();
@@ -6160,6 +6222,10 @@
       return getSearchParams().get("id") || "";
     }
 
+    function getPaymentOrderId() {
+      return getSearchParams().get("id") || "";
+    }
+
     async function fetchOrder(orderId) {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
 
@@ -6170,10 +6236,55 @@
       return response.json();
     }
 
+    async function fetchPaymentAttempts(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/payments`);
+
+      if (!response.ok) {
+        return { payments: [] };
+      }
+
+      return response.json();
+    }
+
+    async function createPayment(orderId, payload) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, locale: activeLocale })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to process payment");
+      }
+
+      return response.json();
+    }
+
+    function getPaymentMethodLabel(method) {
+      const labels = {
+        card: t("payment.card"),
+        paypal: t("payment.paypal"),
+        gift_card: t("payment.giftCard")
+      };
+      return labels[method] || method;
+    }
+
+    function getPaymentStatusLabel(status) {
+      if (status === "succeeded") {
+        return t("payment.succeeded");
+      }
+
+      if (status === "failed") {
+        return t("payment.failed");
+      }
+
+      return status || t("payment.unavailable");
+    }
+
     function getNextOrderActions(order) {
       if (order.status === "pending_payment") {
         return [
-          { status: "paid", label: t("order.payDemo") },
+          { href: `${STOREFRONT_PATH}?view=payment&id=${encodeURIComponent(order.id)}`, label: t("order.payDemo") },
           { status: "cancelled", label: t("order.cancelDemo") }
         ];
       }
@@ -6202,14 +6313,24 @@
       return `
         <div class="order-actions" data-order-actions>
           ${actions.map((action) => `
-            <button
-              class="cart-drawer__confirmation-action"
-              type="button"
-              data-order-status-action
-              data-next-status="${action.status}"
-            >
-              ${action.label}
-            </button>
+            ${action.href ? `
+              <a
+                class="cart-drawer__confirmation-action"
+                href="${action.href}"
+                data-order-payment-link
+              >
+                ${action.label}
+              </a>
+            ` : `
+              <button
+                class="cart-drawer__confirmation-action"
+                type="button"
+                data-order-status-action
+                data-next-status="${action.status}"
+              >
+                ${action.label}
+              </button>
+            `}
           `).join("")}
         </div>
       `;
@@ -6258,6 +6379,12 @@
             <p class="order-source__title">${order.customer.name} · ${order.customer.contact}</p>
             <p class="order-source__copy">${order.shippingAddress.address} ${order.shippingAddress.city} ${order.shippingAddress.region} ${order.shippingAddress.postalCode}</p>
           </div>
+          ${order.payment ? `
+            <div class="order-source" data-order-payment>
+              <p class="order-source__title">${getPaymentMethodLabel(order.payment.method)}</p>
+              <p class="order-source__copy">${getPaymentStatusLabel(order.payment.status)}</p>
+            </div>
+          ` : ""}
           <div class="checkout-summary" data-order-items>
             ${order.items.map((item) => `
               <article class="checkout-summary__item">
@@ -6292,6 +6419,58 @@
           </div>
           ${createOrderStatusActionsMarkup(order)}
         </section>
+      `;
+    }
+
+    async function renderPaymentPage() {
+      const orderId = getPaymentOrderId();
+      const payload = await fetchOrder(orderId);
+      const order = payload.order;
+      const paymentsPayload = await fetchPaymentAttempts(orderId);
+      const payments = Array.isArray(paymentsPayload.payments) ? paymentsPayload.payments : [];
+      const latestPayment = payments[0] || order.payment || null;
+      const canPay = order.status === "pending_payment";
+
+      paymentHeroEyebrow.textContent = t("payment.heroEyebrow");
+      paymentTitle.textContent = t("payment.heroTitle");
+      paymentCopy.textContent = t("payment.heroCopy");
+      paymentPanel.innerHTML = `
+        <div class="checkout-layout">
+          <form class="checkout-form" data-payment-form novalidate>
+            <div class="order-summary">
+              <div class="order-summary__row">
+                <span>${t("common.orderNumber")}</span>
+                <span class="order-summary__value">${escapeHtml(order.id)}</span>
+              </div>
+              <div class="order-summary__row">
+                <span>${t("common.estimatedTotal")}</span>
+                <span class="order-summary__value">${formatCurrency(order.totals.total)}</span>
+              </div>
+            </div>
+            <fieldset class="checkout-shipping">
+              <legend>${t("payment.method")}</legend>
+              <label><input type="radio" name="method" value="card" data-payment-method="card" checked> ${t("payment.card")}</label>
+              <label><input type="radio" name="method" value="paypal" data-payment-method="paypal"> ${t("payment.paypal")}</label>
+              <label><input type="radio" name="method" value="gift_card" data-payment-method="gift_card"> ${t("payment.giftCard")}</label>
+            </fieldset>
+            <div class="checkout-form__error" data-payment-error role="alert">${latestPayment?.status === "failed" ? t("payment.failed") : ""}</div>
+            <button class="cart-drawer__checkout-button" type="submit" data-payment-submit ${canPay ? "" : "disabled"}>
+              ${latestPayment?.status === "failed" ? t("payment.retry") : t("payment.payNow")}
+            </button>
+            <button class="cart-drawer__confirmation-action" type="button" data-payment-fail-demo ${canPay ? "" : "disabled"}>${t("payment.failDemo")}</button>
+            <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(order.id)}">${t("payment.backToOrder")}</a>
+          </form>
+          <aside class="checkout-summary" data-payment-attempts>
+            <h2>${t("payment.attempts")}</h2>
+            ${payments.length ? payments.map((payment) => `
+              <article class="checkout-summary__item" data-payment-attempt>
+                <span>${getPaymentMethodLabel(payment.method)}</span>
+                <span>${getPaymentStatusLabel(payment.status)}</span>
+                <span>${formatCurrency(payment.amount)}</span>
+              </article>
+            `).join("") : `<p>${t("payment.attemptEmpty")}</p>`}
+          </aside>
+        </div>
       `;
     }
 
@@ -7607,6 +7786,7 @@
       const isAuthView = currentView === AUTH_VIEW_KEY;
       const isAddressesView = currentView === ADDRESSES_VIEW_KEY;
       const isCheckoutView = currentView === CHECKOUT_VIEW_KEY;
+      const isPaymentView = currentView === PAYMENT_VIEW_KEY;
       const isOrdersView = currentView === ORDERS_VIEW_KEY;
       const isOrderView = currentView === ORDER_VIEW_KEY;
       const isSupportView = currentView === SUPPORT_VIEW_KEY;
@@ -7620,6 +7800,7 @@
       authView.hidden = !isAuthView;
       addressesView.hidden = !isAddressesView;
       checkoutView.hidden = !isCheckoutView;
+      paymentView.hidden = !isPaymentView;
       ordersView.hidden = !isOrdersView;
       orderView.hidden = !isOrderView;
       supportView.hidden = !isSupportView;
@@ -8354,13 +8535,56 @@
         const payload = await createOrder(getCheckoutFormPayload(form));
         setCartStateFromPayload(payload);
         renderCartState();
-        window.location.href = `${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(payload.order.id)}`;
+        window.location.href = `${STOREFRONT_PATH}?view=payment&id=${encodeURIComponent(payload.order.id)}`;
       } catch (error) {
         errorNode.textContent = error.code === "CHECKOUT_VALIDATION_FAILED"
           ? t("checkout.validationError")
           : t("checkout.submitError");
         submitButton.disabled = false;
       }
+    });
+
+    paymentPanel.addEventListener("submit", async (event) => {
+      const form = event.target.closest("[data-payment-form]");
+      if (!form) {
+        return;
+      }
+
+      event.preventDefault();
+      const orderId = getPaymentOrderId();
+      const submitButton = form.querySelector("[data-payment-submit]");
+      const errorNode = form.querySelector("[data-payment-error]");
+      submitButton.disabled = true;
+      errorNode.textContent = "";
+
+      try {
+        const method = new FormData(form).get("method") || "card";
+        const payload = await createPayment(orderId, { method, outcome: "succeeded" });
+        window.location.href = `${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(payload.order.id)}`;
+      } catch (error) {
+        errorNode.textContent = t("payment.failed");
+        submitButton.disabled = false;
+      }
+    });
+
+    paymentPanel.addEventListener("click", async (event) => {
+      const failButton = event.target.closest("[data-payment-fail-demo]");
+      if (!failButton) {
+        return;
+      }
+
+      const form = failButton.closest("[data-payment-form]");
+      const orderId = getPaymentOrderId();
+      const method = new FormData(form).get("method") || "card";
+      failButton.disabled = true;
+
+      try {
+        await createPayment(orderId, { method, outcome: "failed" });
+      } catch (error) {
+        // Re-render below so stale buttons and retry copy always match backend state.
+      }
+
+      await renderPaymentPage();
     });
 
     orderPagePanel.addEventListener("click", async (event) => {
@@ -8626,6 +8850,12 @@
         return;
       }
 
+      if (getCurrentView() === PAYMENT_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderPaymentPage();
+        return;
+      }
+
       if (getCurrentView() === DETAIL_VIEW_KEY) {
         await cartLoadPromise;
         await renderDetailPage();
@@ -8651,6 +8881,13 @@
       if (getCurrentView() === CHECKOUT_VIEW_KEY) {
         checkoutPagePanel.innerHTML = `
           <div class="order-empty-state" data-checkout-empty-state>${t("checkout.submitError")}</div>
+        `;
+        return;
+      }
+
+      if (getCurrentView() === PAYMENT_VIEW_KEY) {
+        paymentPanel.innerHTML = `
+          <div class="order-empty-state" data-payment-empty-state>${t("payment.unavailable")}</div>
         `;
         return;
       }
