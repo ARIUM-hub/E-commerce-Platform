@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createApiError } = require("./lib/api-errors");
-const { createDatabase, initializeDatabase, getDatabasePath } = require("./lib/database");
+const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { listProducts } = require("./lib/repositories/products");
 const {
   findUserByEmail,
@@ -1050,6 +1050,24 @@ const server = http.createServer(async (request, response) => {
   if (requestUrl.pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
     return;
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/test/reset") {
+    if (process.env.NODE_ENV !== "test") {
+      sendError(response, 404, "NOT_FOUND", "Resource was not found.");
+      return;
+    }
+
+    try {
+      await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
+      withDatabase(() => null);
+      sendJson(response, 200, { ok: true });
+      return;
+    } catch (error) {
+      console.error(error);
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
   }
 
   if (request.method === "GET" && requestUrl.pathname === "/api/products") {

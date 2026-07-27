@@ -44,6 +44,19 @@ test("returns empty user session fixtures by default", async () => {
   expect(userCarts).toEqual({ carts: [] });
 });
 
+test("resets the SQLite test database through the test-only API", async ({ request }) => {
+  const addResponse = await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  expect(addResponse.ok()).toBe(true);
+
+  const resetResponse = await request.post("/api/test/reset");
+  expect(resetResponse.ok()).toBe(true);
+
+  const cartResponse = await request.get("/api/cart");
+  expect((await cartResponse.json()).items).toEqual([]);
+});
+
 test("initializes a SQLite database with product and SKU tables", async () => {
   await resetDatabase(testDbFile);
   const db = createDatabase(testDbFile);

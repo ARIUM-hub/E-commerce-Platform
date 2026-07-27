@@ -5,6 +5,7 @@ module.exports = {
     port: 4173,
     env: {
       DATA_DIR: "tests/fixtures/test-data",
+      NODE_ENV: "test",
       PORT: "4173"
     },
     reuseExistingServer: false

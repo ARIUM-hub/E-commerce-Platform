@@ -51,6 +51,13 @@ async function fillCheckoutForm(page) {
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
 }
 
+async function seedCartFromApi(page, items) {
+  for (const item of items) {
+    const response = await page.request.post("/api/cart/items", { data: item });
+    expect(response.ok()).toBe(true);
+  }
+}
+
 let registerSequence = 0;
 
 async function registerFromUi(page, user = {}) {
@@ -69,7 +76,9 @@ async function registerFromUi(page, user = {}) {
 
 test.use({ viewport: { width: 1280, height: 960 } });
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ request }) => {
+  const resetResponse = await request.post("/api/test/reset");
+  expect(resetResponse.ok()).toBe(true);
   await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(ordersFile, `${JSON.stringify({ orders: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(usersFile, `${JSON.stringify({ users: [] }, null, 2)}\n`, "utf8");
@@ -266,10 +275,8 @@ test("manages saved addresses from the addresses view", async ({ page }) => {
 });
 
 test("uses a default saved address during checkout", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
   await page.goto("/socks-product-list.html?view=addresses");
   await page.locator('[data-address-field="name"]').fill("Alex Chen");
   await page.locator('[data-address-field="contact"]').fill("alex@example.com");
@@ -293,10 +300,8 @@ test("uses a default saved address during checkout", async ({ page }) => {
 });
 
 test("shows the logged-in user's order history after checkout", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
   await page.locator('[data-checkout-field="customer.contact"]').fill("alex@example.com");
@@ -304,7 +309,12 @@ test("shows the logged-in user's order history after checkout", async ({ page })
   await page.locator('[data-checkout-field="shippingAddress.city"]').fill("Seattle");
   await page.locator('[data-checkout-field="shippingAddress.region"]').fill("WA");
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
+  const orderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/orders") && response.request().method() === "POST";
+  });
   await page.locator("[data-checkout-submit]").click();
+  expect((await orderResponse).status()).toBe(201);
+  await expect(page).toHaveURL(/view=order&id=SOCK-/);
 
   await page.goto("/socks-product-list.html?view=orders");
   await expect(page.locator("[data-order-history-card]")).toHaveCount(1);
@@ -319,9 +329,7 @@ test("requires login before showing order history", async ({ page }) => {
 });
 
 test("opens the checkout view from the cart drawer with a live cart summary", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 2 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 2 }]);
 
   await page.goto("/socks-product-list.html");
   await page.locator("[data-cart-toggle]").click();
@@ -335,12 +343,10 @@ test("opens the checkout view from the cart drawer with a live cart summary", as
 });
 
 test("shows checkout validation errors without creating an order", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator("[data-checkout-submit]").click();
@@ -352,12 +358,10 @@ test("shows checkout validation errors without creating an order", async ({ page
 });
 
 test("submits checkout, clears cart, and opens the persisted order detail", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 2 }]
-  }, null, 2)}\n`, "utf8");
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 2 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
@@ -384,12 +388,10 @@ test("submits checkout, clears cart, and opens the persisted order detail", asyn
 });
 
 test("advances persisted order status from the order detail page", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
@@ -1174,9 +1176,7 @@ test("submits shared header search from order view back into storefront results"
 });
 
 test("keeps English cart and order copy after switching locale", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-02", size: "43", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "43", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?filter=sport&sort=price-desc");
   await page.locator('[data-locale-option="en-US"]').click();
@@ -1621,7 +1621,7 @@ test("keeps recommended products first in the default view and inside filtered r
 });
 
 test("sorts products by price descending and newest with full visible order", async ({ page }) => {
-  await page.goto("/socks-product-list.html");
+  await page.goto("/socks-product-list.html?pageSize=24");
 
   await page.getByRole("button", { name: "价格从高到低" }).click();
   await expect(page.locator(".product-card__title")).toHaveText([
