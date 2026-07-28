@@ -29,6 +29,72 @@ test.beforeEach(async () => {
   db.close();
 });
 
+test("parses engineering config defaults and test overrides", async () => {
+  const { createConfig } = require("../lib/config");
+
+  const development = createConfig({});
+  expect(development).toMatchObject({
+    host: "127.0.0.1",
+    port: 4173,
+    nodeEnv: "development",
+    isTest: false,
+    logLevel: "info",
+    requestBodyLimitBytes: 1048576,
+    securityHeadersEnabled: true
+  });
+  expect(development.dataDir).toContain("data");
+
+  const testConfig = createConfig({
+    NODE_ENV: "test",
+    PORT: "5123",
+    HOST: "0.0.0.0",
+    DATA_DIR: "tests/fixtures/test-data",
+    LOG_LEVEL: "debug",
+    REQUEST_BODY_LIMIT_BYTES: "2048",
+    SECURITY_HEADERS_ENABLED: "false"
+  });
+  expect(testConfig).toMatchObject({
+    host: "0.0.0.0",
+    port: 5123,
+    nodeEnv: "test",
+    isTest: true,
+    logLevel: "debug",
+    requestBodyLimitBytes: 2048,
+    securityHeadersEnabled: false
+  });
+  expect(testConfig.dataDir).toContain("tests");
+});
+
+test("rejects invalid engineering config values", async () => {
+  const { createConfig } = require("../lib/config");
+
+  expect(() => createConfig({ PORT: "abc" })).toThrow("PORT must be an integer between 0 and 65535");
+  expect(() => createConfig({ REQUEST_BODY_LIMIT_BYTES: "0" })).toThrow("REQUEST_BODY_LIMIT_BYTES must be an integer between 1024 and 10485760");
+  expect(() => createConfig({ LOG_LEVEL: "loud" })).toThrow("LOG_LEVEL must be one of debug, info, warn, error, silent");
+  expect(() => createConfig({ DATA_DIR: "   " })).toThrow("DATA_DIR cannot be empty");
+});
+
+test("filters structured logger output by level", async () => {
+  const { createLogger } = require("../lib/logger");
+  const lines = [];
+  const logger = createLogger({
+    level: "warn",
+    sink: (line) => lines.push(line),
+    now: () => new Date("2026-07-28T00:00:00.000Z")
+  });
+
+  logger.info("request.received", { method: "GET" });
+  logger.warn("request.slow", { elapsedMs: 1200 });
+  logger.error("request.failed", { code: "INTERNAL_ERROR" });
+
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain("[warn]");
+  expect(lines[0]).toContain("request.slow");
+  expect(lines[0]).toContain("\"elapsedMs\":1200");
+  expect(lines[1]).toContain("[error]");
+  expect(lines[1]).toContain("request.failed");
+});
+
 test("returns an empty order collection fixture by default", async () => {
   const orders = JSON.parse(await fs.readFile(ordersFile, "utf8"));
   expect(orders).toEqual({ orders: [] });
