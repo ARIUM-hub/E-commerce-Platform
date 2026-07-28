@@ -363,12 +363,33 @@ test("creates and lists product reviews for a product", async ({ request }) => {
   });
 });
 
+test("accepts concise product reviews with short nicknames", async ({ request }) => {
+  const response = await request.post("/api/products/sock-02/reviews", {
+    data: {
+      author: "王",
+      rating: 5,
+      body: "好穿",
+      locale: "zh-CN"
+    }
+  });
+
+  expect(response.status()).toBe(201);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: true,
+    review: {
+      author: "王",
+      rating: 5,
+      body: "好穿"
+    }
+  });
+});
+
 test("rejects invalid product reviews with standard errors", async ({ request }) => {
   const response = await request.post("/api/products/sock-02/reviews", {
     data: {
       author: "",
       rating: 8,
-      body: "短",
+      body: "",
       locale: "zh-CN"
     }
   });
