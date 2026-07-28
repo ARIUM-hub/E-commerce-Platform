@@ -1487,6 +1487,124 @@
       padding: 16px;
     }
 
+    .admin-shell {
+      display: grid;
+      gap: 18px;
+      max-width: 1180px;
+      margin: 0 auto 48px;
+      padding: 0 24px;
+    }
+
+    .admin-state,
+    .admin-panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      background: #ffffff;
+      padding: 22px;
+      box-shadow: 0 18px 45px rgba(17, 17, 17, 0.07);
+    }
+
+    .admin-state {
+      display: grid;
+      gap: 12px;
+      justify-items: start;
+    }
+
+    .admin-state h2,
+    .admin-state p {
+      margin: 0;
+    }
+
+    .admin-state p {
+      color: var(--text-subtle);
+    }
+
+    .admin-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #f7f7f7;
+      padding: 8px;
+      margin-bottom: 16px;
+    }
+
+    .admin-tabs button {
+      min-height: 44px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      padding: 10px 14px;
+      color: var(--text-main);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+
+    .admin-tabs button:hover,
+    .admin-tabs button:focus-visible {
+      border-color: var(--text-main);
+      outline: none;
+    }
+
+    .admin-tabs button.is-active {
+      background: #111111;
+      color: #ffffff;
+      border-color: #111111;
+    }
+
+    .admin-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-bottom: 16px;
+    }
+
+    .admin-card,
+    .admin-row {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fbfbfb;
+    }
+
+    .admin-card {
+      display: grid;
+      gap: 4px;
+    }
+
+    .admin-card strong {
+      color: var(--text-main);
+      font-size: clamp(24px, 4vw, 34px);
+      line-height: 1;
+    }
+
+    .admin-card span,
+    .admin-row span {
+      color: var(--text-subtle);
+    }
+
+    .admin-table {
+      display: grid;
+      gap: 10px;
+    }
+
+    .admin-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: center;
+      transition: border-color 160ms ease, background 160ms ease;
+    }
+
+    .admin-row:hover {
+      border-color: #111111;
+      background: #ffffff;
+    }
+
     .return-view,
     .returns-view {
       display: grid;
@@ -3461,6 +3579,36 @@
       </section>
     </div>
 
+    <div class="admin-view" data-admin-view hidden>
+      <section class="hero hero--compact">
+        <p class="hero__eyebrow" data-admin-eyebrow>Admin</p>
+        <h1 class="hero__title" data-admin-title>后台管理</h1>
+        <p class="hero__description" data-admin-copy>管理商品、库存、订单、优惠活动和运营指标。</p>
+      </section>
+
+      <section class="admin-shell">
+        <div class="admin-state" data-admin-auth-required hidden>
+          <h2>请先登录管理员账号</h2>
+          <p>后台只对演示管理员开放，请先登录再继续。</p>
+          <a class="order-button order-button--primary" href="/socks-product-list.html?view=auth&mode=login">去登录</a>
+        </div>
+        <div class="admin-state" data-admin-forbidden hidden>
+          <h2>当前账号没有后台权限</h2>
+          <p>请使用 admin@socks.test 演示管理员账号访问后台。</p>
+        </div>
+        <div data-admin-console hidden>
+          <nav class="admin-tabs" data-admin-tabs aria-label="后台模块">
+            <button type="button" data-admin-tab="dashboard">看板</button>
+            <button type="button" data-admin-tab="products">商品</button>
+            <button type="button" data-admin-tab="inventory">库存</button>
+            <button type="button" data-admin-tab="orders">订单</button>
+            <button type="button" data-admin-tab="marketing">优惠</button>
+          </nav>
+          <div class="admin-panel" data-admin-panel></div>
+        </div>
+      </section>
+    </div>
+
     <div class="order-view" data-order-view hidden>
       <section class="hero">
         <p class="hero__eyebrow" data-order-hero-eyebrow>演示订单</p>
@@ -3628,6 +3776,7 @@
     const ADDRESSES_VIEW_KEY = "addresses";
     const ORDERS_VIEW_KEY = "orders";
     const SUPPORT_VIEW_KEY = "support";
+    const ADMIN_VIEW_KEY = "admin";
     const RETURN_VIEW_KEY = "return";
     const RETURNS_VIEW_KEY = "returns";
     const SUPPORT_DEFAULT_SECTION = "faq";
@@ -3678,6 +3827,7 @@
     const ordersView = document.querySelector("[data-orders-view]");
     const orderView = document.querySelector("[data-order-view]");
     const supportView = document.querySelector("[data-support-view]");
+    const adminView = document.querySelector("[data-admin-view]");
     const returnView = document.querySelector("[data-return-view]");
     const returnsView = document.querySelector("[data-returns-view]");
     const toolbar = document.querySelector("[data-toolbar]");
@@ -3735,6 +3885,11 @@
     const supportFaq = document.querySelector("[data-support-faq]");
     const supportContactForm = document.querySelector("[data-support-contact-form]");
     const supportTicket = document.querySelector("[data-support-ticket]");
+    const adminAuthRequired = document.querySelector("[data-admin-auth-required]");
+    const adminForbidden = document.querySelector("[data-admin-forbidden]");
+    const adminConsole = document.querySelector("[data-admin-console]");
+    const adminTabs = document.querySelector("[data-admin-tabs]");
+    const adminPanel = document.querySelector("[data-admin-panel]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -3803,6 +3958,8 @@
     let openFaqId = null;
     let recentlyViewedProducts = [];
     let currentUser = null;
+    let activeAdminTab = "dashboard";
+    let adminData = { summary: null, products: [], inventory: [], orders: [], marketing: null };
     let addressBook = [];
     let isCartDrawerOpen = false;
     let isCartMutationPending = false;
@@ -4756,6 +4913,10 @@
         return SUPPORT_VIEW_KEY;
       }
 
+      if (view === ADMIN_VIEW_KEY) {
+        return ADMIN_VIEW_KEY;
+      }
+
       if (view === RETURN_VIEW_KEY) {
         return RETURN_VIEW_KEY;
       }
@@ -5257,6 +5418,14 @@
       }
     });
 
+    adminTabs.addEventListener("click", async (event) => {
+      const tab = event.target.closest("[data-admin-tab]");
+      if (!tab) return;
+
+      activeAdminTab = tab.dataset.adminTab;
+      await renderAdminPanel();
+    });
+
     function renderSupportView() {
       if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
         return;
@@ -5298,6 +5467,149 @@
           </div>
         `;
       }
+    }
+
+    async function fetchAdminJson(path) {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Admin request failed");
+      }
+      return response.json();
+    }
+
+    function isCurrentUserAdmin() {
+      return String(currentUser?.email || "").toLowerCase() === "admin@socks.test";
+    }
+
+    function setAdminAccessState(state) {
+      adminAuthRequired.hidden = state !== "auth";
+      adminForbidden.hidden = state !== "forbidden";
+      adminConsole.hidden = state !== "ready";
+    }
+
+    function renderAdminTabs() {
+      adminTabs.querySelectorAll("[data-admin-tab]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.adminTab === activeAdminTab);
+        button.setAttribute("aria-selected", button.dataset.adminTab === activeAdminTab ? "true" : "false");
+      });
+    }
+
+    function createKpiMarkup(summary) {
+      const cards = [
+        ["Orders", summary.ordersTotal],
+        ["Sales", formatCurrency(summary.grossSales)],
+        ["Low stock", summary.lowStockSkuCount],
+        ["Open tickets", summary.openTicketCount]
+      ];
+
+      return `<div class="admin-grid">${cards.map(([label, value]) => `
+        <article class="admin-card" data-admin-kpi>
+          <strong>${escapeHtml(value)}</strong>
+          <span>${escapeHtml(label)}</span>
+        </article>
+      `).join("")}</div>`;
+    }
+
+    async function renderAdminDashboard() {
+      const payload = await fetchAdminJson("/api/admin/summary");
+      adminData.summary = payload;
+      const recentOrders = Array.isArray(payload.recentOrders) ? payload.recentOrders : [];
+      adminPanel.innerHTML = `
+        ${createKpiMarkup(payload.summary)}
+        <div class="admin-table">
+          ${recentOrders.length ? recentOrders.map((order) => `
+            <article class="admin-row" data-admin-recent-order>
+              <span>${escapeHtml(order.id)}</span>
+              <span>${escapeHtml(order.status)}</span>
+              <span>${formatCurrency(order.total)}</span>
+            </article>
+          `).join("") : `<div class="empty-state">No recent orders yet.</div>`}
+        </div>
+      `;
+    }
+
+    async function renderAdminProducts() {
+      const payload = await fetchAdminJson("/api/admin/products");
+      adminData.products = payload.products;
+      adminPanel.innerHTML = `<div class="admin-table">${payload.products.map((product) => `
+        <article class="admin-row" data-admin-product-row>
+          <span>${escapeHtml(product.id)}</span>
+          <strong>${escapeHtml(product.title)}</strong>
+          <span>${escapeHtml(product.category)}</span>
+          <span>${formatCurrency(product.price)}</span>
+          <span>${product.variantCount} SKU</span>
+          <span>${product.totalStock}</span>
+        </article>
+      `).join("")}</div>`;
+    }
+
+    async function renderAdminInventory() {
+      const payload = await fetchAdminJson("/api/admin/inventory");
+      adminData.inventory = payload.items;
+      adminPanel.innerHTML = `<div class="admin-table">${payload.items.map((item) => `
+        <article class="admin-row" data-admin-inventory-row data-sku-id="${escapeHtml(item.skuId)}">
+          <span>${escapeHtml(item.skuId)}</span>
+          <strong>${escapeHtml(item.productTitle)}</strong>
+          <span>${escapeHtml(item.size)}</span>
+          <span>${item.stockQuantity}</span>
+          <span>${escapeHtml(item.stockState)}</span>
+        </article>
+      `).join("")}</div>`;
+    }
+
+    async function renderAdminOrders() {
+      const payload = await fetchAdminJson("/api/admin/orders");
+      adminData.orders = payload.orders;
+      adminPanel.innerHTML = payload.orders.length
+        ? `<div class="admin-table">${payload.orders.map((order) => `
+          <article class="admin-row" data-admin-order-row data-order-id="${escapeHtml(order.id)}">
+            <span>${escapeHtml(order.id)}</span>
+            <span>${escapeHtml(order.status)}</span>
+            <span>${formatCurrency(order.total)}</span>
+          </article>
+        `).join("")}</div>`
+        : `<div class="empty-state" data-admin-orders-empty>No orders yet.</div>`;
+    }
+
+    async function renderAdminMarketing() {
+      const payload = await fetchAdminJson("/api/admin/marketing");
+      adminData.marketing = payload;
+      const rows = [
+        ...payload.coupons.map((item) => ({ type: "coupon", id: item.code, status: item.status })),
+        ...payload.promotions.map((item) => ({ type: "promotion", id: item.id, status: item.status })),
+        ...payload.bundles.map((item) => ({ type: "bundle", id: item.id, status: item.status }))
+      ];
+      adminPanel.innerHTML = `<div class="admin-table">${rows.map((row) => `
+        <article class="admin-row" data-admin-marketing-row data-marketing-type="${row.type}" data-marketing-id="${escapeHtml(row.id)}">
+          <span>${escapeHtml(row.type)}</span>
+          <strong>${escapeHtml(row.id)}</strong>
+          <span>${escapeHtml(row.status)}</span>
+        </article>
+      `).join("")}</div>`;
+    }
+
+    async function renderAdminPanel() {
+      renderAdminTabs();
+      if (activeAdminTab === "products") return renderAdminProducts();
+      if (activeAdminTab === "inventory") return renderAdminInventory();
+      if (activeAdminTab === "orders") return renderAdminOrders();
+      if (activeAdminTab === "marketing") return renderAdminMarketing();
+      return renderAdminDashboard();
+    }
+
+    async function renderAdminView() {
+      if (!currentUser) {
+        setAdminAccessState("auth");
+        return;
+      }
+
+      if (!isCurrentUserAdmin()) {
+        setAdminAccessState("forbidden");
+        return;
+      }
+
+      setAdminAccessState("ready");
+      await renderAdminPanel();
     }
 
     function getAuthMode() {
@@ -5784,6 +6096,12 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         await fetchTrustCenter();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === ADMIN_VIEW_KEY) {
+        await renderAdminView();
         renderCartState();
         return;
       }
@@ -7790,6 +8108,7 @@
       const isOrdersView = currentView === ORDERS_VIEW_KEY;
       const isOrderView = currentView === ORDER_VIEW_KEY;
       const isSupportView = currentView === SUPPORT_VIEW_KEY;
+      const isAdminView = currentView === ADMIN_VIEW_KEY;
       const isReturnView = currentView === RETURN_VIEW_KEY;
       const isReturnsView = currentView === RETURNS_VIEW_KEY;
 
@@ -7804,6 +8123,7 @@
       ordersView.hidden = !isOrdersView;
       orderView.hidden = !isOrderView;
       supportView.hidden = !isSupportView;
+      adminView.hidden = !isAdminView;
       returnView.hidden = !isReturnView;
       returnsView.hidden = !isReturnsView;
       const allowDrawer = !isOrderView;
@@ -8827,6 +9147,12 @@
         return;
       }
 
+      if (getCurrentView() === ADMIN_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderAdminView();
+        return;
+      }
+
       if (getCurrentView() === RETURN_VIEW_KEY) {
         await cartLoadPromise;
         await renderReturnView();
@@ -8899,6 +9225,11 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         supportCurrentTitle.textContent = t("support.loadFailure");
+        return;
+      }
+
+      if (getCurrentView() === ADMIN_VIEW_KEY) {
+        adminPanel.innerHTML = `<div class="empty-state">Admin console failed to load.</div>`;
         return;
       }
 

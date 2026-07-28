@@ -83,6 +83,14 @@ async function registerFromUi(page, user = {}) {
   await expect(page.locator("[data-auth-user-name]")).toHaveText(name);
 }
 
+async function registerAdminFromUi(page) {
+  await registerFromUi(page, {
+    name: "Admin User",
+    email: "admin@socks.test",
+    password: "demo1234"
+  });
+}
+
 test.use({ viewport: { width: 1280, height: 960 } });
 
 test.beforeEach(async ({ request }) => {
@@ -133,6 +141,52 @@ test("renders the shared storefront shell on storefront, detail, and order views
   await expect(page.locator("[data-site-header]")).toBeVisible();
   await expect(page.locator("[data-site-footer]")).toBeVisible();
   await expect(page.locator("[data-site-search-form]")).toBeVisible();
+});
+
+test("shows login prompt for anonymous admin view access", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-auth-required]")).toBeVisible();
+  await expect(page.locator("[data-admin-auth-required]")).toContainText(/登录|sign in/i);
+});
+
+test("shows forbidden state for non-admin users on admin view", async ({ page }) => {
+  await registerFromUi(page, { email: "buyer@example.com" });
+
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-forbidden]")).toBeVisible();
+});
+
+test("renders admin dashboard tabs for demo admins", async ({ page }) => {
+  await registerAdminFromUi(page);
+
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-view]")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='dashboard']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='products']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='inventory']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='orders']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='marketing']")).toBeVisible();
+  await expect(page.locator("[data-admin-kpi]")).not.toHaveCount(0);
+});
+
+test("renders admin products inventory orders and marketing tabs", async ({ page }) => {
+  await registerAdminFromUi(page);
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await expect(page.locator("[data-admin-product-row]")).not.toHaveCount(0);
+
+  await page.locator("[data-admin-tab='inventory']").click();
+  await expect(page.locator("[data-admin-inventory-row]")).not.toHaveCount(0);
+
+  await page.locator("[data-admin-tab='orders']").click();
+  await expect(page.locator("[data-admin-orders-empty], [data-admin-order-row]").first()).toBeVisible();
+
+  await page.locator("[data-admin-tab='marketing']").click();
+  await expect(page.locator("[data-admin-marketing-row]")).not.toHaveCount(0);
 });
 
 test("opens the trust center from the header help link", async ({ page }) => {
