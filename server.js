@@ -34,6 +34,9 @@ const {
   getTrustCenterContent
 } = require("./lib/repositories/support");
 const {
+  getAdminSummary
+} = require("./lib/repositories/admin");
+const {
   createOrderTransaction,
   countOrders,
   listOrders,
@@ -70,6 +73,7 @@ const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
 const validLocales = new Set(["zh-CN", "en-US"]);
 const validStockFilters = new Set(["all", "in-stock", "low-stock", "out-of-stock"]);
+const DEMO_ADMIN_EMAILS = new Set(["admin@socks.test"]);
 const shippingMethods = {
   standard: {
     id: "standard",
@@ -992,12 +996,32 @@ function normalizeAddressPayload(body, existingAddress = {}) {
   };
 }
 
-async function requireUser(request, response) {
+async function requireUser(request, response, errorOptions = {}) {
   const { user } = await getSessionContext(request);
   if (!user) {
-    sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+    sendError(
+      response,
+      401,
+      errorOptions.code || "AUTH_REQUIRED",
+      errorOptions.message || "Authentication is required."
+    );
     return null;
   }
+  return user;
+}
+
+async function requireAdmin(request, response) {
+  const user = await requireUser(request, response, {
+    code: "ADMIN_AUTH_REQUIRED",
+    message: "Admin authentication is required."
+  });
+  if (!user) return null;
+
+  if (!DEMO_ADMIN_EMAILS.has(String(user.email || "").toLowerCase())) {
+    sendError(response, 403, "ADMIN_FORBIDDEN", "Admin access is required.");
+    return null;
+  }
+
   return user;
 }
 
@@ -1161,6 +1185,20 @@ const server = http.createServer(async (request, response) => {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
     }
     return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/summary") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const payload = withDatabase((db) => getAdminSummary(db));
+      sendJson(response, 200, { ok: true, ...payload });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {

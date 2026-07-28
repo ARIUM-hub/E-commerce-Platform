@@ -521,6 +521,63 @@ async function registerAndGetCookie(request) {
   return getSessionCookie(response);
 }
 
+async function registerApiUser(request, { name = "Admin User", email, password = "demo1234" } = {}) {
+  const response = await request.post("/api/auth/register", {
+    data: { name, email, password }
+  });
+  expect(response.ok()).toBe(true);
+  return response.headers()["set-cookie"];
+}
+
+test("requires an admin session for admin summary", async ({ request }) => {
+  const response = await request.get("/api/admin/summary");
+
+  expect(response.status()).toBe(401);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ADMIN_AUTH_REQUIRED");
+});
+
+test("rejects non-admin users from admin summary", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "buyer@example.com" });
+
+  const response = await request.get("/api/admin/summary", {
+    headers: { cookie }
+  });
+
+  expect(response.status()).toBe(403);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ADMIN_FORBIDDEN");
+});
+
+test("returns admin dashboard summary for demo admins", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+
+  const response = await request.get("/api/admin/summary", {
+    headers: { cookie }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.summary).toMatchObject({
+    ordersTotal: 1,
+    pendingPayment: 1,
+    lowStockSkuCount: expect.any(Number),
+    outOfStockSkuCount: expect.any(Number),
+    activeMarketingCount: expect.any(Number)
+  });
+  expect(payload.recentOrders[0].id).toMatch(/^SOCK-/);
+  expect(Array.isArray(payload.stockAlerts)).toBe(true);
+  expect(Array.isArray(payload.workQueue)).toBe(true);
+});
+
 test("registers a user and creates an http-only session", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
