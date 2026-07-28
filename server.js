@@ -1754,6 +1754,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       const item = cart.items.find((entry) => {
         return entry.skuId === variant.skuId
@@ -1763,7 +1764,8 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, {
         ok: true,
         item,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {
@@ -1785,6 +1787,7 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, {
         ok: true,
         items: [],
+        cart: getCartPayload(emptyCart),
         meta: { itemCount: 0 }
       }, activeCart);
       return;
@@ -2394,12 +2397,14 @@ const server = http.createServer(async (request, response) => {
         quantity: validation.quantity
       };
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       sendCartJson(response, 200, {
         ok: true,
         item: cart.items[itemIndex],
         items: cart.items,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {
@@ -2434,12 +2439,14 @@ const server = http.createServer(async (request, response) => {
 
       const [removedItem] = cart.items.splice(itemIndex, 1);
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       sendCartJson(response, 200, {
         ok: true,
         removedItem,
         items: cart.items,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {

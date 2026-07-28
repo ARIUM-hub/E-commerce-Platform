@@ -2056,11 +2056,17 @@ test("removes a single cart item without clearing the rest", async ({ request })
   expect(removeResponse.ok()).toBe(true);
 
   const removePayload = await removeResponse.json();
-  expect(removePayload).toEqual({
+  expect(removePayload).toMatchObject({
     ok: true,
     removedItem: { productId: "sock-02", skuId: "sock-02-43", size: "43", quantity: 1 },
     items: [{ productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }],
     meta: { itemCount: 1 }
+  });
+  expect(removePayload.cart).toMatchObject({
+    items: [{ productId: "sock-05", skuId: "sock-05-39", size: "39", quantity: 1 }],
+    pricing: expect.objectContaining({
+      total: 35
+    })
   });
 });
 

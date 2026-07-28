@@ -8244,28 +8244,6 @@
       return payload;
     }
 
-    function syncCartItem(item) {
-      const existingItem = cartState.items.find((entry) => {
-        return entry.skuId === item.skuId
-          || (entry.productId === item.productId && entry.size === item.size);
-      });
-
-      if (existingItem) {
-        existingItem.skuId = item.skuId;
-        existingItem.quantity = item.quantity;
-      } else {
-        cartState.items.push({
-          productId: item.productId,
-          skuId: item.skuId,
-          size: item.size,
-          quantity: item.quantity
-        });
-      }
-
-      cartState.pricing = null;
-      renderCartState();
-    }
-
     async function fetchMarketing() {
       const response = await fetch("/api/marketing");
       if (!response.ok) {
@@ -8355,7 +8333,8 @@
         const payload = await response.json();
         clearOrderConfirmationState();
         clearStoredOrderConfirmationSnapshot();
-        syncCartItem(payload.item);
+        setCartStateFromPayload(payload);
+        renderCartState();
         return payload;
       } finally {
         setCartMutationPending(false);
@@ -8381,7 +8360,8 @@
         }
 
         const payload = await response.json();
-        syncCartItem(payload.item);
+        setCartStateFromPayload(payload);
+        renderCartState();
         return payload;
       } finally {
         setCartMutationPending(false);
