@@ -19,6 +19,10 @@ const {
   resolveStaticFile,
   sendStaticFile
 } = require("./lib/http/static-files");
+const { createRouter } = require("./lib/http/router");
+const { registerHealthRoutes } = require("./lib/routes/health-routes");
+const { registerProductRoutes } = require("./lib/routes/product-routes");
+const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
 const { listProducts } = require("./lib/repositories/products");
 const {
   findUserByEmail,
@@ -1104,8 +1108,30 @@ function parseAdminMarketingStatusPath(pathname) {
   return match ? { type: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) } : null;
 }
 
+const router = createRouter();
+registerHealthRoutes(router);
+registerProductRoutes(router, {
+  getProductsPayload,
+  listProducts,
+  withDatabase
+});
+registerMarketingRoutes(router, {
+  getMarketingPayload
+});
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
+  const wasHandledByRouter = await router.dispatch({
+    request,
+    response,
+    requestUrl,
+    sendError,
+    sendJson
+  });
+
+  if (wasHandledByRouter) {
+    return;
+  }
 
   if (requestUrl.pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
@@ -1130,33 +1156,6 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/api/products") {
-    try {
-      const products = withDatabase((db) => listProducts(db));
-      const payload = getProductsPayload(
-        products,
-        requestUrl.searchParams.get("filter"),
-        requestUrl.searchParams.get("sort"),
-        requestUrl.searchParams.get("locale"),
-        requestUrl.searchParams.get("q"),
-        {
-          page: requestUrl.searchParams.get("page"),
-          pageSize: requestUrl.searchParams.get("pageSize"),
-          minPrice: requestUrl.searchParams.get("minPrice"),
-          maxPrice: requestUrl.searchParams.get("maxPrice"),
-          size: requestUrl.searchParams.get("size"),
-          stock: requestUrl.searchParams.get("stock"),
-          ratingMin: requestUrl.searchParams.get("ratingMin")
-        }
-      );
-      sendJson(response, 200, payload);
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
   if (request.method === "GET" && requestUrl.pathname === "/api/session") {
     try {
       const { user } = await getSessionContext(request);
@@ -1164,16 +1163,6 @@ const server = http.createServer(async (request, response) => {
         authenticated: Boolean(user),
         user: createPublicUser(user)
       });
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "GET" && requestUrl.pathname === "/api/marketing") {
-    try {
-      sendJson(response, 200, getMarketingPayload());
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");

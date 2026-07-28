@@ -115,6 +115,27 @@ test("serves the external storefront script", async ({ request }) => {
   expect(body).toContain("renderProducts");
 });
 
+test("keeps migrated health product and marketing routes behavior stable", async ({ request }) => {
+  const health = await request.get("/api/health");
+  expect(health.ok()).toBe(true);
+  await expect(health.json()).resolves.toMatchObject({ ok: true });
+
+  const products = await request.get("/api/products?filter=sport&sort=price-asc&pageSize=4&locale=en-US");
+  expect(products.ok()).toBe(true);
+  const productsPayload = await products.json();
+  expect(productsPayload.items.length).toBeGreaterThan(0);
+  expect(productsPayload.meta).toMatchObject({
+    filter: "sport",
+    sort: "price-asc"
+  });
+
+  const marketing = await request.get("/api/marketing");
+  expect(marketing.ok()).toBe(true);
+  const marketingPayload = await marketing.json();
+  expect(Array.isArray(marketingPayload.promotions)).toBe(true);
+  expect(Array.isArray(marketingPayload.coupons)).toBe(true);
+});
+
 test("rejects oversized JSON request bodies with a standard error", async ({ request }) => {
   const largeMessage = "x".repeat(1100000);
   const response = await request.post("/api/support/contact", {
