@@ -279,6 +279,7 @@ test("records schema migrations during database initialization", async () => {
     const migrations = db.prepare("SELECT id, name FROM schema_migrations ORDER BY id ASC").all();
     expect(migrations.map((migration) => migration.id)).toContain("0001_initial_schema");
     expect(migrations.map((migration) => migration.id)).toContain("0002_cart_coupon_code");
+    expect(migrations.map((migration) => migration.id)).toContain("0003_product_reviews");
   } finally {
     db.close();
   }
@@ -320,6 +321,68 @@ test("initializes SQLite support ticket table", async () => {
   } finally {
     db.close();
   }
+});
+
+test("creates and lists product reviews for a product", async ({ request }) => {
+  const createResponse = await request.post("/api/products/sock-02/reviews", {
+    data: {
+      author: "Maya Chen",
+      rating: 5,
+      body: "面料柔软，运动后也很透气。",
+      locale: "zh-CN"
+    }
+  });
+
+  expect(createResponse.status()).toBe(201);
+  await expect(createResponse.json()).resolves.toMatchObject({
+    ok: true,
+    review: {
+      productId: "sock-02",
+      author: "Maya Chen",
+      rating: 5,
+      body: "面料柔软，运动后也很透气。"
+    }
+  });
+
+  const listResponse = await request.get("/api/products/sock-02/reviews");
+  expect(listResponse.ok()).toBe(true);
+  await expect(listResponse.json()).resolves.toMatchObject({
+    ok: true,
+    summary: {
+      count: 1,
+      averageRating: 5
+    },
+    reviews: [
+      {
+        productId: "sock-02",
+        author: "Maya Chen",
+        rating: 5,
+        body: "面料柔软，运动后也很透气。"
+      }
+    ]
+  });
+});
+
+test("rejects invalid product reviews with standard errors", async ({ request }) => {
+  const response = await request.post("/api/products/sock-02/reviews", {
+    data: {
+      author: "",
+      rating: 8,
+      body: "短",
+      locale: "zh-CN"
+    }
+  });
+
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: false,
+    error: {
+      code: "PRODUCT_REVIEW_VALIDATION_FAILED",
+      details: {
+        fields: expect.arrayContaining(["author", "rating", "body"])
+      }
+    }
+  });
 });
 
 test("initializes SQLite return request tables", async () => {

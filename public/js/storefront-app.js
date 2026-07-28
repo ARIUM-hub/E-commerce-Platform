@@ -428,7 +428,18 @@
           emptyCopy: "暂时找不到所选演示商品。",
           noRecommendations: "暂时没有可展示的推荐商品。",
           navNoItemTitle: "暂无商品",
-          navNoItemMeta: "当前视图中没有更多商品"
+          navNoItemMeta: "当前视图中没有更多商品",
+          reviewsEyebrow: "真实反馈",
+          reviewsTitle: "用户评论",
+          reviewsEmpty: "暂无评论，成为第一个分享体验的人。",
+          reviewsCount: ({ count }) => `${count} 条评论`,
+          reviewsSummary: ({ rating }) => `${rating} / 5`,
+          reviewAuthor: "昵称",
+          reviewRating: "评分",
+          reviewBody: "评论内容",
+          reviewSubmit: "提交评论",
+          reviewSubmitting: "提交中...",
+          reviewError: "评论提交失败，请检查昵称、评分和内容。"
         },
         checkout: {
           heroEyebrow: "安全结算",
@@ -737,7 +748,18 @@
           emptyCopy: "We couldn't find the selected demo product.",
           noRecommendations: "No recommendations are available right now.",
           navNoItemTitle: "No item",
-          navNoItemMeta: "No more products in this view"
+          navNoItemMeta: "No more products in this view",
+          reviewsEyebrow: "Real feedback",
+          reviewsTitle: "Customer reviews",
+          reviewsEmpty: "No reviews yet. Be the first to share your experience.",
+          reviewsCount: ({ count }) => `${count} ${count === 1 ? "review" : "reviews"}`,
+          reviewsSummary: ({ rating }) => `${rating} / 5`,
+          reviewAuthor: "Name",
+          reviewRating: "Rating",
+          reviewBody: "Review",
+          reviewSubmit: "Submit review",
+          reviewSubmitting: "Submitting...",
+          reviewError: "Review submission failed. Check name, rating, and content."
         },
         checkout: {
           heroEyebrow: "Secure Checkout",
@@ -2641,6 +2663,28 @@
       return fetchProductsForState(FILTER_KEY.ALL, SORT_KEY.RECOMMENDED, "");
     }
 
+    async function fetchProductReviews(productId) {
+      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/reviews`);
+      if (!response.ok) {
+        throw new Error("Failed to load product reviews");
+      }
+      return response.json();
+    }
+
+    async function createProductReview(productId, payload) {
+      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, locale: activeLocale })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Product review failed");
+      }
+
+      return response.json();
+    }
+
     function createRecommendationCardMarkup(product) {
       const localizedProduct = getLocalizedProduct(product);
 
@@ -3384,12 +3428,76 @@
       `;
     }
 
+    function createReviewItemsMarkup(reviews) {
+      if (!reviews.length) {
+        return `<p class="detail-reviews__empty" data-review-empty>${t("detail.reviewsEmpty")}</p>`;
+      }
+
+      return reviews.map((review) => `
+        <article class="detail-review" data-review-item>
+          <div class="detail-review__header">
+            <strong>${escapeHtml(review.author)}</strong>
+            <span>${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}</span>
+          </div>
+          <p>${escapeHtml(review.body)}</p>
+          <time datetime="${escapeHtml(review.createdAt)}">${escapeHtml(String(review.createdAt || "").slice(0, 10))}</time>
+        </article>
+      `).join("");
+    }
+
+    function createProductReviewsMarkup(productId, payload = {}) {
+      const reviews = Array.isArray(payload.reviews) ? payload.reviews : [];
+      const summary = payload.summary || { count: 0, averageRating: 0 };
+      const averageRating = Number(summary.averageRating || 0).toFixed(1);
+
+      return `
+        <section class="detail-section detail-reviews" data-product-reviews data-product-id="${escapeHtml(productId)}">
+          <div class="detail-reviews__heading">
+            <div>
+              <p class="detail-section__eyebrow">${t("detail.reviewsEyebrow")}</p>
+              <h2 class="detail-section__title">${t("detail.reviewsTitle")}</h2>
+            </div>
+            <div class="detail-reviews__summary">
+              <strong data-review-summary>${t("detail.reviewsSummary", { rating: averageRating })}</strong>
+              <span data-product-review-count>${t("detail.reviewsCount", { count: summary.count || 0 })}</span>
+            </div>
+          </div>
+          <div class="detail-reviews__list" data-review-list>
+            ${createReviewItemsMarkup(reviews)}
+          </div>
+          <form class="detail-review-form" data-review-form novalidate>
+            <label class="detail-review-form__field">
+              ${t("detail.reviewAuthor")}
+              <input name="author" maxlength="60" data-review-author>
+            </label>
+            <label class="detail-review-form__field">
+              ${t("detail.reviewRating")}
+              <select name="rating" data-review-rating>
+                <option value="5">5</option>
+                <option value="4">4</option>
+                <option value="3">3</option>
+                <option value="2">2</option>
+                <option value="1">1</option>
+              </select>
+            </label>
+            <label class="detail-review-form__field detail-review-form__field--wide">
+              ${t("detail.reviewBody")}
+              <textarea name="body" maxlength="500" rows="4" data-review-body></textarea>
+            </label>
+            <p class="detail-review-form__error" data-review-error role="alert"></p>
+            <button class="detail-review-form__submit" type="submit" data-review-submit>${t("detail.reviewSubmit")}</button>
+          </form>
+        </section>
+      `;
+    }
+
     function createDetailPagePanelMarkup(product, options = {}) {
       const localizedProduct = getLocalizedProduct(product);
       const previousProduct = options.previousProduct || null;
       const nextProduct = options.nextProduct || null;
       const detailSourceMarkup = options.detailSourceMarkup || "";
       const recommendationsMarkup = options.recommendationsMarkup || `<p class="detail-recommendations__empty">${t("detail.noRecommendations")}</p>`;
+      const reviewsMarkup = options.reviewsMarkup || createProductReviewsMarkup(product.id);
       const detailTag = product.isRecommended ? t("listing.recommendedTag") : localizedProduct.categoryLabel;
       const sizeButtons = createSizeButtonsMarkup(product, {
         dataAttribute: "data-detail-size"
@@ -3444,6 +3552,7 @@
               <h2 class="detail-section__title">${t("detail.recommendedTitle")}</h2>
               ${recommendationsMarkup}
             </section>
+            ${reviewsMarkup}
           </div>
         </div>
       `;
@@ -3644,14 +3753,25 @@
     }
 
     function createCartFeedbackMarkup(sizeCounts) {
-      const entries = Array.from(sizeCounts.entries());
+      const entries = getSortedSizeCountEntries(sizeCounts);
       const totalCount = entries.reduce((total, [, count]) => total + count, 0);
 
       return `<span class="cart-feedback__summary" data-cart-feedback-summary>${t("cart.selectedSizesSummary", { count: totalCount })}</span>`;
     }
 
+    function getSortedSizeCountEntries(sizeCounts) {
+      return Array.from(sizeCounts.entries()).sort(([leftSize], [rightSize]) => {
+        const leftNumber = Number(leftSize);
+        const rightNumber = Number(rightSize);
+        if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+          return leftNumber - rightNumber;
+        }
+        return String(leftSize).localeCompare(String(rightSize));
+      });
+    }
+
     function createCartFeedbackPopoverMarkup(sizeCounts) {
-      return Array.from(sizeCounts.entries())
+      return getSortedSizeCountEntries(sizeCounts)
         .map(([size, count]) => `<span class="cart-feedback__size" data-cart-feedback-size>${size} x${count}</span>`)
         .join("");
     }
@@ -4033,11 +4153,53 @@
       detailPagePanel.innerHTML = createDetailEmptyStateMarkup();
     }
 
+    function renderProductReviews(productId, payload) {
+      const currentSection = detailPagePanel.querySelector("[data-product-reviews]");
+      if (!currentSection) {
+        return;
+      }
+
+      currentSection.outerHTML = createProductReviewsMarkup(productId, payload);
+      bindProductReviewForm(productId);
+    }
+
+    function bindProductReviewForm(productId) {
+      const reviewForm = detailPagePanel.querySelector("[data-review-form]");
+      if (!reviewForm) {
+        return;
+      }
+
+      reviewForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const submitButton = reviewForm.querySelector("[data-review-submit]");
+        const errorNode = reviewForm.querySelector("[data-review-error]");
+        const formData = new FormData(reviewForm);
+        submitButton.disabled = true;
+        submitButton.textContent = t("detail.reviewSubmitting");
+        errorNode.textContent = "";
+
+        try {
+          const payload = await createProductReview(productId, {
+            author: formData.get("author"),
+            rating: formData.get("rating"),
+            body: formData.get("body")
+          });
+          renderProductReviews(productId, payload);
+        } catch (error) {
+          errorNode.textContent = t("detail.reviewError");
+          submitButton.disabled = false;
+          submitButton.textContent = t("detail.reviewSubmit");
+        }
+      });
+    }
+
     function bindDetailInteractions(product) {
       const detailRoot = detailPagePanel.querySelector("[data-detail-product-root]");
       if (!detailRoot) {
         return;
       }
+
+      bindProductReviewForm(product.id);
 
       const sizeButtons = Array.from(detailRoot.querySelectorAll("[data-detail-size]"));
       const cartButton = detailRoot.querySelector("[data-detail-cart-button]");
@@ -4152,6 +4314,12 @@
       const recommendedProducts = allProducts
         .filter((entry) => entry.id !== requestedProductId)
         .slice(0, 3);
+      const reviewPayload = await fetchProductReviews(product.id).catch(() => ({
+        ok: true,
+        productId: product.id,
+        summary: { count: 0, averageRating: 0 },
+        reviews: []
+      }));
       const localizedProduct = getLocalizedProduct(product);
 
       detailPageSeries.textContent = product.series;
@@ -4162,7 +4330,8 @@
         previousProduct,
         nextProduct,
         detailSourceMarkup: createDetailSourceMarkup(product),
-        recommendationsMarkup: createDetailRecommendationsMarkup(recommendedProducts)
+        recommendationsMarkup: createDetailRecommendationsMarkup(recommendedProducts),
+        reviewsMarkup: createProductReviewsMarkup(product.id, reviewPayload)
       });
 
       const stockLabel = detailPagePanel.querySelector("[data-stock-label]");

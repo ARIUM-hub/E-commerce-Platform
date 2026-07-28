@@ -23,7 +23,12 @@ const { createRouter } = require("./lib/http/router");
 const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
 const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
-const { listProducts } = require("./lib/repositories/products");
+const { listProducts, findProductById } = require("./lib/repositories/products");
+const {
+  createProductReview,
+  listProductReviews,
+  summarizeReviews
+} = require("./lib/repositories/product-reviews");
 const {
   findUserByEmail,
   findUserById,
@@ -1111,8 +1116,13 @@ function parseAdminMarketingStatusPath(pathname) {
 const router = createRouter();
 registerHealthRoutes(router);
 registerProductRoutes(router, {
+  createProductReview,
+  findProductById,
   getProductsPayload,
+  listProductReviews,
   listProducts,
+  readRequestBody,
+  summarizeReviews,
   withDatabase
 });
 registerMarketingRoutes(router, {

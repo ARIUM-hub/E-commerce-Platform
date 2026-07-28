@@ -844,6 +844,32 @@ test("updates the visible detail cart state after adding the current product", a
   await expect(page.locator("[data-detail-cart-summary]")).toContainText("1 件");
 });
 
+test("submits and displays product reviews on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  await expect(page.locator("[data-product-reviews]")).toBeVisible();
+  await expect(page.locator("[data-review-empty]")).toContainText("暂无评论");
+
+  await page.locator("[data-review-author]").fill("Maya Chen");
+  await page.locator("[data-review-rating]").selectOption("5");
+  await page.locator("[data-review-body]").fill("面料柔软，运动后也很透气。");
+
+  const createReviewResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.request().method() === "POST";
+  });
+
+  await page.locator("[data-review-submit]").click();
+  expect((await createReviewResponse).status()).toBe(201);
+
+  await expect(page.locator("[data-review-empty]")).toHaveCount(0);
+  await expect(page.locator("[data-review-item]")).toHaveCount(1);
+  await expect(page.locator("[data-review-item]").first()).toContainText("Maya Chen");
+  await expect(page.locator("[data-review-item]").first()).toContainText("面料柔软，运动后也很透气。");
+  await expect(page.locator("[data-review-summary]")).toContainText("5.0");
+  await expect(page.locator("[data-product-review-count]")).toContainText("1 条评论");
+});
+
 test("shows selected detail sizes and quantities after adding from the detail page", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=detail&id=sock-04");
 
@@ -867,7 +893,7 @@ test("shows selected detail sizes and quantities after adding from the detail pa
   await detailAddButton.click();
 
   await expect(detailFeedbackButton.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x1"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x1", "43 x1"]);
 });
 
 test("renders gallery color material and size chart on the detail page", async ({ page }) => {
@@ -907,7 +933,7 @@ test("keeps add-to-cart size feedback synced between storefront and detail views
   await detailRoot.locator("[data-detail-cart-button]").click();
 
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x1"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x1", "43 x1"]);
 
   await page.locator("[data-detail-back-link]").click();
   await expect(firstCard.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
@@ -924,13 +950,13 @@ test("restores persisted size feedback when the detail page is reopened", async 
 
   const detailRoot = page.locator("[data-detail-product-root]");
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+3）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x2"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x2", "43 x1"]);
 
   await page.locator("[data-detail-back-link]").click();
   await page.locator('[data-product-card][data-product-id="sock-01"]').locator("[data-product-detail-link]").click();
 
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+3）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x2"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x2", "43 x1"]);
 });
 
 test("shows detail recommendations without repeating the current product", async ({ page }) => {
