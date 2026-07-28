@@ -578,6 +578,69 @@ test("returns admin dashboard summary for demo admins", async ({ request }) => {
   expect(Array.isArray(payload.workQueue)).toBe(true);
 });
 
+test("returns admin product summaries for demo admins", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.get("/api/admin/products", {
+    headers: { cookie }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.products.length).toBeGreaterThan(0);
+  expect(payload.products[0]).toMatchObject({
+    id: "sock-01",
+    title: expect.any(String),
+    variantCount: expect.any(Number),
+    totalStock: expect.any(Number),
+    lowStockCount: expect.any(Number),
+    outOfStockCount: expect.any(Number)
+  });
+});
+
+test("returns filtered admin inventory rows", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.get("/api/admin/inventory?stock=low-stock&q=sock-04", {
+    headers: { cookie }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.items.length).toBeGreaterThan(0);
+  payload.items.forEach((item) => {
+    expect(item.stockState).toBe("low-stock");
+    expect(item.skuId).toContain("sock-04");
+  });
+});
+
+test("updates SKU inventory from admin API and reflects it in products", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.patch("/api/admin/inventory/sock-01-39", {
+    headers: { cookie },
+    data: { stockQuantity: 0, lowStockThreshold: 2, isAvailable: false }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.item).toMatchObject({
+    skuId: "sock-01-39",
+    stockQuantity: 0,
+    lowStockThreshold: 2,
+    isAvailable: false,
+    stockState: "out-of-stock"
+  });
+
+  const productsResponse = await request.get("/api/products?locale=en-US&pageSize=24");
+  const productsPayload = await productsResponse.json();
+  const product = productsPayload.items.find((item) => item.id === "sock-01");
+  expect(product.variants.find((variant) => variant.skuId === "sock-01-39")).toMatchObject({
+    stockQuantity: 0,
+    isAvailable: false
+  });
+});
+
 test("registers a user and creates an http-only session", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);

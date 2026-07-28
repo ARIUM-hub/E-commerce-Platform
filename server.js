@@ -34,7 +34,10 @@ const {
   getTrustCenterContent
 } = require("./lib/repositories/support");
 const {
-  getAdminSummary
+  getAdminSummary,
+  listAdminProducts,
+  listInventory,
+  updateInventoryItem
 } = require("./lib/repositories/admin");
 const {
   createOrderTransaction,
@@ -1077,6 +1080,11 @@ function parseReturnStatusPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseAdminInventoryPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/inventory\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
 
@@ -1196,6 +1204,63 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, ...payload });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/products") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const products = withDatabase((db) => listAdminProducts(db));
+      sendJson(response, 200, { ok: true, products });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/inventory") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const items = withDatabase((db) => listInventory(db, {
+        stock: requestUrl.searchParams.get("stock") || "all",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, items });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminSkuId = parseAdminInventoryPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedAdminSkuId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateInventoryItem(db, requestedAdminSkuId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, item: result.item });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
