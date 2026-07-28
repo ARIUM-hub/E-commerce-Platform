@@ -126,6 +126,18 @@ test("renders the socks category page shell", async ({ page }) => {
   await expect(page.locator("[data-product-card]").first()).toBeVisible();
 });
 
+test("boots the storefront from the external script bundle", async ({ page }) => {
+  const scriptResponse = page.waitForResponse((response) => {
+    return response.url().includes("/public/js/storefront-app.js") && response.status() === 200;
+  });
+
+  await page.goto("/socks-product-list.html");
+
+  expect((await scriptResponse).ok()).toBe(true);
+  await expect(page.locator("[data-product-card]")).not.toHaveCount(0);
+  await expect(page.getByRole("button", { name: "打开购物车" })).toBeVisible();
+});
+
 test("renders the shared storefront shell on storefront, detail, and order views", async ({ page }) => {
   await page.goto("/socks-product-list.html");
   await expect(page.locator("[data-site-header]")).toBeVisible();

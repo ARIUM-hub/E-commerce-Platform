@@ -105,6 +105,16 @@ test("adds baseline security headers to API responses", async ({ request }) => {
   expect(response.headers()["permissions-policy"]).toContain("camera=()");
 });
 
+test("serves the external storefront script", async ({ request }) => {
+  const response = await request.get("/public/js/storefront-app.js");
+
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["content-type"]).toContain("application/javascript");
+  const body = await response.text();
+  expect(body).toContain("fetchCart");
+  expect(body).toContain("renderProducts");
+});
+
 test("rejects oversized JSON request bodies with a standard error", async ({ request }) => {
   const largeMessage = "x".repeat(1100000);
   const response = await request.post("/api/support/contact", {
