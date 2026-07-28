@@ -6,7 +6,10 @@ module.exports = {
     env: {
       DATA_DIR: "tests/fixtures/test-data",
       NODE_ENV: "test",
-      PORT: "4173"
+      PORT: "4173",
+      LOG_LEVEL: "warn",
+      REQUEST_BODY_LIMIT_BYTES: "1048576",
+      SECURITY_HEADERS_ENABLED: "true"
     },
     reuseExistingServer: false
   },

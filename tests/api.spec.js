@@ -136,6 +136,17 @@ test("keeps migrated health product and marketing routes behavior stable", async
   expect(Array.isArray(marketingPayload.coupons)).toBe(true);
 });
 
+test("documents expected engineering environment variables", async () => {
+  const envExample = await fs.readFile(".env.example", "utf8");
+
+  expect(envExample).toContain("HOST=127.0.0.1");
+  expect(envExample).toContain("PORT=4173");
+  expect(envExample).toContain("DATA_DIR=data");
+  expect(envExample).toContain("LOG_LEVEL=info");
+  expect(envExample).toContain("REQUEST_BODY_LIMIT_BYTES=1048576");
+  expect(envExample).toContain("SECURITY_HEADERS_ENABLED=true");
+});
+
 test("rejects oversized JSON request bodies with a standard error", async ({ request }) => {
   const largeMessage = "x".repeat(1100000);
   const response = await request.post("/api/support/contact", {

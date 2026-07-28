@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "node server.js",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:api": "playwright test tests/api.spec.js --workers=1",
+    "test:ui": "playwright test tests/socks-product-list.spec.js --workers=1"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.1"
