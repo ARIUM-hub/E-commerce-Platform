@@ -225,6 +225,47 @@ test("initializes SQLite marketing campaigns, coupons, bundles, and recent views
   expect(recentViewTable).toEqual({ name: "recent_views" });
 });
 
+test("records schema migrations during database initialization", async () => {
+  await resetDatabase(testDbFile);
+
+  const db = createDatabase(testDbFile);
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const migrations = db.prepare("SELECT id, name FROM schema_migrations ORDER BY id ASC").all();
+    expect(migrations.map((migration) => migration.id)).toContain("0001_initial_schema");
+    expect(migrations.map((migration) => migration.id)).toContain("0002_cart_coupon_code");
+  } finally {
+    db.close();
+  }
+});
+
+test("runs database initialization idempotently without duplicate seeds", async () => {
+  await resetDatabase(testDbFile);
+
+  const db = createDatabase(testDbFile);
+  try {
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+
+    const productCount = db.prepare("SELECT COUNT(*) AS count FROM products").get().count;
+    const promotionCount = db.prepare("SELECT COUNT(*) AS count FROM promotions").get().count;
+    const migrationCount = db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count;
+
+    expect(productCount).toBe(12);
+    expect(promotionCount).toBe(2);
+    expect(migrationCount).toBeGreaterThanOrEqual(2);
+  } finally {
+    db.close();
+  }
+});
+
 test("initializes SQLite support ticket table", async () => {
   const db = createDatabase(":memory:");
   try {
