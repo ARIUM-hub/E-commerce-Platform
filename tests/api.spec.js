@@ -95,6 +95,56 @@ test("filters structured logger output by level", async () => {
   expect(lines[1]).toContain("request.failed");
 });
 
+test("adds baseline security headers to API responses", async ({ request }) => {
+  const response = await request.get("/api/health");
+
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(response.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["permissions-policy"]).toContain("camera=()");
+});
+
+test("rejects oversized JSON request bodies with a standard error", async ({ request }) => {
+  const largeMessage = "x".repeat(1100000);
+  const response = await request.post("/api/support/contact", {
+    data: {
+      name: "Alex",
+      contact: "alex@example.com",
+      topic: "other",
+      message: largeMessage,
+      locale: "zh-CN"
+    }
+  });
+
+  expect(response.status()).toBe(413);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: false,
+    error: {
+      code: "REQUEST_BODY_TOO_LARGE",
+      message: expect.any(String),
+      details: {}
+    }
+  });
+});
+
+test("keeps invalid JSON errors in the standard error envelope", async ({ request }) => {
+  const response = await request.post("/api/support/contact", {
+    headers: { "content-type": "application/json" },
+    data: Buffer.from("{not-json", "utf8")
+  });
+
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: false,
+    error: {
+      code: "INVALID_JSON",
+      message: expect.any(String),
+      details: {}
+    }
+  });
+});
+
 test("returns an empty order collection fixture by default", async () => {
   const orders = JSON.parse(await fs.readFile(ordersFile, "utf8"));
   expect(orders).toEqual({ orders: [] });

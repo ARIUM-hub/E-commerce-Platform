@@ -2,8 +2,23 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { createApiError } = require("./lib/api-errors");
+const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
+const { createLogger } = require("./lib/logger");
+const {
+  sendError: sendHttpError,
+  sendJson: sendHttpJson,
+  sendJsonWithHeaders: sendHttpJsonWithHeaders
+} = require("./lib/http/responses");
+const { JsonBodyError, readJsonBody } = require("./lib/http/request-body");
+const {
+  createCookie,
+  getCookieValue
+} = require("./lib/http/cookies");
+const {
+  resolveStaticFile,
+  sendStaticFile
+} = require("./lib/http/static-files");
 const { listProducts } = require("./lib/repositories/products");
 const {
   findUserByEmail,
@@ -63,10 +78,12 @@ const {
 } = require("./lib/repositories/payments");
 const { createPricingSummary } = require("./lib/pricing");
 
-const host = "127.0.0.1";
-const port = Number.parseInt(process.env.PORT || "4173", 10);
-const rootDir = __dirname;
-const dataDir = path.resolve(rootDir, process.env.DATA_DIR || "data");
+const config = createConfig(process.env);
+const logger = createLogger({ level: config.logLevel });
+const host = config.host;
+const port = config.port;
+const rootDir = config.rootDir;
+const dataDir = config.dataDir;
 const productsFile = path.join(dataDir, "products.json");
 const requiredDataFiles = [
   "products.json"
@@ -107,26 +124,12 @@ const orderStatusLabels = {
 const sessionCookieName = "socks_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 
-const mimeTypes = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8"
-};
-
 function sendJson(response, statusCode, payload) {
-  response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(payload));
+  sendHttpJson(response, statusCode, payload, config);
 }
 
 function sendJsonWithHeaders(response, statusCode, payload, headers = {}) {
-  response.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
-    ...headers
-  });
-  response.end(JSON.stringify(payload));
+  sendHttpJsonWithHeaders(response, statusCode, payload, headers, config);
 }
 
 function sendCartJson(response, statusCode, payload, activeCart) {
@@ -141,8 +144,7 @@ function sendCartJson(response, statusCode, payload, activeCart) {
 }
 
 function sendError(response, statusCode, code, message, details = {}) {
-  const apiError = createApiError(code, { statusCode, message, details });
-  sendJson(response, apiError.statusCode, apiError.payload);
+  sendHttpError(response, statusCode, code, message, details, config);
 }
 
 function validateDataDir() {
@@ -158,16 +160,8 @@ function validateDataDir() {
   }
 }
 
-function sendFile(response, filePath) {
-  const extension = path.extname(filePath).toLowerCase();
-  const contentType = mimeTypes[extension] || "application/octet-stream";
-
-  response.writeHead(200, { "Content-Type": contentType });
-  fs.createReadStream(filePath).pipe(response);
-}
-
 function getStaticFilePath(urlPathname) {
-  return staticRoutes.get(urlPathname) || null;
+  return resolveStaticFile(urlPathname, { rootDir, staticRoutes });
 }
 
 function withDatabase(callback) {
@@ -183,17 +177,21 @@ function withDatabase(callback) {
 }
 
 async function readRequestBody(request) {
-  const chunks = [];
+  return readJsonBody(request, { limitBytes: config.requestBodyLimitBytes });
+}
 
-  for await (const chunk of request) {
-    chunks.push(chunk);
+function handleRequestBodyError(error, response) {
+  if (error instanceof JsonBodyError) {
+    sendError(response, error.statusCode, error.code, error.message);
+    return true;
   }
 
-  if (chunks.length === 0) {
-    return {};
+  if (error instanceof SyntaxError) {
+    sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+    return true;
   }
 
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return false;
 }
 
 function sortRecommended(left, right) {
@@ -773,21 +771,22 @@ function createSessionId() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-function getCookieValue(request, cookieName) {
-  const cookieHeader = request.headers.cookie || "";
-  return cookieHeader
-    .split(";")
-    .map((entry) => entry.trim())
-    .map((entry) => entry.split("="))
-    .find(([name]) => name === cookieName)?.[1] || "";
-}
-
 function createSessionCookie(sessionId) {
-  return `${sessionCookieName}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionMaxAgeSeconds}`;
+  return createCookie(sessionCookieName, sessionId, {
+    httpOnly: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: sessionMaxAgeSeconds
+  });
 }
 
 function createExpiredSessionCookie() {
-  return `${sessionCookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+  return createCookie(sessionCookieName, "", {
+    httpOnly: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: 0
+  });
 }
 
 async function getSessionContext(request) {
@@ -1204,8 +1203,7 @@ const server = http.createServer(async (request, response) => {
 
       sendJson(response, 201, { ticket: result.ticket });
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1276,8 +1274,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, item: result.item });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1346,8 +1343,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, order: result.order });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1391,8 +1387,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, resource: result.resource });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1448,8 +1443,7 @@ const server = http.createServer(async (request, response) => {
       });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1487,8 +1481,7 @@ const server = http.createServer(async (request, response) => {
       });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1556,8 +1549,7 @@ const server = http.createServer(async (request, response) => {
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1673,8 +1665,7 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, { ok: true }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1769,8 +1760,7 @@ const server = http.createServer(async (request, response) => {
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1844,8 +1834,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 201, { ok: true, address, addresses: nextUser.addresses });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -1878,8 +1867,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, address: updatedAddress, addresses: nextUser.addresses });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -2065,8 +2053,7 @@ const server = http.createServer(async (request, response) => {
       });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2153,8 +2140,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 201, { ok: true, payment: result.payment, order: result.order });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2226,8 +2212,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, order });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2271,8 +2256,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 201, { ok: true, returnRequest: result.returnRequest });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2317,8 +2301,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, returnRequest: result.returnRequest });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2408,8 +2391,7 @@ const server = http.createServer(async (request, response) => {
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2450,8 +2432,7 @@ const server = http.createServer(async (request, response) => {
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -2461,36 +2442,19 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    sendJson(response, 405, { error: "Method Not Allowed" });
+    sendError(response, 405, "METHOD_NOT_ALLOWED", "Method is not allowed.");
     return;
   }
 
   const filePath = getStaticFilePath(requestUrl.pathname);
-  if (!filePath) {
-    sendJson(response, 404, { error: "Not Found" });
+  if (!sendStaticFile(request, response, filePath, config)) {
+    sendError(response, 404, "NOT_FOUND", "Resource was not found.");
     return;
   }
-
-  fs.stat(filePath, (error, stats) => {
-    if (error || !stats.isFile()) {
-      sendJson(response, 404, { error: "Not Found" });
-      return;
-    }
-
-    if (request.method === "HEAD") {
-      const extension = path.extname(filePath).toLowerCase();
-      const contentType = mimeTypes[extension] || "application/octet-stream";
-      response.writeHead(200, { "Content-Type": contentType });
-      response.end();
-      return;
-    }
-
-    sendFile(response, filePath);
-  });
 });
 
 validateDataDir();
 
 server.listen(port, host, () => {
-  console.log(`Server listening on http://${host}:${port}`);
+  logger.info("server.listening", { url: `http://${host}:${port}` });
 });
