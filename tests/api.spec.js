@@ -349,17 +349,50 @@ test("creates and lists product reviews for a product", async ({ request }) => {
   await expect(listResponse.json()).resolves.toMatchObject({
     ok: true,
     summary: {
-      count: 1,
-      averageRating: 5
+      count: 4,
+      averageRating: 4.8
     },
-    reviews: [
-      {
+    reviews: expect.arrayContaining([
+      expect.objectContaining({
         productId: "sock-02",
         author: "Maya Chen",
         rating: 5,
         body: "面料柔软，运动后也很透气。"
-      }
-    ]
+      }),
+      expect.objectContaining({
+        productId: "sock-02",
+        author: "李然",
+        rating: 5,
+        body: "运动时包裹感很好，脚背不会勒。"
+      })
+    ])
+  });
+});
+
+test("lists seeded product reviews for product detail pages", async ({ request }) => {
+  const response = await request.get("/api/products/sock-02/reviews");
+
+  expect(response.ok()).toBe(true);
+  await expect(response.json()).resolves.toMatchObject({
+    ok: true,
+    summary: {
+      count: 3,
+      averageRating: 4.7
+    },
+    reviews: expect.arrayContaining([
+      expect.objectContaining({
+        productId: "sock-02",
+        author: "李然",
+        rating: 5,
+        body: "运动时包裹感很好，脚背不会勒。"
+      }),
+      expect.objectContaining({
+        productId: "sock-02",
+        author: "Ava",
+        rating: 4,
+        body: "洗过两次还是挺有弹性，厚度适合训练。"
+      })
+    ])
   });
 });
 

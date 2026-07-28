@@ -848,7 +848,10 @@ test("submits and displays product reviews on the detail page", async ({ page })
   await page.goto("/socks-product-list.html?view=detail&id=sock-02");
 
   await expect(page.locator("[data-product-reviews]")).toBeVisible();
-  await expect(page.locator("[data-review-empty]")).toContainText("暂无评论");
+  await expect(page.locator("[data-review-empty]")).toHaveCount(0);
+  await expect(page.locator("[data-review-item]")).toHaveCount(3);
+  await expect(page.locator("[data-review-item]").first()).toContainText("李然");
+  await expect(page.locator("[data-product-review-count]")).toContainText("3 条评论");
 
   await page.locator("[data-review-author]").fill("Maya Chen");
   await page.locator("[data-review-rating]").selectOption("5");
@@ -863,11 +866,11 @@ test("submits and displays product reviews on the detail page", async ({ page })
   expect((await createReviewResponse).status()).toBe(201);
 
   await expect(page.locator("[data-review-empty]")).toHaveCount(0);
-  await expect(page.locator("[data-review-item]")).toHaveCount(1);
+  await expect(page.locator("[data-review-item]")).toHaveCount(4);
   await expect(page.locator("[data-review-item]").first()).toContainText("Maya Chen");
   await expect(page.locator("[data-review-item]").first()).toContainText("面料柔软，运动后也很透气。");
-  await expect(page.locator("[data-review-summary]")).toContainText("5.0");
-  await expect(page.locator("[data-product-review-count]")).toContainText("1 条评论");
+  await expect(page.locator("[data-review-summary]")).toContainText("4.8");
+  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
 });
 
 test("shows selected detail sizes and quantities after adding from the detail page", async ({ page }) => {
