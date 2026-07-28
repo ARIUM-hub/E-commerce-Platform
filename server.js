@@ -34,10 +34,15 @@ const {
   getTrustCenterContent
 } = require("./lib/repositories/support");
 const {
+  findAdminOrder,
   getAdminSummary,
+  listAdminMarketing,
+  listAdminOrders,
   listAdminProducts,
   listInventory,
-  updateInventoryItem
+  updateAdminOrderStatus,
+  updateInventoryItem,
+  updateMarketingStatus
 } = require("./lib/repositories/admin");
 const {
   createOrderTransaction,
@@ -1085,6 +1090,21 @@ function parseAdminInventoryPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseAdminOrderPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminOrderStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminMarketingStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/marketing\/([^/]+)\/([^/]+)\/status$/);
+  return match ? { type: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) } : null;
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
 
@@ -1254,6 +1274,121 @@ const server = http.createServer(async (request, response) => {
       }
 
       sendJson(response, 200, { ok: true, item: result.item });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/orders") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const orders = withDatabase((db) => listAdminOrders(db, {
+        status: requestUrl.searchParams.get("status") || "",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, orders });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminOrderId = parseAdminOrderPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedAdminOrderId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const order = withDatabase((db) => findAdminOrder(db, requestedAdminOrderId));
+      if (!order) {
+        sendError(response, 404, "ADMIN_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminStatusOrderId = parseAdminOrderStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedAdminStatusOrderId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateAdminOrderStatus(
+        db,
+        requestedAdminStatusOrderId,
+        String(body.status || "").trim(),
+        normalizeLocale(body.locale),
+        createTimelineEntry,
+        saveOrder
+      ));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order });
+      return;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/marketing") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const marketing = withDatabase((db) => listAdminMarketing(db));
+      sendJson(response, 200, { ok: true, ...marketing });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedMarketingStatus = parseAdminMarketingStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedMarketingStatus) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateMarketingStatus(
+        db,
+        requestedMarketingStatus.type,
+        requestedMarketingStatus.id,
+        body.status
+      ));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, resource: result.resource });
       return;
     } catch (error) {
       if (error instanceof SyntaxError) {

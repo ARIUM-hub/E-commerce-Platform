@@ -641,6 +641,59 @@ test("updates SKU inventory from admin API and reflects it in products", async (
   });
 });
 
+test("lists admin orders and advances an order status", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const createResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await createResponse.json()).order;
+
+  const listResponse = await request.get("/api/admin/orders", {
+    headers: { cookie }
+  });
+  expect(listResponse.ok()).toBe(true);
+  expect((await listResponse.json()).orders[0].id).toBe(order.id);
+
+  const statusResponse = await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "cancelled", locale: "en-US" }
+  });
+  expect(statusResponse.ok()).toBe(true);
+  const statusPayload = await statusResponse.json();
+  expect(statusPayload.order.status).toBe("cancelled");
+  expect(statusPayload.order.timeline.map((entry) => entry.status)).toContain("cancelled");
+});
+
+test("returns and toggles admin marketing resources", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const listResponse = await request.get("/api/admin/marketing", {
+    headers: { cookie }
+  });
+  expect(listResponse.ok()).toBe(true);
+  const listPayload = await listResponse.json();
+  expect(listPayload.coupons.map((coupon) => coupon.code)).toContain("SOCK10");
+
+  const updateResponse = await request.patch("/api/admin/marketing/coupon/SOCK10/status", {
+    headers: { cookie },
+    data: { status: "inactive" }
+  });
+  expect(updateResponse.ok()).toBe(true);
+  expect((await updateResponse.json()).resource).toMatchObject({
+    code: "SOCK10",
+    status: "inactive"
+  });
+
+  const marketingResponse = await request.get("/api/marketing");
+  const marketingPayload = await marketingResponse.json();
+  expect(marketingPayload.coupons.map((coupon) => coupon.code)).not.toContain("SOCK10");
+});
+
 test("registers a user and creates an http-only session", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
