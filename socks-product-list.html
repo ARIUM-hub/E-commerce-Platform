@@ -5426,6 +5426,44 @@
       await renderAdminPanel();
     });
 
+    adminPanel.addEventListener("click", async (event) => {
+      const inventorySave = event.target.closest("[data-admin-inventory-save]");
+      if (inventorySave) {
+        const row = inventorySave.closest("[data-admin-inventory-row]");
+        inventorySave.disabled = true;
+        await patchAdminJson(`/api/admin/inventory/${encodeURIComponent(row.dataset.skuId)}`, {
+          stockQuantity: Number(row.querySelector("[data-admin-stock-input]").value),
+          lowStockThreshold: Number(row.querySelector("[data-admin-low-stock-input]").value),
+          isAvailable: row.querySelector("[data-admin-available-input]").checked
+        });
+        await renderAdminInventory();
+        return;
+      }
+
+      const orderAction = event.target.closest("[data-admin-order-action]");
+      if (orderAction) {
+        const row = orderAction.closest("[data-admin-order-row]");
+        orderAction.disabled = true;
+        await patchAdminJson(`/api/admin/orders/${encodeURIComponent(row.dataset.orderId)}/status`, {
+          status: orderAction.dataset.adminOrderAction,
+          locale: activeLocale
+        });
+        await renderAdminOrders();
+        return;
+      }
+
+      const marketingToggle = event.target.closest("[data-admin-marketing-toggle]");
+      if (marketingToggle) {
+        const row = marketingToggle.closest("[data-admin-marketing-row]");
+        marketingToggle.disabled = true;
+        await patchAdminJson(
+          `/api/admin/marketing/${encodeURIComponent(row.dataset.marketingType)}/${encodeURIComponent(row.dataset.marketingId)}/status`,
+          { status: row.dataset.marketingStatus === "active" ? "inactive" : "active" }
+        );
+        await renderAdminMarketing();
+      }
+    });
+
     function renderSupportView() {
       if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
         return;
@@ -5475,6 +5513,26 @@
         throw await createCartRequestError(response, "Admin request failed");
       }
       return response.json();
+    }
+
+    async function patchAdminJson(path, payload) {
+      const response = await fetch(path, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Admin update failed");
+      }
+      return response.json();
+    }
+
+    function getAdminOrderActions(status) {
+      if (status === "pending_payment") return ["paid", "cancelled"];
+      if (status === "paid") return ["processing"];
+      if (status === "processing") return ["shipped"];
+      if (status === "shipped") return ["delivered"];
+      return [];
     }
 
     function isCurrentUserAdmin() {
@@ -5551,8 +5609,11 @@
           <span>${escapeHtml(item.skuId)}</span>
           <strong>${escapeHtml(item.productTitle)}</strong>
           <span>${escapeHtml(item.size)}</span>
-          <span>${item.stockQuantity}</span>
+          <input class="advanced-filters__input" type="number" min="0" max="9999" value="${item.stockQuantity}" aria-label="Stock quantity" data-admin-stock-input>
+          <input class="advanced-filters__input" type="number" min="0" max="999" value="${item.lowStockThreshold}" aria-label="Low stock threshold" data-admin-low-stock-input>
+          <label><input type="checkbox" data-admin-available-input ${item.isAvailable ? "checked" : ""}> Available</label>
           <span>${escapeHtml(item.stockState)}</span>
+          <button class="order-button order-button--secondary" type="button" data-admin-inventory-save>Save</button>
         </article>
       `).join("")}</div>`;
     }
@@ -5566,6 +5627,11 @@
             <span>${escapeHtml(order.id)}</span>
             <span>${escapeHtml(order.status)}</span>
             <span>${formatCurrency(order.total)}</span>
+            <span>
+              ${getAdminOrderActions(order.status).map((status) => `
+                <button class="order-button order-button--secondary" type="button" data-admin-order-action="${status}">${escapeHtml(status)}</button>
+              `).join("")}
+            </span>
           </article>
         `).join("")}</div>`
         : `<div class="empty-state" data-admin-orders-empty>No orders yet.</div>`;
@@ -5580,10 +5646,13 @@
         ...payload.bundles.map((item) => ({ type: "bundle", id: item.id, status: item.status }))
       ];
       adminPanel.innerHTML = `<div class="admin-table">${rows.map((row) => `
-        <article class="admin-row" data-admin-marketing-row data-marketing-type="${row.type}" data-marketing-id="${escapeHtml(row.id)}">
+        <article class="admin-row" data-admin-marketing-row data-marketing-type="${row.type}" data-marketing-id="${escapeHtml(row.id)}" data-marketing-status="${escapeHtml(row.status)}">
           <span>${escapeHtml(row.type)}</span>
           <strong>${escapeHtml(row.id)}</strong>
           <span>${escapeHtml(row.status)}</span>
+          <button class="order-button order-button--secondary" type="button" data-admin-marketing-toggle>
+            ${row.status === "active" ? "Disable" : "Enable"}
+          </button>
         </article>
       `).join("")}</div>`;
     }

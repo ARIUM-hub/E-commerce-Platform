@@ -189,6 +189,44 @@ test("renders admin products inventory orders and marketing tabs", async ({ page
   await expect(page.locator("[data-admin-marketing-row]")).not.toHaveCount(0);
 });
 
+test("updates inventory from the admin inventory tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='inventory']").click();
+
+  const row = page.locator("[data-admin-inventory-row][data-sku-id='sock-01-39']");
+  await row.locator("[data-admin-stock-input]").fill("0");
+  await row.locator("[data-admin-inventory-save]").click();
+
+  await expect(row).toContainText("out-of-stock");
+});
+
+test("advances an order from the admin orders tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator("[data-admin-order-action='cancelled']").first().click();
+
+  await expect(page.locator("[data-admin-order-row]").first()).toContainText("cancelled");
+});
+
+test("toggles a coupon from the admin marketing tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='marketing']").click();
+
+  const row = page.locator("[data-admin-marketing-row][data-marketing-id='SOCK10']");
+  await row.locator("[data-admin-marketing-toggle]").click();
+
+  await expect(row).toContainText("inactive");
+});
+
 test("opens the trust center from the header help link", async ({ page }) => {
   await page.goto("/socks-product-list.html");
   await page.locator("[data-site-help-link]").click();
