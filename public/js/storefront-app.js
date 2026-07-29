@@ -447,6 +447,9 @@
           reviewSubmit: "提交评论",
           reviewSubmitting: "提交中...",
           reviewError: "评论提交失败，请检查昵称、评分和内容。",
+          verifiedPurchase: "Verified Purchase",
+          helpful: ({ count }) => `有帮助 ${count}`,
+          helpfulSubmitting: "记录中...",
           saveProduct: "保存到稍后购买",
           savedProduct: "已保存",
           savedProductsCount: ({ count }) => `${count}`,
@@ -786,6 +789,9 @@
           reviewSubmit: "Submit review",
           reviewSubmitting: "Submitting...",
           reviewError: "Review submission failed. Check name, rating, and content.",
+          verifiedPurchase: "Verified Purchase",
+          helpful: ({ count }) => `Helpful ${count}`,
+          helpfulSubmitting: "Saving...",
           saveProduct: "Save for later",
           savedProduct: "Saved",
           savedProductsCount: ({ count }) => `${count}`,
@@ -2737,6 +2743,19 @@
       return response.json();
     }
 
+    async function markProductReviewHelpful(productId, reviewId) {
+      const response = await fetch(
+        `/api/products/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/helpful`,
+        { method: "POST" }
+      );
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Product review helpful vote failed");
+      }
+
+      return response.json();
+    }
+
     async function fetchProductQuestions(productId) {
       const response = await fetch(`/api/products/${encodeURIComponent(productId)}/questions`);
       if (!response.ok) {
@@ -3541,16 +3560,51 @@
         return `<p class="detail-reviews__empty" data-review-empty>${t("detail.reviewsEmpty")}</p>`;
       }
 
-      return reviews.map((review) => `
-        <article class="detail-review" data-review-item>
-          <div class="detail-review__header">
-            <strong>${escapeHtml(review.author)}</strong>
-            <span>${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}</span>
-          </div>
-          <p>${escapeHtml(review.body)}</p>
-          <time datetime="${escapeHtml(review.createdAt)}">${escapeHtml(String(review.createdAt || "").slice(0, 10))}</time>
-        </article>
-      `).join("");
+      return reviews.map((review) => {
+        const helpfulCount = Number.isInteger(review.helpfulCount) ? review.helpfulCount : 0;
+        const mediaUrls = Array.isArray(review.mediaUrls) ? review.mediaUrls : [];
+        const reasonTags = Array.isArray(review.reasonTags) ? review.reasonTags : [];
+
+        return `
+          <article class="detail-review" data-review-item data-review-id="${escapeHtml(review.id)}">
+            <div class="detail-review__header">
+              <div class="detail-review__author">
+                <strong>${escapeHtml(review.author)}</strong>
+                ${review.verifiedPurchase ? `<span class="detail-review__verified" data-verified-purchase>${t("detail.verifiedPurchase")}</span>` : ""}
+              </div>
+              <span class="detail-review__rating">${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}</span>
+            </div>
+            <p>${escapeHtml(review.body)}</p>
+            ${reasonTags.length ? `
+              <div class="detail-review__reasons" aria-label="${activeLocale === LOCALE_KEY.EN_US ? "Negative review reason tags" : "差评原因标签"}">
+                ${reasonTags.map((tag) => `<span class="detail-review__reason-tag" data-review-reason-tag>${escapeHtml(tag)}</span>`).join("")}
+              </div>
+            ` : ""}
+            ${mediaUrls.length ? `
+              <div class="detail-review__media" aria-label="${activeLocale === LOCALE_KEY.EN_US ? "Buyer photos" : "买家晒图"}">
+                ${mediaUrls.map((url, index) => `
+                  <img
+                    class="detail-review__media-image"
+                    src="${escapeHtml(url)}"
+                    alt="${activeLocale === LOCALE_KEY.EN_US ? `Buyer photo ${index + 1}` : `买家晒图 ${index + 1}`}"
+                    data-review-media
+                    loading="lazy"
+                  >
+                `).join("")}
+              </div>
+            ` : ""}
+            <div class="detail-review__footer">
+              <time datetime="${escapeHtml(review.createdAt)}">${escapeHtml(String(review.createdAt || "").slice(0, 10))}</time>
+              <button
+                class="detail-review__helpful"
+                type="button"
+                data-review-helpful-button
+                data-review-helpful-id="${escapeHtml(review.id)}"
+              >${t("detail.helpful", { count: helpfulCount })}</button>
+            </div>
+          </article>
+        `;
+      }).join("");
     }
 
     function createReviewControlsMarkup(options = {}) {
@@ -4374,6 +4428,7 @@
       currentSection.outerHTML = createProductReviewsMarkup(productId, payload);
       bindProductReviewForm(productId);
       bindProductReviewControls(productId);
+      bindProductReviewHelpfulButtons(productId);
     }
 
     function bindProductReviewControls(productId) {
@@ -4394,6 +4449,34 @@
 
       sortSelect?.addEventListener("change", reloadReviews);
       ratingSelect?.addEventListener("change", reloadReviews);
+    }
+
+    function bindProductReviewHelpfulButtons(productId) {
+      const reviewSection = detailPagePanel.querySelector("[data-product-reviews]");
+      if (!reviewSection) {
+        return;
+      }
+
+      reviewSection.querySelectorAll("[data-review-helpful-button]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const reviewId = button.getAttribute("data-review-helpful-id");
+          if (!reviewId || button.disabled) {
+            return;
+          }
+
+          const originalLabel = button.textContent;
+          button.disabled = true;
+          button.textContent = t("detail.helpfulSubmitting");
+
+          try {
+            const payload = await markProductReviewHelpful(productId, reviewId);
+            renderProductReviews(productId, payload);
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = originalLabel;
+          }
+        });
+      });
     }
 
     function bindProductReviewForm(productId) {
@@ -4513,6 +4596,7 @@
 
       bindProductReviewForm(product.id);
       bindProductReviewControls(product.id);
+      bindProductReviewHelpfulButtons(product.id);
       bindProductQuestionForm(product.id);
       bindSavedProductButton(product.id);
 

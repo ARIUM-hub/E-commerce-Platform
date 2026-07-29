@@ -2689,15 +2689,112 @@
 
     .detail-review__header {
       display: flex;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
       color: #111111;
+    }
+
+    .detail-review__author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .detail-review__verified {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid #111111;
+      border-radius: 999px;
+      padding: 3px 9px;
+      background: #ffffff;
+      color: #111111;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .detail-review__rating {
+      color: #111111;
+      font-size: 14px;
+      white-space: nowrap;
     }
 
     .detail-review p {
       margin: 0;
       color: #333333;
       line-height: 1.6;
+    }
+
+    .detail-review__reasons,
+    .detail-review__media,
+    .detail-review__footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .detail-review__reason-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border: 1px solid #d7d7d7;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #ffffff;
+      color: #444444;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .detail-review__media-image {
+      width: 92px;
+      aspect-ratio: 16 / 9;
+      border: 1px solid #dfdfdf;
+      border-radius: 14px;
+      background: #f3f3f3;
+      object-fit: cover;
+    }
+
+    .detail-review__footer {
+      justify-content: space-between;
+      padding-top: 2px;
+    }
+
+    .detail-review__helpful {
+      min-height: 44px;
+      border: 1px solid #d4d4d4;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: #ffffff;
+      color: #111111;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 850;
+      cursor: pointer;
+      transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+    }
+
+    .detail-review__helpful:hover {
+      border-color: #111111;
+      background: #f4f4f4;
+      transform: translateY(-1px);
+    }
+
+    .detail-review__helpful:focus-visible {
+      outline: 2px solid #111111;
+      outline-offset: 2px;
+    }
+
+    .detail-review__helpful:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+      transform: none;
     }
 
     .detail-review-form {

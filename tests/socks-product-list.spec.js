@@ -849,9 +849,9 @@ test("submits and displays product reviews on the detail page", async ({ page })
 
   await expect(page.locator("[data-product-reviews]")).toBeVisible();
   await expect(page.locator("[data-review-empty]")).toHaveCount(0);
-  await expect(page.locator("[data-review-item]")).toHaveCount(3);
+  await expect(page.locator("[data-review-item]")).toHaveCount(4);
   await expect(page.locator("[data-review-item]").first()).toContainText("李然");
-  await expect(page.locator("[data-product-review-count]")).toContainText("3 条评论");
+  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
 
   await page.locator("[data-review-author]").fill("Maya Chen");
   await page.locator("[data-review-rating]").selectOption("5");
@@ -866,11 +866,30 @@ test("submits and displays product reviews on the detail page", async ({ page })
   expect((await createReviewResponse).status()).toBe(201);
 
   await expect(page.locator("[data-review-empty]")).toHaveCount(0);
-  await expect(page.locator("[data-review-item]")).toHaveCount(4);
+  await expect(page.locator("[data-review-item]")).toHaveCount(5);
   await expect(page.locator("[data-review-item]").first()).toContainText("Maya Chen");
   await expect(page.locator("[data-review-item]").first()).toContainText("面料柔软，运动后也很透气。");
-  await expect(page.locator("[data-review-summary]")).toContainText("4.8");
-  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
+  await expect(page.locator("[data-review-summary]")).toContainText("4.2");
+  await expect(page.locator("[data-product-review-count]")).toContainText("5 条评论");
+});
+
+test("shows review trust signals and helpful voting on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const firstReview = page.locator('[data-review-item][data-review-id="seed-review-sock-02-01"]');
+  await expect(firstReview.locator("[data-verified-purchase]")).toHaveText("Verified Purchase");
+  await expect(firstReview.locator("[data-review-media]")).toHaveCount(1);
+  await expect(firstReview.locator("[data-review-helpful-button]")).toContainText("有帮助 12");
+
+  const negativeReview = page.locator('[data-review-item][data-review-id="seed-review-sock-02-04"]');
+  await expect(negativeReview.locator("[data-review-reason-tag]")).toHaveText(["尺码偏紧", "厚度偏厚"]);
+
+  const helpfulResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews/seed-review-sock-02-01/helpful");
+  });
+  await firstReview.locator("[data-review-helpful-button]").click();
+  expect((await helpfulResponse).ok()).toBe(true);
+  await expect(firstReview.locator("[data-review-helpful-button]")).toContainText("有帮助 13");
 });
 
 test("saves and unsaves a product from the detail page", async ({ page }) => {
@@ -940,7 +959,7 @@ test("filters and sorts product reviews on the detail page", async ({ page }) =>
   });
   await page.locator("[data-review-sort]").selectOption("rating-asc");
   expect((await sortResponse).ok()).toBe(true);
-  await expect(page.locator("[data-review-item]").first()).toContainText("Ava");
+  await expect(page.locator("[data-review-item]").first()).toContainText("韩路");
 });
 
 test("shows selected detail sizes and quantities after adding from the detail page", async ({ page }) => {
@@ -1885,6 +1904,7 @@ test("sorts the visible products by price from low to high", async ({ page }) =>
 
 test("keeps recommended products first in the default view and inside filtered results", async ({ page }) => {
   await page.goto("/socks-product-list.html");
+  await expect(page.locator("[data-product-card]")).toHaveCount(8);
 
   const allProductTitles = await page.locator(".product-card__title").allTextContents();
   expect(allProductTitles.slice(0, 3)).toEqual(["极简中筒袜", "轻压运动袜", "通勤罗口袜"]);
@@ -2010,12 +2030,10 @@ test("splits cart action into add and persistent feedback buttons after adding",
 });
 
 test("shows selected size quantities in a hover popover instead of inside the selected button", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "39", quantity: 2 },
-      { productId: "sock-02", size: "43", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "39", quantity: 2 },
+    { productId: "sock-02", size: "43", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
 
@@ -2034,12 +2052,10 @@ test("shows selected size quantities in a hover popover instead of inside the se
 });
 
 test("removes selected size quantities from the product-card remove dialog", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "39", quantity: 2 },
-      { productId: "sock-02", size: "43", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "39", quantity: 2 },
+    { productId: "sock-02", size: "43", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
 
@@ -2372,7 +2388,8 @@ test("shows an empty state when a filter has no products", async ({ page }) => {
   await page.getByRole("button", { name: "商务袜" }).click();
 
   await expect(page.locator("[data-product-card]")).toHaveCount(0);
-  await expect(page.locator("[data-empty-state]")).toHaveText("当前分类暂无商品");
+  await expect(page.locator("[data-no-results]")).toBeVisible();
+  await expect(page.locator("[data-no-results-title]")).toContainText("没有找到完全匹配");
 });
 
 test("reuses the single-card hover motion for the card media and cart button", async ({ page }) => {

@@ -27,6 +27,7 @@ const { listProducts, findProductById } = require("./lib/repositories/products")
 const {
   createProductReview,
   listProductReviews,
+  markProductReviewHelpful,
   summarizeReviews
 } = require("./lib/repositories/product-reviews");
 const {
@@ -1134,6 +1135,7 @@ registerProductRoutes(router, {
   listProductReviews,
   listProducts,
   listSavedProducts,
+  markProductReviewHelpful,
   readRequestBody,
   readActiveCart,
   removeSavedProduct,

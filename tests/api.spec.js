@@ -349,8 +349,8 @@ test("creates and lists product reviews for a product", async ({ request }) => {
   await expect(listResponse.json()).resolves.toMatchObject({
     ok: true,
     summary: {
-      count: 4,
-      averageRating: 4.8
+      count: 5,
+      averageRating: 4.2
     },
     reviews: expect.arrayContaining([
       expect.objectContaining({
@@ -376,23 +376,78 @@ test("lists seeded product reviews for product detail pages", async ({ request }
   await expect(response.json()).resolves.toMatchObject({
     ok: true,
     summary: {
-      count: 3,
-      averageRating: 4.7
+      count: 4,
+      averageRating: 4
     },
     reviews: expect.arrayContaining([
       expect.objectContaining({
         productId: "sock-02",
         author: "李然",
         rating: 5,
-        body: "运动时包裹感很好，脚背不会勒。"
+        body: "运动时包裹感很好，脚背不会勒。",
+        verifiedPurchase: true,
+        helpfulCount: 12,
+        mediaUrls: expect.arrayContaining([expect.stringContaining("data:image/svg+xml")])
       }),
       expect.objectContaining({
         productId: "sock-02",
         author: "Ava",
         rating: 4,
         body: "洗过两次还是挺有弹性，厚度适合训练。"
+      }),
+      expect.objectContaining({
+        productId: "sock-02",
+        author: "韩路",
+        rating: 2,
+        body: "脚背偏紧，厚度也比预期更明显。",
+        reasonTags: ["尺码偏紧", "厚度偏厚"]
       })
     ])
+  });
+});
+
+test("returns product review trust signals and records helpful votes once per session", async ({ request }) => {
+  const reviewsResponse = await request.get("/api/products/sock-02/reviews");
+
+  expect(reviewsResponse.ok()).toBe(true);
+  const reviewsPayload = await reviewsResponse.json();
+  const trustedReview = reviewsPayload.reviews.find((review) => review.id === "seed-review-sock-02-01");
+  expect(trustedReview).toMatchObject({
+    verifiedPurchase: true,
+    helpfulCount: 12,
+    mediaUrls: expect.arrayContaining([expect.stringContaining("data:image/svg+xml")]),
+    reasonTags: []
+  });
+
+  const negativeReview = reviewsPayload.reviews.find((review) => review.id === "seed-review-sock-02-04");
+  expect(negativeReview).toMatchObject({
+    verifiedPurchase: true,
+    rating: 2,
+    reasonTags: ["尺码偏紧", "厚度偏厚"]
+  });
+
+  const helpfulResponse = await request.post("/api/products/sock-02/reviews/seed-review-sock-02-01/helpful");
+  expect(helpfulResponse.ok()).toBe(true);
+  const cookie = getSessionCookie(helpfulResponse);
+  expect(cookie).toContain("socks_session=");
+  await expect(helpfulResponse.json()).resolves.toMatchObject({
+    ok: true,
+    review: {
+      id: "seed-review-sock-02-01",
+      helpfulCount: 13
+    }
+  });
+
+  const duplicateResponse = await request.post("/api/products/sock-02/reviews/seed-review-sock-02-01/helpful", {
+    headers: { cookie }
+  });
+  expect(duplicateResponse.ok()).toBe(true);
+  await expect(duplicateResponse.json()).resolves.toMatchObject({
+    ok: true,
+    review: {
+      id: "seed-review-sock-02-01",
+      helpfulCount: 13
+    }
   });
 });
 
@@ -419,8 +474,8 @@ test("filters product reviews by rating and sort order", async ({ request }) => 
   expect(sortedResponse.ok()).toBe(true);
   const sortedPayload = await sortedResponse.json();
   expect(sortedPayload.reviews[0]).toMatchObject({
-    author: "Ava",
-    rating: 4
+    author: "韩路",
+    rating: 2
   });
 });
 
