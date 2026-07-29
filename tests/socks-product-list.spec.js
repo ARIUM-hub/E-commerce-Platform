@@ -873,6 +873,76 @@ test("submits and displays product reviews on the detail page", async ({ page })
   await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
 });
 
+test("saves and unsaves a product from the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const saveButton = page.locator("[data-save-product-button]");
+  await expect(saveButton).toHaveText("保存到稍后购买");
+
+  const saveResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/saved-products") && response.request().method() === "POST";
+  });
+  await saveButton.click();
+  expect((await saveResponse).status()).toBe(201);
+  await expect(saveButton).toHaveText("已保存");
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("1");
+
+  const removeResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/saved-products/sock-02") && response.request().method() === "DELETE";
+  });
+  await saveButton.click();
+  expect((await removeResponse).ok()).toBe(true);
+  await expect(saveButton).toHaveText("保存到稍后购买");
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("0");
+});
+
+test("shows and submits product questions on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  await expect(page.locator("[data-product-questions]")).toBeVisible();
+  await expect(page.locator("[data-question-item]")).toHaveCount(3);
+  await expect(page.locator("[data-question-item]").first()).toContainText("这款适合跑步训练吗？");
+
+  await page.locator("[data-question-author]").fill("王");
+  await page.locator("[data-question-body]").fill("40 码脚宽可以穿吗？");
+
+  const createQuestionResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/questions")
+      && response.request().method() === "POST";
+  });
+
+  await page.locator("[data-question-submit]").click();
+  expect((await createQuestionResponse).status()).toBe(201);
+
+  await expect(page.locator("[data-question-item]")).toHaveCount(4);
+  await expect(page.locator("[data-question-item]").first()).toContainText("40 码脚宽可以穿吗？");
+  await expect(page.locator("[data-product-question-count]")).toContainText("4 个问题");
+});
+
+test("filters and sorts product reviews on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const ratingResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.url().includes("rating=4");
+  });
+  await page.locator("[data-review-rating-filter]").selectOption("4");
+  expect((await ratingResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-review-item]")).toHaveCount(1);
+  await expect(page.locator("[data-review-item]").first()).toContainText("Ava");
+  await expect(page.locator("[data-product-review-count]")).toContainText("1 条评论");
+
+  await page.locator("[data-review-rating-filter]").selectOption("");
+  const sortResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.url().includes("sort=rating-asc");
+  });
+  await page.locator("[data-review-sort]").selectOption("rating-asc");
+  expect((await sortResponse).ok()).toBe(true);
+  await expect(page.locator("[data-review-item]").first()).toContainText("Ava");
+});
+
 test("shows selected detail sizes and quantities after adding from the detail page", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=detail&id=sock-04");
 

@@ -30,6 +30,16 @@ const {
   summarizeReviews
 } = require("./lib/repositories/product-reviews");
 const {
+  createProductQuestion,
+  listProductQuestions,
+  summarizeQuestions
+} = require("./lib/repositories/product-questions");
+const {
+  listSavedProducts,
+  removeSavedProduct,
+  saveProduct
+} = require("./lib/repositories/saved-products");
+const {
   findUserByEmail,
   findUserById,
   countUsers,
@@ -1116,12 +1126,19 @@ function parseAdminMarketingStatusPath(pathname) {
 const router = createRouter();
 registerHealthRoutes(router);
 registerProductRoutes(router, {
+  createProductQuestion,
   createProductReview,
   findProductById,
   getProductsPayload,
+  listProductQuestions,
   listProductReviews,
   listProducts,
+  listSavedProducts,
   readRequestBody,
+  readActiveCart,
+  removeSavedProduct,
+  saveProduct,
+  summarizeQuestions,
   summarizeReviews,
   withDatabase
 });

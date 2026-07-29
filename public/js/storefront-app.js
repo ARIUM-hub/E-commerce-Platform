@@ -212,6 +212,7 @@
       coupons: [],
       bundles: []
     };
+    let savedProductIds = new Set();
     let trustCenterState = {
       sections: [],
       faqs: [],
@@ -434,12 +435,31 @@
           reviewsEmpty: "暂无评论，成为第一个分享体验的人。",
           reviewsCount: ({ count }) => `${count} 条评论`,
           reviewsSummary: ({ rating }) => `${rating} / 5`,
+          reviewSort: "评论排序",
+          reviewSortNewest: "最新",
+          reviewSortHigh: "评分高到低",
+          reviewSortLow: "评分低到高",
+          reviewFilter: "筛选评分",
+          reviewFilterAll: "全部评分",
           reviewAuthor: "昵称",
           reviewRating: "评分",
           reviewBody: "评论内容",
           reviewSubmit: "提交评论",
           reviewSubmitting: "提交中...",
-          reviewError: "评论提交失败，请检查昵称、评分和内容。"
+          reviewError: "评论提交失败，请检查昵称、评分和内容。",
+          saveProduct: "保存到稍后购买",
+          savedProduct: "已保存",
+          savedProductsCount: ({ count }) => `${count}`,
+          questionsEyebrow: "商品问答",
+          questionsTitle: "买家问答",
+          questionsCount: ({ count }) => `${count} 个问题`,
+          questionsEmpty: "暂无问题，成为第一个提问的人。",
+          questionAuthor: "昵称",
+          questionBody: "问题内容",
+          questionSubmit: "提交问题",
+          questionSubmitting: "提交中...",
+          questionPendingAnswer: "等待答复",
+          questionError: "问题提交失败，请检查昵称和问题内容。"
         },
         checkout: {
           heroEyebrow: "安全结算",
@@ -754,12 +774,31 @@
           reviewsEmpty: "No reviews yet. Be the first to share your experience.",
           reviewsCount: ({ count }) => `${count} ${count === 1 ? "review" : "reviews"}`,
           reviewsSummary: ({ rating }) => `${rating} / 5`,
+          reviewSort: "Review sort",
+          reviewSortNewest: "Newest",
+          reviewSortHigh: "Highest rating",
+          reviewSortLow: "Lowest rating",
+          reviewFilter: "Filter rating",
+          reviewFilterAll: "All ratings",
           reviewAuthor: "Name",
           reviewRating: "Rating",
           reviewBody: "Review",
           reviewSubmit: "Submit review",
           reviewSubmitting: "Submitting...",
-          reviewError: "Review submission failed. Check name, rating, and content."
+          reviewError: "Review submission failed. Check name, rating, and content.",
+          saveProduct: "Save for later",
+          savedProduct: "Saved",
+          savedProductsCount: ({ count }) => `${count}`,
+          questionsEyebrow: "Product Q&A",
+          questionsTitle: "Customer questions",
+          questionsCount: ({ count }) => `${count} ${count === 1 ? "question" : "questions"}`,
+          questionsEmpty: "No questions yet. Be the first to ask.",
+          questionAuthor: "Name",
+          questionBody: "Question",
+          questionSubmit: "Submit question",
+          questionSubmitting: "Submitting...",
+          questionPendingAnswer: "Waiting for answer",
+          questionError: "Question submission failed. Check name and question."
         },
         checkout: {
           heroEyebrow: "Secure Checkout",
@@ -2663,12 +2702,25 @@
       return fetchProductsForState(FILTER_KEY.ALL, SORT_KEY.RECOMMENDED, "");
     }
 
-    async function fetchProductReviews(productId) {
-      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/reviews`);
+    async function fetchProductReviews(productId, options = {}) {
+      const params = new URLSearchParams();
+      if (options.sort) {
+        params.set("sort", options.sort);
+      }
+      if (options.rating) {
+        params.set("rating", options.rating);
+      }
+
+      const query = params.toString();
+      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/reviews${query ? `?${query}` : ""}`);
       if (!response.ok) {
         throw new Error("Failed to load product reviews");
       }
-      return response.json();
+      const payload = await response.json();
+      return {
+        ...payload,
+        options
+      };
     }
 
     async function createProductReview(productId, payload) {
@@ -2680,6 +2732,62 @@
 
       if (!response.ok) {
         throw await createCartRequestError(response, "Product review failed");
+      }
+
+      return response.json();
+    }
+
+    async function fetchProductQuestions(productId) {
+      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/questions`);
+      if (!response.ok) {
+        throw new Error("Failed to load product questions");
+      }
+      return response.json();
+    }
+
+    async function createProductQuestion(productId, payload) {
+      const response = await fetch(`/api/products/${encodeURIComponent(productId)}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, locale: activeLocale })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Product question failed");
+      }
+
+      return response.json();
+    }
+
+    async function fetchSavedProducts() {
+      const response = await fetch("/api/saved-products");
+      if (!response.ok) {
+        throw new Error("Failed to load saved products");
+      }
+      return response.json();
+    }
+
+    async function saveProduct(productId) {
+      const response = await fetch("/api/saved-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Save product failed");
+      }
+
+      return response.json();
+    }
+
+    async function removeSavedProduct(productId) {
+      const response = await fetch(`/api/saved-products/${encodeURIComponent(productId)}`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Remove saved product failed");
       }
 
       return response.json();
@@ -3445,6 +3553,45 @@
       `).join("");
     }
 
+    function createReviewControlsMarkup(options = {}) {
+      const activeSortValue = options.sort || "newest";
+      const activeRatingValue = options.rating || "";
+      const sortOptions = [
+        ["newest", t("detail.reviewSortNewest")],
+        ["rating-desc", t("detail.reviewSortHigh")],
+        ["rating-asc", t("detail.reviewSortLow")]
+      ];
+      const ratingOptions = [
+        ["", t("detail.reviewFilterAll")],
+        ["5", "5 ★"],
+        ["4", "4 ★"],
+        ["3", "3 ★"],
+        ["2", "2 ★"],
+        ["1", "1 ★"]
+      ];
+
+      return `
+        <div class="detail-reviews__controls" data-review-controls>
+          <label>
+            ${t("detail.reviewSort")}
+            <select data-review-sort>
+              ${sortOptions.map(([value, label]) => `
+                <option value="${value}"${activeSortValue === value ? " selected" : ""}>${label}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label>
+            ${t("detail.reviewFilter")}
+            <select data-review-rating-filter>
+              ${ratingOptions.map(([value, label]) => `
+                <option value="${value}"${activeRatingValue === value ? " selected" : ""}>${label}</option>
+              `).join("")}
+            </select>
+          </label>
+        </div>
+      `;
+    }
+
     function createProductReviewsMarkup(productId, payload = {}) {
       const reviews = Array.isArray(payload.reviews) ? payload.reviews : [];
       const summary = payload.summary || { count: 0, averageRating: 0 };
@@ -3462,6 +3609,7 @@
               <span data-product-review-count>${t("detail.reviewsCount", { count: summary.count || 0 })}</span>
             </div>
           </div>
+          ${createReviewControlsMarkup(payload.options || {})}
           <div class="detail-reviews__list" data-review-list>
             ${createReviewItemsMarkup(reviews)}
           </div>
@@ -3491,6 +3639,67 @@
       `;
     }
 
+    function createQuestionItemsMarkup(questions) {
+      if (!questions.length) {
+        return `<p class="detail-questions__empty" data-question-empty>${t("detail.questionsEmpty")}</p>`;
+      }
+
+      return questions.map((question) => `
+        <article class="detail-question" data-question-item>
+          <div class="detail-question__header">
+            <strong>${escapeHtml(question.author)}</strong>
+            <time datetime="${escapeHtml(question.createdAt)}">${escapeHtml(String(question.createdAt || "").slice(0, 10))}</time>
+          </div>
+          <p class="detail-question__body">${escapeHtml(question.question)}</p>
+          <p class="detail-question__answer">${escapeHtml(question.answer || t("detail.questionPendingAnswer"))}</p>
+        </article>
+      `).join("");
+    }
+
+    function createProductQuestionsMarkup(productId, payload = {}) {
+      const questions = Array.isArray(payload.questions) ? payload.questions : [];
+      const summary = payload.summary || { count: 0 };
+
+      return `
+        <section class="detail-section detail-questions" data-product-questions data-product-id="${escapeHtml(productId)}">
+          <div class="detail-questions__heading">
+            <div>
+              <p class="detail-section__eyebrow">${t("detail.questionsEyebrow")}</p>
+              <h2 class="detail-section__title">${t("detail.questionsTitle")}</h2>
+            </div>
+            <span class="detail-questions__count" data-product-question-count>${t("detail.questionsCount", { count: summary.count || 0 })}</span>
+          </div>
+          <div class="detail-questions__list" data-question-list>
+            ${createQuestionItemsMarkup(questions)}
+          </div>
+          <form class="detail-question-form" data-question-form novalidate>
+            <label class="detail-question-form__field">
+              ${t("detail.questionAuthor")}
+              <input name="author" maxlength="60" data-question-author>
+            </label>
+            <label class="detail-question-form__field detail-question-form__field--wide">
+              ${t("detail.questionBody")}
+              <textarea name="question" maxlength="280" rows="3" data-question-body></textarea>
+            </label>
+            <p class="detail-question-form__error" data-question-error role="alert"></p>
+            <button class="detail-question-form__submit" type="submit" data-question-submit>${t("detail.questionSubmit")}</button>
+          </form>
+        </section>
+      `;
+    }
+
+    function createSavedProductMarkup(productId) {
+      const isSaved = savedProductIds.has(productId);
+      return `
+        <div class="detail-save" data-save-product-root>
+          <button class="detail-save__button${isSaved ? " is-saved" : ""}" type="button" data-save-product-button data-product-id="${escapeHtml(productId)}" aria-pressed="${isSaved}">
+            ${isSaved ? t("detail.savedProduct") : t("detail.saveProduct")}
+          </button>
+          <span class="detail-save__count" data-saved-products-count>${t("detail.savedProductsCount", { count: savedProductIds.size })}</span>
+        </div>
+      `;
+    }
+
     function createDetailPagePanelMarkup(product, options = {}) {
       const localizedProduct = getLocalizedProduct(product);
       const previousProduct = options.previousProduct || null;
@@ -3498,6 +3707,7 @@
       const detailSourceMarkup = options.detailSourceMarkup || "";
       const recommendationsMarkup = options.recommendationsMarkup || `<p class="detail-recommendations__empty">${t("detail.noRecommendations")}</p>`;
       const reviewsMarkup = options.reviewsMarkup || createProductReviewsMarkup(product.id);
+      const questionsMarkup = options.questionsMarkup || createProductQuestionsMarkup(product.id);
       const detailTag = product.isRecommended ? t("listing.recommendedTag") : localizedProduct.categoryLabel;
       const sizeButtons = createSizeButtonsMarkup(product, {
         dataAttribute: "data-detail-size"
@@ -3534,11 +3744,13 @@
               <div class="detail-content__cart-actions" data-cart-actions>
                 <button class="detail-content__cta" type="button" data-detail-cart-button>${t("cart.addToCart")}</button>
               </div>
+              ${createSavedProductMarkup(product.id)}
               ${createBundleCardMarkup()}
             </section>
           </div>
           <div class="detail-sections">
             ${createSizeChartMarkup(product)}
+            ${questionsMarkup}
             <section class="detail-section">
               <p class="detail-section__eyebrow">${t("detail.continueEyebrow")}</p>
               <h2 class="detail-section__title">${t("detail.continueTitle")}</h2>
@@ -4161,6 +4373,27 @@
 
       currentSection.outerHTML = createProductReviewsMarkup(productId, payload);
       bindProductReviewForm(productId);
+      bindProductReviewControls(productId);
+    }
+
+    function bindProductReviewControls(productId) {
+      const reviewSection = detailPagePanel.querySelector("[data-product-reviews]");
+      if (!reviewSection) {
+        return;
+      }
+
+      const sortSelect = reviewSection.querySelector("[data-review-sort]");
+      const ratingSelect = reviewSection.querySelector("[data-review-rating-filter]");
+      const reloadReviews = async () => {
+        const payload = await fetchProductReviews(productId, {
+          sort: sortSelect?.value || "newest",
+          rating: ratingSelect?.value || ""
+        });
+        renderProductReviews(productId, payload);
+      };
+
+      sortSelect?.addEventListener("change", reloadReviews);
+      ratingSelect?.addEventListener("change", reloadReviews);
     }
 
     function bindProductReviewForm(productId) {
@@ -4193,6 +4426,85 @@
       });
     }
 
+    function renderProductQuestions(productId, payload) {
+      const currentSection = detailPagePanel.querySelector("[data-product-questions]");
+      if (!currentSection) {
+        return;
+      }
+
+      currentSection.outerHTML = createProductQuestionsMarkup(productId, payload);
+      bindProductQuestionForm(productId);
+    }
+
+    function bindProductQuestionForm(productId) {
+      const questionForm = detailPagePanel.querySelector("[data-question-form]");
+      if (!questionForm) {
+        return;
+      }
+
+      questionForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const submitButton = questionForm.querySelector("[data-question-submit]");
+        const errorNode = questionForm.querySelector("[data-question-error]");
+        const formData = new FormData(questionForm);
+        submitButton.disabled = true;
+        submitButton.textContent = t("detail.questionSubmitting");
+        errorNode.textContent = "";
+
+        try {
+          const payload = await createProductQuestion(productId, {
+            author: formData.get("author"),
+            question: formData.get("question")
+          });
+          renderProductQuestions(productId, payload);
+        } catch (error) {
+          errorNode.textContent = t("detail.questionError");
+          submitButton.disabled = false;
+          submitButton.textContent = t("detail.questionSubmit");
+        }
+      });
+    }
+
+    function applySavedProductsPayload(payload = {}) {
+      savedProductIds = new Set(Array.isArray(payload.savedProductIds) ? payload.savedProductIds : []);
+    }
+
+    function refreshSaveButtons() {
+      detailPagePanel.querySelectorAll("[data-save-product-button]").forEach((button) => {
+        const productId = button.dataset.productId;
+        const isSaved = savedProductIds.has(productId);
+        button.classList.toggle("is-saved", isSaved);
+        button.setAttribute("aria-pressed", String(isSaved));
+        button.textContent = isSaved ? t("detail.savedProduct") : t("detail.saveProduct");
+      });
+
+      detailPagePanel.querySelectorAll("[data-saved-products-count]").forEach((node) => {
+        node.textContent = t("detail.savedProductsCount", { count: savedProductIds.size });
+      });
+    }
+
+    function bindSavedProductButton(productId) {
+      const saveButton = detailPagePanel.querySelector("[data-save-product-button]");
+      if (!saveButton) {
+        return;
+      }
+
+      saveButton.addEventListener("click", async () => {
+        saveButton.disabled = true;
+        try {
+          const payload = savedProductIds.has(productId)
+            ? await removeSavedProduct(productId)
+            : await saveProduct(productId);
+          applySavedProductsPayload(payload);
+          refreshSaveButtons();
+        } catch (error) {
+          showOutOfStockToast();
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+    }
+
     function bindDetailInteractions(product) {
       const detailRoot = detailPagePanel.querySelector("[data-detail-product-root]");
       if (!detailRoot) {
@@ -4200,6 +4512,9 @@
       }
 
       bindProductReviewForm(product.id);
+      bindProductReviewControls(product.id);
+      bindProductQuestionForm(product.id);
+      bindSavedProductButton(product.id);
 
       const sizeButtons = Array.from(detailRoot.querySelectorAll("[data-detail-size]"));
       const cartButton = detailRoot.querySelector("[data-detail-cart-button]");
@@ -4320,6 +4635,18 @@
         summary: { count: 0, averageRating: 0 },
         reviews: []
       }));
+      const questionPayload = await fetchProductQuestions(product.id).catch(() => ({
+        ok: true,
+        productId: product.id,
+        summary: { count: 0 },
+        questions: []
+      }));
+      const savedPayload = await fetchSavedProducts().catch(() => ({
+        ok: true,
+        savedProductIds: [],
+        items: []
+      }));
+      applySavedProductsPayload(savedPayload);
       const localizedProduct = getLocalizedProduct(product);
 
       detailPageSeries.textContent = product.series;
@@ -4331,6 +4658,7 @@
         nextProduct,
         detailSourceMarkup: createDetailSourceMarkup(product),
         recommendationsMarkup: createDetailRecommendationsMarkup(recommendedProducts),
+        questionsMarkup: createProductQuestionsMarkup(product.id, questionPayload),
         reviewsMarkup: createProductReviewsMarkup(product.id, reviewPayload)
       });
 

@@ -396,6 +396,121 @@ test("lists seeded product reviews for product detail pages", async ({ request }
   });
 });
 
+test("filters product reviews by rating and sort order", async ({ request }) => {
+  const ratingResponse = await request.get("/api/products/sock-02/reviews?rating=4");
+
+  expect(ratingResponse.ok()).toBe(true);
+  await expect(ratingResponse.json()).resolves.toMatchObject({
+    ok: true,
+    summary: {
+      count: 1,
+      averageRating: 4
+    },
+    reviews: [
+      expect.objectContaining({
+        author: "Ava",
+        rating: 4,
+        body: "洗过两次还是挺有弹性，厚度适合训练。"
+      })
+    ]
+  });
+
+  const sortedResponse = await request.get("/api/products/sock-02/reviews?sort=rating-asc");
+  expect(sortedResponse.ok()).toBe(true);
+  const sortedPayload = await sortedResponse.json();
+  expect(sortedPayload.reviews[0]).toMatchObject({
+    author: "Ava",
+    rating: 4
+  });
+});
+
+test("creates and lists saved products for an anonymous session", async ({ request }) => {
+  const saveResponse = await request.post("/api/saved-products", {
+    data: {
+      productId: "sock-02"
+    }
+  });
+
+  expect(saveResponse.status()).toBe(201);
+  const cookie = getSessionCookie(saveResponse);
+  expect(cookie).toContain("socks_session=");
+  await expect(saveResponse.json()).resolves.toMatchObject({
+    ok: true,
+    savedProductIds: ["sock-02"],
+    items: [
+      expect.objectContaining({
+        id: "sock-02"
+      })
+    ]
+  });
+
+  const listResponse = await request.get("/api/saved-products", {
+    headers: { cookie }
+  });
+  expect(listResponse.ok()).toBe(true);
+  await expect(listResponse.json()).resolves.toMatchObject({
+    ok: true,
+    savedProductIds: ["sock-02"],
+    items: [
+      expect.objectContaining({
+        id: "sock-02"
+      })
+    ]
+  });
+
+  const removeResponse = await request.delete("/api/saved-products/sock-02", {
+    headers: { cookie }
+  });
+  expect(removeResponse.ok()).toBe(true);
+  await expect(removeResponse.json()).resolves.toMatchObject({
+    ok: true,
+    savedProductIds: [],
+    items: []
+  });
+});
+
+test("creates and lists product questions for product detail pages", async ({ request }) => {
+  const seededResponse = await request.get("/api/products/sock-02/questions");
+
+  expect(seededResponse.ok()).toBe(true);
+  await expect(seededResponse.json()).resolves.toMatchObject({
+    ok: true,
+    summary: {
+      count: 3
+    },
+    questions: expect.arrayContaining([
+      expect.objectContaining({
+        productId: "sock-02",
+        author: "官方客服",
+        question: "这款适合跑步训练吗？",
+        answer: "适合。它的袜底有轻压支撑，日常跑步和健身训练都可以穿。"
+      })
+    ])
+  });
+
+  const createResponse = await request.post("/api/products/sock-02/questions", {
+    data: {
+      author: "王",
+      question: "40 码脚宽可以穿吗？",
+      locale: "zh-CN"
+    }
+  });
+
+  expect(createResponse.status()).toBe(201);
+  await expect(createResponse.json()).resolves.toMatchObject({
+    ok: true,
+    question: {
+      productId: "sock-02",
+      author: "王",
+      question: "40 码脚宽可以穿吗？",
+      answer: ""
+    },
+    summary: {
+      count: 4
+    }
+  });
+});
+
 test("accepts concise product reviews with short nicknames", async ({ request }) => {
   const response = await request.post("/api/products/sock-02/reviews", {
     data: {
