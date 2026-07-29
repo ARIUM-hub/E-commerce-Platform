@@ -437,6 +437,42 @@ test("shows the logged-in user's order history after checkout", async ({ page })
   await expect(page.locator("[data-order-history-card]")).toContainText(/Minimal Crew Socks|极简中筒袜/);
 });
 
+test("reorders from the order history page", async ({ page }) => {
+  await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment/);
+
+  await page.goto("/socks-product-list.html?view=orders");
+  const reorderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/reorder") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-reorder]").first().click();
+  expect((await reorderResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
+test("reorders from the order detail page", async ({ page }) => {
+  await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment/);
+  const orderId = new URL(page.url()).searchParams.get("id");
+  expect(orderId).not.toBeNull();
+  await page.goto(`/socks-product-list.html?view=order&id=${orderId}`);
+
+  const reorderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/reorder") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-detail-reorder]").click();
+  expect((await reorderResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
 test("requires login before showing order history", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=orders");
 
@@ -913,6 +949,34 @@ test("saves and unsaves a product from the detail page", async ({ page }) => {
   expect((await removeResponse).ok()).toBe(true);
   await expect(saveButton).toHaveText("保存到稍后购买");
   await expect(page.locator("[data-saved-products-count]")).toHaveText("0");
+});
+
+test("shows saved products on the wishlist page and removes one", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await page.locator("[data-save-product-button]").click();
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("1");
+
+  await page.goto("/socks-product-list.html?view=wishlist");
+  await expect(page.locator("[data-wishlist-view]")).toBeVisible();
+  await expect(page.locator("[data-wishlist-card]")).toHaveCount(1);
+  await expect(page.locator("[data-wishlist-card]").first()).toContainText(/轻压运动袜|Active Base/);
+
+  await page.locator("[data-wishlist-remove]").click();
+  await expect(page.locator("[data-wishlist-empty]")).toBeVisible();
+});
+
+test("adds a wishlist product to the cart", async ({ page }) => {
+  const saveResponse = await page.request.post("/api/saved-products", { data: { productId: "sock-02" } });
+  expect(saveResponse.ok()).toBe(true);
+
+  await page.goto("/socks-product-list.html?view=wishlist");
+
+  const cartResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await page.locator("[data-wishlist-add-cart]").first().click();
+  expect((await cartResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
 });
 
 test("shows and submits product questions on the detail page", async ({ page }) => {
@@ -1749,6 +1813,46 @@ test("adds a bundle from the detail page and shows recently viewed products", as
   await page.goto("/socks-product-list.html");
   await expect(page.locator("[data-recently-viewed]")).toBeVisible();
   await expect(page.locator("[data-recently-viewed]")).toContainText(/sock-01|极简|Minimal/);
+});
+
+test("shows a full recent history page and clears it", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+
+  await page.goto("/socks-product-list.html?view=recent");
+  await expect(page.locator("[data-recent-history-card]")).toHaveCount(2);
+  await expect(page.locator("[data-recent-history-card]").first()).toContainText(/轻压运动袜|Active Base/);
+
+  await page.locator("[data-recent-clear]").click();
+  await expect(page.locator("[data-recent-history-empty]")).toBeVisible();
+});
+
+test("adds a recently viewed product to the cart from the full history page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+  await page.goto("/socks-product-list.html?view=recent");
+
+  const cartResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await page.locator("[data-recent-add-cart]").first().click();
+  expect((await cartResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
+test("opens wishlist and recent history from storefront navigation", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await page.locator("[data-site-wishlist-link]").click();
+  await expect(page).toHaveURL(/view=wishlist/);
+  await expect(page.locator("[data-wishlist-view]")).toBeVisible();
+
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-recent-link]").click();
+  await expect(page).toHaveURL(/view=recent/);
+  await expect(page.locator("[data-recent-view]")).toBeVisible();
 });
 
 test("keeps the social proof row readable on a mobile viewport", async ({ browser }) => {

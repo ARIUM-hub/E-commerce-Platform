@@ -35,6 +35,8 @@
     const CHECKOUT_VIEW_KEY = "checkout";
     const PAYMENT_VIEW_KEY = "payment";
     const ORDER_VIEW_KEY = "order";
+    const WISHLIST_VIEW_KEY = "wishlist";
+    const RECENT_VIEW_KEY = "recent";
     const AUTH_VIEW_KEY = "auth";
     const ADDRESSES_VIEW_KEY = "addresses";
     const ORDERS_VIEW_KEY = "orders";
@@ -50,6 +52,8 @@
     const siteUtilityService = document.querySelector("[data-site-utility-service]");
     const siteHelpLink = document.querySelector("[data-site-help-link]");
     const siteReturnsLink = document.querySelector("[data-site-returns-link]");
+    const siteWishlistLink = document.querySelector("[data-site-wishlist-link]");
+    const siteRecentLink = document.querySelector("[data-site-recent-link]");
     const siteBrandEyebrow = document.querySelector("[data-site-brand-eyebrow]");
     const siteBrandTitle = document.querySelector("[data-site-brand-title]");
     const siteDepartmentLabel = document.querySelector("[data-site-department-label]");
@@ -83,6 +87,8 @@
     const localeButtons = Array.from(document.querySelectorAll("[data-locale-option]"));
     const storefrontView = document.querySelector("[data-storefront-view]");
     const detailView = document.querySelector("[data-detail-view]");
+    const wishlistView = document.querySelector("[data-wishlist-view]");
+    const recentView = document.querySelector("[data-recent-view]");
     const authView = document.querySelector("[data-auth-view]");
     const addressesView = document.querySelector("[data-addresses-view]");
     const checkoutView = document.querySelector("[data-checkout-view]");
@@ -107,6 +113,14 @@
     const detailCartToggleButton = document.querySelector("[data-detail-cart-toggle]");
     const detailCartCount = document.querySelector("[data-detail-cart-count]");
     const detailCartSummary = document.querySelector("[data-detail-cart-summary]");
+    const wishlistHeroEyebrow = document.querySelector("[data-wishlist-hero-eyebrow]");
+    const wishlistTitle = document.querySelector("[data-wishlist-title]");
+    const wishlistCopy = document.querySelector("[data-wishlist-copy]");
+    const wishlistPanel = document.querySelector("[data-wishlist-panel]");
+    const recentHeroEyebrow = document.querySelector("[data-recent-hero-eyebrow]");
+    const recentTitle = document.querySelector("[data-recent-title]");
+    const recentCopy = document.querySelector("[data-recent-copy]");
+    const recentPanel = document.querySelector("[data-recent-panel]");
     const orderPagePanel = document.querySelector("[data-order-page-panel]");
     const returnPagePanel = document.querySelector("[data-return-panel]");
     const returnsPagePanel = document.querySelector("[data-returns-panel]");
@@ -464,6 +478,26 @@
           questionPendingAnswer: "等待答复",
           questionError: "问题提交失败，请检查昵称和问题内容。"
         },
+        wishlist: {
+          eyebrow: "保存列表",
+          title: "心愿单",
+          copy: "管理你保存的袜子，稍后继续购买。",
+          empty: "还没有保存的商品",
+          browse: "去浏览袜子",
+          viewDetail: "查看详情",
+          addCart: "加入购物车",
+          remove: "移除收藏"
+        },
+        recent: {
+          eyebrow: "浏览历史",
+          title: "浏览历史",
+          copy: "继续查看你最近打开过的袜子商品。",
+          empty: "还没有浏览记录",
+          clear: "清空浏览历史",
+          remove: "移除记录",
+          viewDetail: "查看详情",
+          addCart: "加入购物车"
+        },
         checkout: {
           heroEyebrow: "安全结算",
           heroTitle: "确认订单",
@@ -519,6 +553,11 @@
           processDemo: "模拟处理中",
           shipDemo: "模拟发货",
           deliverDemo: "模拟送达"
+        },
+        reorder: {
+          button: "再次购买",
+          partial: "部分商品因库存不足未加入",
+          empty: "暂无可再次购买的商品"
         },
         returns: {
           request: "申请售后",
@@ -806,6 +845,26 @@
           questionPendingAnswer: "Waiting for answer",
           questionError: "Question submission failed. Check name and question."
         },
+        wishlist: {
+          eyebrow: "Saved list",
+          title: "Wishlist",
+          copy: "Manage saved socks and continue shopping later.",
+          empty: "No saved products yet",
+          browse: "Browse socks",
+          viewDetail: "View detail",
+          addCart: "Add to cart",
+          remove: "Remove"
+        },
+        recent: {
+          eyebrow: "Browsing history",
+          title: "Browsing history",
+          copy: "Continue with socks you viewed recently.",
+          empty: "No browsing history yet",
+          clear: "Clear history",
+          remove: "Remove",
+          viewDetail: "View detail",
+          addCart: "Add to cart"
+        },
         checkout: {
           heroEyebrow: "Secure Checkout",
           heroTitle: "Review your order",
@@ -861,6 +920,11 @@
           processDemo: "Simulate processing",
           shipDemo: "Simulate shipping",
           deliverDemo: "Simulate delivery"
+        },
+        reorder: {
+          button: "Buy again",
+          partial: "Some items were skipped because of stock",
+          empty: "No items are available to buy again"
         },
         returns: {
           request: "Request return",
@@ -1038,6 +1102,11 @@
           isAvailable: true
         }))
         : [];
+    }
+
+    function getDefaultSizeForProduct(product) {
+      const variants = getProductVariants(product);
+      return variants.find(isVariantAvailable)?.size || variants[0]?.size || "";
     }
 
     function findVariantForSize(product, size) {
@@ -1225,6 +1294,14 @@
 
       if (view === ORDER_VIEW_KEY) {
         return ORDER_VIEW_KEY;
+      }
+
+      if (view === WISHLIST_VIEW_KEY) {
+        return WISHLIST_VIEW_KEY;
+      }
+
+      if (view === RECENT_VIEW_KEY) {
+        return RECENT_VIEW_KEY;
       }
 
       if (view === AUTH_VIEW_KEY) {
@@ -1452,6 +1529,10 @@
       siteHelpLink.href = createSupportPath("faq");
       siteReturnsLink.textContent = t("shell.returns");
       siteReturnsLink.href = createSupportPath("returns");
+      siteWishlistLink.textContent = t("wishlist.title");
+      siteWishlistLink.href = `${STOREFRONT_PATH}?view=${WISHLIST_VIEW_KEY}`;
+      siteRecentLink.textContent = t("recent.title");
+      siteRecentLink.href = `${STOREFRONT_PATH}?view=${RECENT_VIEW_KEY}`;
       siteBrandEyebrow.textContent = t("shell.brandEyebrow");
       siteBrandTitle.textContent = t("storefront.title");
       siteDepartmentLabel.textContent = t("shell.departmentLabel");
@@ -1551,6 +1632,12 @@
       detailPageTitle.textContent = t("detail.loadingTitle");
       detailPageDescription.textContent = t("detail.loadingCopy");
       detailBackLink.textContent = t("common.backToStorefront");
+      wishlistHeroEyebrow.textContent = t("wishlist.eyebrow");
+      wishlistTitle.textContent = t("wishlist.title");
+      wishlistCopy.textContent = t("wishlist.copy");
+      recentHeroEyebrow.textContent = t("recent.eyebrow");
+      recentTitle.textContent = t("recent.title");
+      recentCopy.textContent = t("recent.copy");
       checkoutHeroEyebrow.textContent = t("checkout.heroEyebrow");
       checkoutTitle.textContent = t("checkout.heroTitle");
       checkoutCopy.textContent = t("checkout.heroCopy");
@@ -2181,15 +2268,20 @@
       orderHistoryPanel.innerHTML = `
         <div class="checkout-summary">
           ${orders.map((order) => `
-            <a class="checkout-summary__item" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(order.id)}" data-order-history-card>
+            <article class="checkout-summary__item" data-order-history-card>
               <span>${escapeHtml(order.id)}</span>
               <span>${order.items.map((item) => escapeHtml(item.title)).join(", ")}</span>
               <span>${escapeHtml(order.timeline[order.timeline.length - 1].label)}</span>
               <span>${formatCurrency(order.totals.total)}</span>
-            </a>
+              <span class="order-actions">
+                <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=order&id=${encodeURIComponent(order.id)}">${t("returns.detail")}</a>
+                <button class="order-button order-button--primary" type="button" data-order-reorder data-order-id="${escapeHtml(order.id)}">${t("reorder.button")}</button>
+              </span>
+            </article>
           `).join("")}
         </div>
       `;
+      bindReorderButtons(orderHistoryPanel);
     }
 
     async function renderOrdersView() {
@@ -2200,6 +2292,29 @@
 
       const payload = await fetchUserOrders();
       renderOrderHistory(Array.isArray(payload.orders) ? payload.orders : []);
+    }
+
+    function bindReorderButtons(root = document) {
+      root.querySelectorAll("[data-order-reorder], [data-order-detail-reorder]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const orderId = button.dataset.orderId;
+          if (!orderId || button.disabled) {
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            const payload = await reorderOrder(orderId);
+            if (Array.isArray(payload.skippedItems) && payload.skippedItems.length) {
+              showOutOfStockToast();
+            }
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
     }
 
     const customerReturnableOrderStatuses = new Set(["paid", "processing", "shipped", "delivered"]);
@@ -2812,6 +2927,212 @@
       return response.json();
     }
 
+    function createRetentionCardMarkup(product, options = {}) {
+      const localizedProduct = getLocalizedProduct(product);
+      const addAction = options.addAction || "";
+      const removeAction = options.removeAction || "";
+      const labelKey = options.labelKey || "wishlist";
+
+      return `
+        <article class="retention-card" data-wishlist-card data-product-id="${escapeHtml(product.id)}">
+          <p class="retention-card__series">${escapeHtml(localizedProduct.series)}</p>
+          <h2 class="retention-card__title">${escapeHtml(localizedProduct.title)}</h2>
+          <p class="retention-card__meta">${escapeHtml(localizedProduct.categoryLabel)} · ¥${product.price} <s>¥${product.originalPrice}</s></p>
+          <p class="retention-card__meta">${escapeHtml(String(localizedProduct.rating))} · ${formatReviewCount(product.reviewCount)}</p>
+          <div class="retention-card__actions">
+            <a class="retention-card__button" href="${getActiveDetailHref(product.id)}">${t(`${labelKey}.viewDetail`)}</a>
+            <button class="retention-card__button retention-card__button--primary" type="button" ${addAction}>${t(`${labelKey}.addCart`)}</button>
+            <button class="retention-card__button" type="button" ${removeAction}>${t(`${labelKey}.remove`)}</button>
+          </div>
+        </article>
+      `;
+    }
+
+    async function renderWishlistPage() {
+      if (!wishlistPanel) {
+        return;
+      }
+
+      const payload = await fetchSavedProducts().catch(() => ({ items: [], savedProductIds: [] }));
+      applySavedProductsPayload(payload);
+      const items = Array.isArray(payload.items) ? payload.items : [];
+
+      if (!items.length) {
+        wishlistPanel.innerHTML = `
+          <div class="empty-state" data-wishlist-empty>
+            <p>${t("wishlist.empty")}</p>
+            <a class="retention-card__button retention-card__button--primary" href="${STOREFRONT_PATH}">${t("wishlist.browse")}</a>
+          </div>
+        `;
+        return;
+      }
+
+      wishlistPanel.innerHTML = `
+        <div class="retention-grid">
+          ${items.map((product) => createRetentionCardMarkup(product, {
+            addAction: `data-wishlist-add-cart data-default-size="${escapeHtml(getDefaultSizeForProduct(product))}"`,
+            removeAction: "data-wishlist-remove"
+          })).join("")}
+        </div>
+      `;
+      bindWishlistInteractions();
+    }
+
+    function bindWishlistInteractions() {
+      if (!wishlistPanel) {
+        return;
+      }
+
+      wishlistPanel.querySelectorAll("[data-wishlist-add-cart]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const card = button.closest("[data-product-id]");
+          const productId = card?.dataset.productId;
+          const size = button.dataset.defaultSize;
+          if (!productId || !size || button.disabled) {
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            await addCartItem(productId, size);
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+
+      wishlistPanel.querySelectorAll("[data-wishlist-remove]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const productId = button.closest("[data-product-id]")?.dataset.productId;
+          if (!productId || button.disabled) {
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            const payload = await removeSavedProduct(productId);
+            applySavedProductsPayload(payload);
+            await renderWishlistPage();
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function fetchRecentHistory(limit = 24) {
+      const response = await fetch(`/api/recent-views?limit=${encodeURIComponent(limit)}&locale=${encodeURIComponent(activeLocale)}`);
+      if (!response.ok) {
+        throw new Error("Failed to load recent history");
+      }
+      return response.json();
+    }
+
+    async function removeRecentHistoryItem(productId) {
+      const response = await fetch(`/api/recent-views/${encodeURIComponent(productId)}?locale=${encodeURIComponent(activeLocale)}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to remove recent history item");
+      }
+      return response.json();
+    }
+
+    async function clearRecentHistory() {
+      const response = await fetch("/api/recent-views/clear", {
+        method: "POST"
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to clear recent history");
+      }
+      return response.json();
+    }
+
+    function createRecentHistoryCardMarkup(product) {
+      return createRetentionCardMarkup(product, {
+        labelKey: "recent",
+        addAction: `data-recent-add-cart data-default-size="${escapeHtml(getDefaultSizeForProduct(product))}"`,
+        removeAction: "data-recent-remove"
+      }).replace("data-wishlist-card", "data-recent-history-card");
+    }
+
+    async function renderRecentHistoryPage(payload) {
+      if (!recentPanel) {
+        return;
+      }
+
+      const recentPayload = payload || await fetchRecentHistory().catch(() => ({ items: [] }));
+      const items = Array.isArray(recentPayload.items) ? recentPayload.items : [];
+
+      if (!items.length) {
+        recentPanel.innerHTML = `<div class="empty-state" data-recent-history-empty>${t("recent.empty")}</div>`;
+        return;
+      }
+
+      recentPanel.innerHTML = `
+        <div class="retention-panel__toolbar">
+          <button class="retention-card__button" type="button" data-recent-clear>${t("recent.clear")}</button>
+        </div>
+        <div class="retention-grid">
+          ${items.map(createRecentHistoryCardMarkup).join("")}
+        </div>
+      `;
+      bindRecentHistoryInteractions();
+    }
+
+    function bindRecentHistoryInteractions() {
+      if (!recentPanel) {
+        return;
+      }
+
+      recentPanel.querySelector("[data-recent-clear]")?.addEventListener("click", async () => {
+        await clearRecentHistory();
+        await renderRecentHistoryPage({ items: [] });
+      });
+
+      recentPanel.querySelectorAll("[data-recent-remove]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const productId = button.closest("[data-product-id]")?.dataset.productId;
+          if (!productId || button.disabled) {
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            const payload = await removeRecentHistoryItem(productId);
+            await renderRecentHistoryPage(payload);
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+
+      recentPanel.querySelectorAll("[data-recent-add-cart]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const productId = button.closest("[data-product-id]")?.dataset.productId;
+          const size = button.dataset.defaultSize;
+          if (!productId || !size || button.disabled) {
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            await addCartItem(productId, size);
+          } catch (error) {
+            showOutOfStockToast();
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    }
+
     function createRecommendationCardMarkup(product) {
       const localizedProduct = getLocalizedProduct(product);
 
@@ -3057,6 +3378,21 @@
       return response.json();
     }
 
+    async function reorderOrder(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/reorder`, {
+        method: "POST"
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to reorder");
+      }
+
+      const payload = await response.json();
+      setCartStateFromPayload(payload);
+      renderCartState();
+      return payload;
+    }
+
     async function fetchPaymentAttempts(orderId) {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/payments`);
 
@@ -3229,6 +3565,14 @@
                 ${t("returns.request")}
               </a>
             ` : ""}
+            <button
+              class="order-button order-button--primary"
+              type="button"
+              data-order-detail-reorder
+              data-order-id="${escapeHtml(order.id)}"
+            >
+              ${t("reorder.button")}
+            </button>
             <a
               class="order-button order-button--secondary"
               href="${getContinueShoppingHref()}"
@@ -3241,6 +3585,7 @@
           ${createOrderStatusActionsMarkup(order)}
         </section>
       `;
+      bindReorderButtons(orderPagePanel);
     }
 
     async function renderPaymentPage() {
@@ -5014,6 +5359,8 @@
       const currentView = getCurrentView();
       const isStorefrontView = currentView === "storefront";
       const isDetailView = currentView === DETAIL_VIEW_KEY;
+      const isWishlistView = currentView === WISHLIST_VIEW_KEY;
+      const isRecentView = currentView === RECENT_VIEW_KEY;
       const isAuthView = currentView === AUTH_VIEW_KEY;
       const isAddressesView = currentView === ADDRESSES_VIEW_KEY;
       const isCheckoutView = currentView === CHECKOUT_VIEW_KEY;
@@ -5029,6 +5376,8 @@
       pageRoot.dataset.view = currentView;
       storefrontView.hidden = !isStorefrontView;
       detailView.hidden = !isDetailView;
+      wishlistView.hidden = !isWishlistView;
+      recentView.hidden = !isRecentView;
       authView.hidden = !isAuthView;
       addressesView.hidden = !isAddressesView;
       checkoutView.hidden = !isCheckoutView;
@@ -6072,6 +6421,18 @@
       if (getCurrentView() === PAYMENT_VIEW_KEY) {
         await cartLoadPromise;
         await renderPaymentPage();
+        return;
+      }
+
+      if (getCurrentView() === WISHLIST_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderWishlistPage();
+        return;
+      }
+
+      if (getCurrentView() === RECENT_VIEW_KEY) {
+        await cartLoadPromise;
+        await renderRecentHistoryPage();
         return;
       }
 

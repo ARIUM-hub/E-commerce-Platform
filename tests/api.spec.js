@@ -963,6 +963,45 @@ test("records and returns recently viewed products for the session", async ({ re
   expect(payload.items.map((item) => item.id)).toEqual(["sock-02", "sock-01"]);
 });
 
+test("lists removes and clears full recent views for the current session", async ({ request }) => {
+  const firstRecord = await request.post("/api/recent-views", { data: { productId: "sock-01" } });
+  expect(firstRecord.ok()).toBe(true);
+  const cookie = getSessionCookie(firstRecord);
+
+  const secondRecord = await request.post("/api/recent-views", {
+    data: { productId: "sock-02" },
+    headers: { cookie }
+  });
+  expect(secondRecord.ok()).toBe(true);
+
+  const listResponse = await request.get("/api/recent-views?limit=24", {
+    headers: { cookie }
+  });
+  expect(listResponse.ok()).toBe(true);
+  await expect(listResponse.json()).resolves.toMatchObject({
+    ok: true,
+    productIds: ["sock-02", "sock-01"]
+  });
+
+  const removeResponse = await request.delete("/api/recent-views/sock-02", {
+    headers: { cookie }
+  });
+  expect(removeResponse.ok()).toBe(true);
+  await expect(removeResponse.json()).resolves.toMatchObject({
+    ok: true,
+    productIds: ["sock-01"]
+  });
+
+  const clearResponse = await request.post("/api/recent-views/clear", {
+    headers: { cookie }
+  });
+  expect(clearResponse.ok()).toBe(true);
+  await expect(clearResponse.json()).resolves.toMatchObject({
+    ok: true,
+    productIds: []
+  });
+});
+
 const checkoutPayload = {
   locale: "en-US",
   customer: {
@@ -1881,6 +1920,46 @@ test("does not expose another user's order detail", async ({ request }) => {
 
   const payload = await response.json();
   expect(payload.error.code).toBe("ORDER_NOT_FOUND");
+});
+
+test("reorders an owned order into the current cart", async ({ request }) => {
+  const { sessionCookie, order } = await createLoggedInOrder(request, {
+    name: "Reorder User",
+    email: "reorder@example.com",
+    password: "demo1234"
+  });
+
+  const reorderResponse = await request.post(`/api/orders/${order.id}/reorder`, {
+    headers: { cookie: sessionCookie }
+  });
+  expect(reorderResponse.ok()).toBe(true);
+  await expect(reorderResponse.json()).resolves.toMatchObject({
+    ok: true,
+    addedItems: [{ productId: "sock-01", size: "39", quantity: 1 }],
+    cart: {
+      meta: { itemCount: 1 }
+    }
+  });
+});
+
+test("does not reorder another user's order", async ({ request }) => {
+  const { order } = await createLoggedInOrder(request, {
+    name: "Order Owner",
+    email: "owner@example.com",
+    password: "demo1234"
+  });
+  const otherResponse = await request.post("/api/auth/register", {
+    data: { name: "Other User", email: "other@example.com", password: "demo1234" }
+  });
+  const otherCookie = getSessionCookie(otherResponse);
+
+  const reorderResponse = await request.post(`/api/orders/${order.id}/reorder`, {
+    headers: { cookie: otherCookie }
+  });
+  expect(reorderResponse.status()).toBe(404);
+  await expect(reorderResponse.json()).resolves.toMatchObject({
+    error: { code: "ORDER_NOT_FOUND" }
+  });
 });
 
 test("requires login for user order history", async ({ request }) => {

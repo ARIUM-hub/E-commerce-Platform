@@ -3335,6 +3335,88 @@
       line-height: 1.7;
     }
 
+    .retention-panel {
+      display: grid;
+      gap: 16px;
+    }
+
+    .retention-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .retention-panel__toolbar {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .retention-card {
+      display: grid;
+      gap: 12px;
+      border: 1px solid #e4e4e4;
+      border-radius: 22px;
+      padding: 16px;
+      background: #ffffff;
+    }
+
+    .retention-card__series,
+    .retention-card__meta {
+      margin: 0;
+      color: #6b6b6b;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .retention-card__series {
+      color: #7a7a7a;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .retention-card__title {
+      margin: 0;
+      color: #111111;
+      font-size: 20px;
+      line-height: 1.18;
+    }
+
+    .retention-card__actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .retention-card__button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 1px solid #111111;
+      border-radius: 999px;
+      padding: 10px 12px;
+      background: #ffffff;
+      color: #111111;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .retention-card__button--primary {
+      background: #111111;
+      color: #ffffff;
+    }
+
+    .retention-card__button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
     .recommendations {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3731,6 +3813,8 @@
       <div class="site-header__utility-actions">
         <a class="site-header__utility-link" href="/socks-product-list.html" data-site-help-link>帮助中心</a>
         <a class="site-header__utility-link" href="/socks-product-list.html" data-site-returns-link>退换说明</a>
+        <a class="site-header__utility-link" href="/socks-product-list.html?view=wishlist" data-site-wishlist-link>心愿单</a>
+        <a class="site-header__utility-link" href="/socks-product-list.html?view=recent" data-site-recent-link>浏览历史</a>
         <section class="locale-switcher" data-locale-switcher aria-label="Language switcher">
           <div class="locale-switcher__group" role="group" aria-label="Language switcher">
             <button class="locale-switcher__button is-active" type="button" data-locale-option="zh-CN" aria-pressed="true">中文</button>
@@ -3889,6 +3973,26 @@
       </section>
 
       <section class="detail-panel" data-detail-page-panel></section>
+    </div>
+
+    <div class="wishlist-view" data-wishlist-view hidden>
+      <section class="hero hero--compact">
+        <p class="hero__eyebrow" data-wishlist-hero-eyebrow>保存列表</p>
+        <h1 class="hero__title" data-wishlist-title>心愿单</h1>
+        <p class="hero__description" data-wishlist-copy>管理你保存的袜子，稍后继续购买。</p>
+      </section>
+
+      <section class="retention-panel" data-wishlist-panel></section>
+    </div>
+
+    <div class="recent-view" data-recent-view hidden>
+      <section class="hero hero--compact">
+        <p class="hero__eyebrow" data-recent-hero-eyebrow>浏览历史</p>
+        <h1 class="hero__title" data-recent-title>浏览历史</h1>
+        <p class="hero__description" data-recent-copy>继续查看你最近打开过的袜子商品。</p>
+      </section>
+
+      <section class="retention-panel" data-recent-panel></section>
     </div>
 
     <div class="auth-view" data-auth-view hidden>

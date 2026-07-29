@@ -58,11 +58,14 @@ const {
   setCartCouponCode
 } = require("./lib/repositories/carts");
 const {
+  clearRecentViews,
   findBundleById,
   findCouponByCode,
   listRecentProductIds,
+  listRecentViews,
   recordRecentView,
-  listActiveMarketingCampaigns
+  listActiveMarketingCampaigns,
+  removeRecentView
 } = require("./lib/repositories/marketing");
 const {
   createSupportTicket,
@@ -84,6 +87,7 @@ const {
   countOrders,
   listOrders,
   findOrderById,
+  reorderItemsFromOrder,
   saveOrder
 } = require("./lib/repositories/orders");
 const {
@@ -475,6 +479,27 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
 
 function getMarketingPayload() {
   return withDatabase((db) => listActiveMarketingCampaigns(db));
+}
+
+function getRecentViewsPayload(db, owner, products, locale, limit) {
+  const views = listRecentViews(db, {
+    userId: owner.userId,
+    sessionId: owner.sessionId,
+    limit
+  });
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const items = views
+    .map((view) => {
+      const product = productsById.get(view.productId);
+      return product ? { ...localizeProduct(product, locale), viewedAt: view.viewedAt } : null;
+    })
+    .filter(Boolean);
+
+  return {
+    ok: true,
+    productIds: views.map((view) => view.productId),
+    items
+  };
 }
 
 function getCartPayload(cart, options = {}) {
@@ -1082,6 +1107,11 @@ const allowedOrderTransitions = {
 function parseOrderIdFromPath(pathname) {
   const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
+}
+
+function parseOrderReorderPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/reorder$/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function parseOrderStatusPath(pathname) {
@@ -1692,6 +1722,69 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  if (request.method === "GET" && requestUrl.pathname === "/api/recent-views") {
+    try {
+      const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      const products = withDatabase((db) => listProducts(db));
+      const payload = withDatabase((db) => getRecentViewsPayload(
+        db,
+        owner,
+        products,
+        locale,
+        requestUrl.searchParams.get("limit")
+      ));
+      sendCartJson(response, 200, payload, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const recentViewProductMatch = requestUrl.pathname.match(/^\/api\/recent-views\/([^/]+)$/);
+  if (request.method === "DELETE" && recentViewProductMatch) {
+    try {
+      const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      const productId = decodeURIComponent(recentViewProductMatch[1]);
+      const products = withDatabase((db) => listProducts(db));
+      const payload = withDatabase((db) => {
+        removeRecentView(db, { ...owner, productId });
+        return getRecentViewsPayload(db, owner, products, locale, 24);
+      });
+      sendCartJson(response, 200, payload, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/recent-views/clear") {
+    try {
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      withDatabase((db) => clearRecentViews(db, owner));
+      sendCartJson(response, 200, { ok: true, productIds: [], items: [] }, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/recommendations") {
     try {
       const scenario = requestUrl.searchParams.get("scenario") || "detail";
@@ -2093,6 +2186,43 @@ const server = http.createServer(async (request, response) => {
       const orders = withDatabase((db) => listOrders(db, user.id));
 
       sendJson(response, 200, { orders });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReorderId = parseOrderReorderPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedReorderId) {
+    try {
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const order = withDatabase((db) => findOrderById(db, requestedReorderId));
+      if (!order || (order.userId && (!activeCart.user || activeCart.user.id !== order.userId))) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const products = withDatabase((db) => listProducts(db));
+      const result = withDatabase((db) => reorderItemsFromOrder(db, {
+        order,
+        cart: activeCart.cart,
+        products
+      }));
+
+      if (!result.addedItems.length) {
+        sendError(response, 409, "REORDER_EMPTY", "No order items are available to reorder.");
+        return;
+      }
+
+      const nextCart = { ...activeCart.cart, items: result.items };
+      await writeActiveCart(activeCart, nextCart);
+      sendCartJson(response, 200, {
+        ok: true,
+        cart: getCartPayload(nextCart, { products }),
+        addedItems: result.addedItems,
+        skippedItems: result.skippedItems
+      }, activeCart);
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
