@@ -2466,6 +2466,48 @@ test("handles duplicate successful payment webhooks idempotently", async ({ requ
   expect(secondPayload.order.timeline.filter((entry) => entry.status === "paid")).toHaveLength(1);
 });
 
+test("returns invoice for a paid order and not-ready for unpaid orders", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  const notReadyResponse = await request.get(`/api/orders/${order.id}/invoice`);
+  expect(notReadyResponse.status()).toBe(409);
+  expect((await notReadyResponse.json()).error.code).toBe("INVOICE_NOT_READY");
+
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+
+  const invoiceResponse = await request.get(`/api/orders/${order.id}/invoice`);
+  expect(invoiceResponse.ok()).toBe(true);
+  const invoicePayload = await invoiceResponse.json();
+  expect(invoicePayload.invoice).toMatchObject({
+    orderId: order.id,
+    status: "issued",
+    tax: expect.any(Number),
+    grandTotal: expect.any(Number)
+  });
+});
+
+test("does not expose another user's invoice", async ({ request }) => {
+  const { order } = await createLoggedInOrder(request, {
+    name: "Invoice Owner",
+    email: "invoice-owner@example.com",
+    password: "demo1234"
+  });
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+  const otherRegisterResponse = await request.post("/api/auth/register", {
+    data: { name: "Other User", email: "other-invoice@example.com", password: "demo1234" }
+  });
+  const otherCookie = getSessionCookie(otherRegisterResponse);
+
+  const response = await request.get(`/api/orders/${order.id}/invoice`, {
+    headers: { cookie: otherCookie }
+  });
+  expect(response.status()).toBe(404);
+  expect((await response.json()).error.code).toBe("INVOICE_NOT_FOUND");
+});
+
 test("lists payment attempts for an order", async ({ request }) => {
   const { order } = await createOrderViaApi(request);
 

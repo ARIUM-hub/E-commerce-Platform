@@ -110,6 +110,7 @@ const {
 const { processPaymentWebhook } = require("./lib/repositories/payment-events");
 const {
   createInvoiceForOrder,
+  findInvoiceById,
   findInvoiceByOrderId
 } = require("./lib/repositories/invoices");
 const {
@@ -1154,6 +1155,16 @@ function parseOrderStatusPath(pathname) {
 
 function parseOrderPaymentsPath(pathname) {
   const match = pathname.match(/^\/api\/orders\/([^/]+)\/payments$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderInvoicePath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/invoice$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseInvoiceIdFromPath(pathname) {
+  const match = pathname.match(/^\/api\/invoices\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -2393,6 +2404,59 @@ const server = http.createServer(async (request, response) => {
   }
 
   const requestedPaymentOrderId = parseOrderPaymentsPath(requestUrl.pathname);
+  const requestedInvoiceOrderId = parseOrderInvoicePath(requestUrl.pathname);
+  if (request.method === "GET" && requestedInvoiceOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedInvoiceOrderId));
+      if (!order) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const invoice = withDatabase((db) => findInvoiceByOrderId(db, requestedInvoiceOrderId));
+      if (!invoice) {
+        sendError(response, 409, "INVOICE_NOT_READY", "Invoice is not ready until payment succeeds.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, invoice });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedInvoiceId = parseInvoiceIdFromPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedInvoiceId) {
+    try {
+      const invoice = withDatabase((db) => findInvoiceById(db, requestedInvoiceId));
+      if (!invoice) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const order = withDatabase((db) => findOrderById(db, invoice.orderId));
+      const { user } = await getSessionContext(request);
+      if (!order || (order.userId && (!user || user.id !== order.userId))) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, invoice });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestedPaymentOrderId) {
     try {
       const order = withDatabase((db) => findOrderById(db, requestedPaymentOrderId));
