@@ -1668,6 +1668,47 @@ test("creates a persisted order from the current cart and clears the cart", asyn
   }
 });
 
+test("creates orders with an address-aware fulfillment snapshot", async ({ request }) => {
+  await request.post("/api/cart/items", {
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+
+  const response = await request.post("/api/orders", {
+    data: {
+      ...checkoutPayload,
+      shippingAddress: {
+        ...checkoutPayload.shippingAddress,
+        region: "AK",
+        postalCode: "99501"
+      },
+      shippingMethodId: "express"
+    }
+  });
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+
+  expect(payload.order.fulfillment).toMatchObject({
+    status: "not_started",
+    shippingMethodId: "express",
+    carrier: "Socks Express",
+    addressZone: "remote"
+  });
+  expect(payload.order.fulfillment.estimatedDeliveryDate).toEqual(expect.any(String));
+
+  const fulfillmentResponse = await request.get(`/api/orders/${payload.order.id}/fulfillment`);
+  expect(fulfillmentResponse.ok()).toBe(true);
+  const fulfillmentPayload = await fulfillmentResponse.json();
+  expect(fulfillmentPayload.fulfillment).toMatchObject({
+    orderId: payload.order.id,
+    status: "not_started",
+    shippingMethodId: "express",
+    addressZone: "remote"
+  });
+  expect(fulfillmentPayload.fulfillment.events).toEqual([
+    expect.objectContaining({ status: "not_started" })
+  ]);
+});
+
 test("persists skuId on order items created from cart", async ({ request }) => {
   await request.post("/api/cart/items", {
     data: { productId: "sock-01", size: "39", quantity: 1 }

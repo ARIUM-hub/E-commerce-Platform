@@ -101,6 +101,10 @@ const {
   listPaymentAttemptsByOrder
 } = require("./lib/repositories/payments");
 const {
+  createFulfillmentForOrder,
+  createFulfillmentSummary,
+  findFulfillmentByOrderId,
+  getShippingMethodForOrder,
   getShippingMethodsForAddress
 } = require("./lib/repositories/fulfillment");
 const { createPricingSummary } = require("./lib/pricing");
@@ -1127,6 +1131,11 @@ function parseOrderPaymentsPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseOrderFulfillmentPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/fulfillment$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function parseReturnIdFromPath(pathname) {
   const match = pathname.match(/^\/api\/returns\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -2093,7 +2102,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const shippingMethod = getShippingMethod(body.shippingMethodId, locale);
+      const shippingMethod = getShippingMethodForOrder(body.shippingMethodId, body.shippingAddress, locale);
       if (!shippingMethod) {
         sendError(response, 400, "INVALID_SHIPPING_METHOD", "Shipping method is invalid.");
         return;
@@ -2167,7 +2176,11 @@ const server = http.createServer(async (request, response) => {
       const savedOrder = withDatabase((db) => createOrderTransaction(db, {
         cart,
         cartId: activeCart.cartId,
-        order
+        order,
+        afterOrderCreated(database, pendingOrder) {
+          const fulfillment = createFulfillmentForOrder(database, pendingOrder, shippingMethod, locale);
+          pendingOrder.fulfillment = createFulfillmentSummary(fulfillment);
+        }
       }));
 
       sendJson(response, 201, {
@@ -2305,6 +2318,35 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedFulfillmentOrderId = parseOrderFulfillmentPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedFulfillmentOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedFulfillmentOrderId));
+      if (!order) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const fulfillment = withDatabase((db) => findFulfillmentByOrderId(db, requestedFulfillmentOrderId));
+      if (!fulfillment) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, fulfillment });
+      return;
+    } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
