@@ -1896,6 +1896,18 @@
           { status: row.dataset.marketingStatus === "active" ? "inactive" : "active" }
         );
         await renderAdminMarketing();
+        return;
+      }
+
+      const paymentToggle = event.target.closest("[data-admin-payment-toggle]");
+      if (paymentToggle) {
+        const row = paymentToggle.closest("[data-admin-payment-method]");
+        paymentToggle.disabled = true;
+        await patchAdminJson(`/api/admin/payment-methods/${encodeURIComponent(row.dataset.methodId)}`, {
+          status: row.dataset.status === "active" ? "inactive" : "active",
+          locale: activeLocale
+        });
+        await renderAdminPayments();
       }
     });
 
@@ -2143,12 +2155,29 @@
       `).join("")}</div>`;
     }
 
+    async function renderAdminPayments() {
+      const payload = await fetchAdminJson("/api/admin/payment-methods");
+      adminData.payments = payload.methods;
+      adminPanel.innerHTML = `<div class="admin-table">${payload.methods.map((method) => `
+        <article class="admin-row" data-admin-payment-method data-method-id="${escapeHtml(method.id)}" data-status="${escapeHtml(method.status)}">
+          <span>${escapeHtml(method.id)}</span>
+          <strong>${escapeHtml(method.label)}</strong>
+          <span>${escapeHtml(method.status)}</span>
+          <span>${formatCurrency(method.fee || 0)}</span>
+          <button class="order-button order-button--secondary" type="button" data-admin-payment-toggle>
+            ${method.status === "active" ? "Disable" : "Enable"}
+          </button>
+        </article>
+      `).join("")}</div>`;
+    }
+
     async function renderAdminPanel() {
       renderAdminTabs();
       if (activeAdminTab === "products") return renderAdminProducts();
       if (activeAdminTab === "inventory") return renderAdminInventory();
       if (activeAdminTab === "orders") return renderAdminOrders();
       if (activeAdminTab === "marketing") return renderAdminMarketing();
+      if (activeAdminTab === "payments") return renderAdminPayments();
       return renderAdminDashboard();
     }
 

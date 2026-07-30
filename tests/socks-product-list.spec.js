@@ -181,6 +181,7 @@ test("renders admin dashboard tabs for demo admins", async ({ page }) => {
   await expect(page.locator("[data-admin-tab='inventory']")).toBeVisible();
   await expect(page.locator("[data-admin-tab='orders']")).toBeVisible();
   await expect(page.locator("[data-admin-tab='marketing']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='payments']")).toBeVisible();
   await expect(page.locator("[data-admin-kpi]")).not.toHaveCount(0);
 });
 
@@ -199,6 +200,21 @@ test("renders admin products inventory orders and marketing tabs", async ({ page
 
   await page.locator("[data-admin-tab='marketing']").click();
   await expect(page.locator("[data-admin-marketing-row]")).not.toHaveCount(0);
+});
+
+test("disables a payment method from the admin console and hides it on payment page", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='payments']").click();
+  await page.locator("[data-admin-payment-method][data-method-id='paypal'] [data-admin-payment-toggle]").click();
+  await expect(page.locator("[data-admin-payment-method][data-method-id='paypal']")).toContainText("inactive");
+
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+
+  await expect(page.locator("[data-payment-method='paypal']")).toHaveCount(0);
 });
 
 test("updates inventory from the admin inventory tab", async ({ page }) => {
