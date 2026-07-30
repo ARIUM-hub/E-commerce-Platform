@@ -1320,6 +1320,33 @@ test("returns and toggles admin marketing resources", async ({ request }) => {
   expect(marketingPayload.coupons.map((coupon) => coupon.code)).not.toContain("SOCK10");
 });
 
+test("returns configured payment methods filtered for the order total", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  const response = await request.get(`/api/payment-methods?orderId=${encodeURIComponent(order.id)}&locale=en-US`);
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+
+  expect(payload.methods.map((method) => method.id)).toEqual(["card", "paypal", "gift_card"]);
+  expect(payload.methods.find((method) => method.id === "paypal")).toMatchObject({
+    label: "PayPal",
+    fee: 1,
+    isAvailable: true
+  });
+});
+
+test("disables a payment method from admin API", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const patchResponse = await request.patch("/api/admin/payment-methods/paypal", {
+    headers: { cookie },
+    data: { status: "inactive", locale: "en-US" }
+  });
+  expect(patchResponse.ok()).toBe(true);
+
+  const methodsResponse = await request.get("/api/payment-methods?locale=en-US");
+  const payload = await methodsResponse.json();
+  expect(payload.methods.map((method) => method.id)).not.toContain("paypal");
+});
+
 test("registers a user and creates an http-only session", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);

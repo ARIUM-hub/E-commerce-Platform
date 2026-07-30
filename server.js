@@ -76,6 +76,7 @@ const {
   getAdminSummary,
   listAdminMarketing,
   listAdminOrders,
+  listAdminPaymentMethods,
   listAdminProducts,
   listInventory,
   updateAdminOrderStatus,
@@ -100,6 +101,10 @@ const {
   createPaymentAttempt,
   listPaymentAttemptsByOrder
 } = require("./lib/repositories/payments");
+const {
+  listPaymentMethods,
+  updatePaymentMethod
+} = require("./lib/repositories/payment-methods");
 const {
   createFulfillmentForOrder,
   createFulfillmentSummary,
@@ -1200,6 +1205,11 @@ function parseAdminMarketingStatusPath(pathname) {
   return match ? { type: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) } : null;
 }
 
+function parseAdminPaymentMethodPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/payment-methods\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 const router = createRouter();
 registerHealthRoutes(router);
 registerProductRoutes(router, {
@@ -1313,6 +1323,16 @@ const server = http.createServer(async (request, response) => {
       console.error(error);
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
     }
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/payment-methods") {
+    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+    const orderId = requestUrl.searchParams.get("orderId") || "";
+    const order = orderId ? withDatabase((db) => findOrderById(db, orderId)) : null;
+    const orderTotal = Number(order?.totals?.grandTotal ?? order?.totals?.total ?? 0);
+    const methods = withDatabase((db) => listPaymentMethods(db, { locale, orderTotal }));
+    sendJson(response, 200, { ok: true, methods });
     return;
   }
 
@@ -1464,6 +1484,45 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, ...marketing });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/payment-methods") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const methods = withDatabase((db) => listAdminPaymentMethods(db));
+      sendJson(response, 200, { ok: true, methods });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedPaymentMethodId = parseAdminPaymentMethodPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedPaymentMethodId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updatePaymentMethod(db, requestedPaymentMethodId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, method: result.method });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
