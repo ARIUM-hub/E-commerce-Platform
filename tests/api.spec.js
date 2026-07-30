@@ -2356,7 +2356,7 @@ test("creates a successful payment attempt and marks the order paid", async ({ r
     orderId: order.id,
     method: "card",
     status: "succeeded",
-    amount: order.totals.total
+    amount: order.totals.grandTotal
   });
   expect(payload.order.status).toBe("paid");
   expect(payload.order.payment).toMatchObject({
@@ -2367,6 +2367,103 @@ test("creates a successful payment attempt and marks the order paid", async ({ r
     "pending_payment",
     "paid"
   ]);
+});
+
+test("processes a successful payment webhook and creates an invoice", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  const paymentResponse = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", locale: "en-US" }
+  });
+  expect(paymentResponse.status()).toBe(201);
+  const paymentPayload = await paymentResponse.json();
+  expect(paymentPayload.payment).toMatchObject({
+    orderId: order.id,
+    status: "processing"
+  });
+
+  const webhookResponse = await request.post("/api/payments/webhook", {
+    data: {
+      eventId: "evt-demo-success-0001",
+      paymentId: paymentPayload.payment.id,
+      orderId: order.id,
+      status: "succeeded",
+      provider: "demo_gateway",
+      idempotencyKey: "demo-callback-success-0001",
+      signature: "demo-signature",
+      locale: "en-US"
+    }
+  });
+  expect(webhookResponse.ok()).toBe(true);
+  const webhookPayload = await webhookResponse.json();
+
+  expect(webhookPayload.payment.status).toBe("succeeded");
+  expect(webhookPayload.order.status).toBe("paid");
+  expect(webhookPayload.invoice).toMatchObject({
+    orderId: order.id,
+    status: "issued",
+    invoiceNumber: expect.stringMatching(/^INV-\d{8}-\d{4}$/)
+  });
+  expect(webhookPayload.order.payment.invoiceId).toBe(webhookPayload.invoice.id);
+});
+
+test("keeps orders pending after a failed payment webhook", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  const paymentResponse = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "paypal", locale: "en-US" }
+  });
+  const paymentPayload = await paymentResponse.json();
+
+  const webhookResponse = await request.post("/api/payments/webhook", {
+    data: {
+      eventId: "evt-demo-failed-0001",
+      paymentId: paymentPayload.payment.id,
+      orderId: order.id,
+      status: "failed",
+      provider: "demo_gateway",
+      idempotencyKey: "demo-callback-failed-0001",
+      signature: "demo-signature",
+      failureReason: "Demo payment was declined. Please try another method.",
+      locale: "en-US"
+    }
+  });
+  expect(webhookResponse.ok()).toBe(true);
+  const webhookPayload = await webhookResponse.json();
+
+  expect(webhookPayload.payment).toMatchObject({
+    status: "failed",
+    failureReason: "Demo payment was declined. Please try another method."
+  });
+  expect(webhookPayload.order.status).toBe("pending_payment");
+  expect(webhookPayload.invoice).toBeNull();
+});
+
+test("handles duplicate successful payment webhooks idempotently", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  const paymentResponse = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", locale: "en-US" }
+  });
+  const paymentPayload = await paymentResponse.json();
+  const webhookBody = {
+    eventId: "evt-demo-success-duplicate",
+    paymentId: paymentPayload.payment.id,
+    orderId: order.id,
+    status: "succeeded",
+    provider: "demo_gateway",
+    idempotencyKey: "demo-callback-success-duplicate",
+    signature: "demo-signature",
+    locale: "en-US"
+  };
+
+  const firstResponse = await request.post("/api/payments/webhook", { data: webhookBody });
+  const firstPayload = await firstResponse.json();
+  const secondResponse = await request.post("/api/payments/webhook", { data: webhookBody });
+  const secondPayload = await secondResponse.json();
+
+  expect(firstResponse.ok()).toBe(true);
+  expect(secondResponse.ok()).toBe(true);
+  expect(secondPayload.event.eventStatus).toBe("duplicate");
+  expect(secondPayload.invoice.id).toBe(firstPayload.invoice.id);
+  expect(secondPayload.order.timeline.filter((entry) => entry.status === "paid")).toHaveLength(1);
 });
 
 test("lists payment attempts for an order", async ({ request }) => {

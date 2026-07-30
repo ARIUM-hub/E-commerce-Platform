@@ -99,12 +99,19 @@ const {
 } = require("./lib/repositories/returns");
 const {
   createPaymentAttempt,
+  findPaymentAttemptById,
+  savePaymentAttempt,
   listPaymentAttemptsByOrder
 } = require("./lib/repositories/payments");
 const {
   listPaymentMethods,
   updatePaymentMethod
 } = require("./lib/repositories/payment-methods");
+const { processPaymentWebhook } = require("./lib/repositories/payment-events");
+const {
+  createInvoiceForOrder,
+  findInvoiceByOrderId
+} = require("./lib/repositories/invoices");
 const {
   createFulfillmentForOrder,
   createFulfillmentSummary,
@@ -1336,6 +1343,34 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (request.method === "POST" && requestUrl.pathname === "/api/payments/webhook") {
+    try {
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => processPaymentWebhook(db, {
+        body,
+        findOrderById,
+        saveOrder,
+        findPaymentAttemptById,
+        savePaymentAttempt,
+        createTimelineEntry,
+        createInvoiceForOrder
+      }));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/admin/summary") {
     try {
       const admin = await requireAdmin(request, response);
@@ -2401,7 +2436,6 @@ const server = http.createServer(async (request, response) => {
       const result = withDatabase((db) => createPaymentAttempt(db, {
         order,
         method: body.method,
-        outcome: body.outcome,
         locale,
         createTimelineEntry,
         saveOrder
@@ -2412,7 +2446,40 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      sendJson(response, 201, { ok: true, payment: result.payment, order: result.order });
+      if (body.outcome) {
+        const callback = withDatabase((db) => processPaymentWebhook(db, {
+          body: {
+            eventId: `evt-${result.payment.id}-${body.outcome}`,
+            paymentId: result.payment.id,
+            orderId: order.id,
+            status: body.outcome,
+            provider: "demo_gateway",
+            idempotencyKey: `demo-${result.payment.id}-${body.outcome}`,
+            signature: "demo-signature",
+            failureReason: body.outcome === "failed" ? "Demo payment was declined. Please try another method." : "",
+            locale
+          },
+          findOrderById,
+          saveOrder,
+          findPaymentAttemptById,
+          savePaymentAttempt,
+          createTimelineEntry,
+          createInvoiceForOrder
+        }));
+        if (callback.validationError) {
+          sendError(response, callback.validationError.statusCode, callback.validationError.code, callback.validationError.message);
+          return;
+        }
+        sendJson(response, 201, { ok: true, payment: callback.payment, order: callback.order, invoice: callback.invoice });
+        return;
+      }
+
+      sendJson(response, 201, {
+        ok: true,
+        payment: result.payment,
+        order: result.order,
+        nextAction: result.payment.nextAction
+      });
       return;
     } catch (error) {
       if (handleRequestBodyError(error, response)) {
