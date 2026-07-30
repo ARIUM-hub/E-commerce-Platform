@@ -267,6 +267,24 @@ test("initializes SQLite marketing campaigns, coupons, bundles, and recent views
   expect(recentViewTable).toEqual({ name: "recent_views" });
 });
 
+test("initializes SQLite fulfillment and refund lifecycle tables", async () => {
+  const { createDatabase, initializeDatabase } = require("../lib/database");
+  const db = createDatabase(":memory:");
+  initializeDatabase(db);
+
+  const fulfillmentTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'fulfillments'").get();
+  const fulfillmentEventTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'fulfillment_events'").get();
+  const refundTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'refunds'").get();
+  const refundEventTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'refund_events'").get();
+
+  expect(fulfillmentTable).toEqual({ name: "fulfillments" });
+  expect(fulfillmentEventTable).toEqual({ name: "fulfillment_events" });
+  expect(refundTable).toEqual({ name: "refunds" });
+  expect(refundEventTable).toEqual({ name: "refund_events" });
+
+  db.close();
+});
+
 test("records schema migrations during database initialization", async () => {
   await resetDatabase(testDbFile);
 
