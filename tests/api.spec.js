@@ -1395,6 +1395,48 @@ test("rejects invalid admin product payloads", async ({ request }) => {
   expect(payload.error.code).toBe("ADMIN_PRODUCT_ID_INVALID");
 });
 
+test("uploads a product image to local public uploads for admins", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const imageBuffer = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#eeeeee"/></svg>`);
+
+  const response = await request.post("/api/admin/products/sock-01/images", {
+    headers: { cookie },
+    multipart: {
+      image: {
+        name: "sock-clean.svg",
+        mimeType: "image/svg+xml",
+        buffer: imageBuffer
+      }
+    }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.image).toMatchObject({
+    src: expect.stringMatching(/^\/public\/uploads\/products\/sock-01-/),
+    alt: "sock-01 product image"
+  });
+});
+
+test("rejects invalid admin product image uploads", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.post("/api/admin/products/sock-01/images", {
+    headers: { cookie },
+    multipart: {
+      image: {
+        name: "bad.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("not an image")
+      }
+    }
+  });
+
+  expect(response.status()).toBe(400);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ADMIN_IMAGE_TYPE_INVALID");
+});
+
 test("returns filtered admin inventory rows", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "admin@socks.test" });
 

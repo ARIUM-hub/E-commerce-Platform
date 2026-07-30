@@ -19,6 +19,10 @@ const {
   resolveStaticFile,
   sendStaticFile
 } = require("./lib/http/static-files");
+const {
+  MultipartError,
+  readMultipartFile
+} = require("./lib/http/multipart");
 const { createRouter } = require("./lib/http/router");
 const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
@@ -156,6 +160,12 @@ const staticRoutes = new Map([
 const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
 const validLocales = new Set(["zh-CN", "en-US"]);
+const adminImageTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/svg+xml", "svg"]
+]);
 const validStockFilters = new Set(["all", "in-stock", "low-stock", "out-of-stock"]);
 const DEMO_ADMIN_EMAILS = new Set(["admin@socks.test"]);
 const shippingMethods = {
@@ -253,6 +263,22 @@ function handleRequestBodyError(error, response) {
   }
 
   return false;
+}
+
+function handleMultipartError(error, response) {
+  if (!(error instanceof MultipartError)) {
+    return false;
+  }
+
+  sendError(response, error.statusCode, error.code, error.message);
+  return true;
+}
+
+function createAdminImageName(productId, contentType) {
+  const extension = adminImageTypes.get(contentType);
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const suffix = crypto.randomBytes(3).toString("hex");
+  return `${productId}-${stamp}-${suffix}.${extension}`;
 }
 
 function sortRecommended(left, right) {
@@ -1218,6 +1244,11 @@ function parseAdminProductPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseAdminProductImagePath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/products\/([^/]+)\/images$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function parseAdminOrderPath(pathname) {
   const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -1416,6 +1447,44 @@ const server = http.createServer(async (request, response) => {
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminProductImageId = parseAdminProductImagePath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminProductImageId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const product = withDatabase((db) => findAdminProductById(db, requestedAdminProductImageId));
+      if (!product) {
+        sendError(response, 404, "ADMIN_PRODUCT_NOT_FOUND", "Product was not found.");
+        return;
+      }
+
+      const file = await readMultipartFile(request, { limitBytes: 3 * 1024 * 1024 });
+      if (!adminImageTypes.has(file.contentType)) {
+        sendError(response, 400, "ADMIN_IMAGE_TYPE_INVALID", "Image type is invalid.");
+        return;
+      }
+
+      const safeFileName = createAdminImageName(requestedAdminProductImageId, file.contentType);
+      const uploadDir = path.join(rootDir, "public", "uploads", "products");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadDir, safeFileName), file.buffer);
+      const image = {
+        id: safeFileName.replace(/\.[^.]+$/, ""),
+        src: `/public/uploads/products/${safeFileName}`,
+        alt: `${requestedAdminProductImageId} product image`
+      };
+
+      sendJson(response, 201, { ok: true, image });
+      return;
+    } catch (error) {
+      if (handleMultipartError(error, response)) return;
+
+      sendError(response, 500, "ADMIN_IMAGE_SAVE_FAILED", "Image could not be saved.");
       return;
     }
   }
