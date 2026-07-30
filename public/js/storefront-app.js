@@ -239,6 +239,7 @@
     let activeAdminTab = "dashboard";
     let adminData = { summary: null, products: [], inventory: [], orders: [], marketing: null };
     let addressBook = [];
+    let checkoutShippingEstimateTimer = null;
     let isCartDrawerOpen = false;
     let isCartMutationPending = false;
     let orderConfirmationState = null;
@@ -1869,6 +1870,23 @@
         return;
       }
 
+      const fulfillmentAction = event.target.closest("[data-admin-order-fulfillment]");
+      if (fulfillmentAction) {
+        const row = fulfillmentAction.closest("[data-admin-order-row]");
+        fulfillmentAction.disabled = true;
+        await adminAdvanceFulfillment(row.dataset.orderId, fulfillmentAction.dataset.nextFulfillmentStatus);
+        await renderAdminOrders();
+        return;
+      }
+
+      const refundAction = event.target.closest("[data-admin-refund-status]");
+      if (refundAction) {
+        refundAction.disabled = true;
+        await adminAdvanceRefund(refundAction.dataset.refundId, refundAction.dataset.nextRefundStatus);
+        await renderAdminOrders();
+        return;
+      }
+
       const marketingToggle = event.target.closest("[data-admin-marketing-toggle]");
       if (marketingToggle) {
         const row = marketingToggle.closest("[data-admin-marketing-row]");
@@ -1944,12 +1962,51 @@
       return response.json();
     }
 
+    async function adminAdvanceFulfillment(orderId, status) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/fulfillment/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-demo-admin": "true" },
+        body: JSON.stringify({ status, locale: activeLocale })
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Fulfillment update failed");
+      }
+      return response.json();
+    }
+
+    async function adminAdvanceRefund(refundId, status) {
+      const response = await fetch(`/api/refunds/${encodeURIComponent(refundId)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-demo-admin": "true" },
+        body: JSON.stringify({ status, locale: activeLocale })
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Refund update failed");
+      }
+      return response.json();
+    }
+
     function getAdminOrderActions(status) {
       if (status === "pending_payment") return ["paid", "cancelled"];
       if (status === "paid") return ["processing"];
       if (status === "processing") return ["shipped"];
       if (status === "shipped") return ["delivered"];
       return [];
+    }
+
+    function getNextAdminFulfillmentStatus(status) {
+      if (status === "not_started") return "preparing";
+      if (status === "preparing") return "label_created";
+      if (status === "label_created") return "in_transit";
+      if (status === "in_transit") return "out_for_delivery";
+      if (status === "out_for_delivery") return "delivered";
+      return "";
+    }
+
+    function getNextAdminRefundStatus(status) {
+      if (status === "requested") return "processing";
+      if (status === "processing") return "succeeded";
+      return "";
     }
 
     function isCurrentUserAdmin() {
@@ -2039,18 +2096,30 @@
       const payload = await fetchAdminJson("/api/admin/orders");
       adminData.orders = payload.orders;
       adminPanel.innerHTML = payload.orders.length
-        ? `<div class="admin-table">${payload.orders.map((order) => `
-          <article class="admin-row" data-admin-order-row data-order-id="${escapeHtml(order.id)}">
-            <span>${escapeHtml(order.id)}</span>
-            <span>${escapeHtml(order.status)}</span>
-            <span>${formatCurrency(order.total)}</span>
-            <span>
-              ${getAdminOrderActions(order.status).map((status) => `
-                <button class="order-button order-button--secondary" type="button" data-admin-order-action="${status}">${escapeHtml(status)}</button>
-              `).join("")}
-            </span>
-          </article>
-        `).join("")}</div>`
+        ? `<div class="admin-table">${payload.orders.map((order) => {
+          const nextFulfillmentStatus = getNextAdminFulfillmentStatus(order.fulfillmentStatus);
+          const nextRefundStatus = getNextAdminRefundStatus(order.refundStatus);
+          return `
+            <article class="admin-row" data-admin-order-row data-order-id="${escapeHtml(order.id)}">
+              <span>${escapeHtml(order.id)}</span>
+              <span>${escapeHtml(order.status)}</span>
+              <span>${escapeHtml(order.fulfillmentStatus || "not_started")}</span>
+              <span>${escapeHtml(order.refundStatus || "none")}</span>
+              <span>${formatCurrency(order.total)}</span>
+              <span>
+                ${getAdminOrderActions(order.status).map((status) => `
+                  <button class="order-button order-button--secondary" type="button" data-admin-order-action="${status}">${escapeHtml(status)}</button>
+                `).join("")}
+                ${nextFulfillmentStatus ? `
+                  <button class="order-button order-button--secondary" type="button" data-admin-order-fulfillment data-next-fulfillment-status="${escapeHtml(nextFulfillmentStatus)}">推进物流</button>
+                ` : ""}
+                ${nextRefundStatus && order.refundId ? `
+                  <button class="order-button order-button--secondary" type="button" data-admin-refund-status data-refund-id="${escapeHtml(order.refundId)}" data-next-refund-status="${escapeHtml(nextRefundStatus)}">推进退款</button>
+                ` : ""}
+              </span>
+            </article>
+          `;
+        }).join("")}</div>`
         : `<div class="empty-state" data-admin-orders-empty>No orders yet.</div>`;
     }
 
@@ -3302,11 +3371,15 @@
             <label class="checkout-field">${t("checkout.region")}<input name="region" data-checkout-field="shippingAddress.region" value="${defaultAddress ? escapeHtml(defaultAddress.region) : ""}"></label>
             <label class="checkout-field">${t("checkout.postalCode")}<input name="postalCode" data-checkout-field="shippingAddress.postalCode" value="${defaultAddress ? escapeHtml(defaultAddress.postalCode) : ""}"></label>
             <label class="checkout-field">${t("checkout.note")}<textarea name="note" data-checkout-field="shippingAddress.note">${defaultAddress ? escapeHtml(defaultAddress.note) : ""}</textarea></label>
-            <fieldset class="checkout-shipping">
-              <legend>${t("checkout.shippingMethod")}</legend>
-              <label><input type="radio" name="shippingMethodId" value="standard" checked> ${t("checkout.standardShipping")}</label>
-              <label><input type="radio" name="shippingMethodId" value="express"> ${t("checkout.expressShipping")}</label>
-            </fieldset>
+            <section class="shipping-estimate" data-shipping-estimate-panel>
+              <div class="shipping-estimate__header">
+                <strong>${t("checkout.shippingMethod")}</strong>
+                <button class="order-button order-button--secondary" type="button" data-shipping-refresh>
+                  ${activeLocale === LOCALE_KEY.EN_US ? "Refresh delivery estimates" : "刷新预计送达"}
+                </button>
+              </div>
+              <div data-shipping-method-options></div>
+            </section>
             <div class="checkout-form__error" data-checkout-form-error role="alert"></div>
             <button class="cart-drawer__checkout-button" type="submit" data-checkout-submit>${t("checkout.submitOrder")}</button>
           </form>
@@ -3324,6 +3397,7 @@
           </aside>
         </div>
       `;
+      renderCheckoutShippingEstimates();
     }
 
     function getCheckoutFormPayload(form) {
@@ -3360,6 +3434,40 @@
       return response.json();
     }
 
+    async function fetchShippingMethodsForCheckout(address = {}) {
+      const params = new URLSearchParams({
+        region: address.region || "",
+        postalCode: address.postalCode || "",
+        locale: activeLocale
+      });
+      const response = await fetch(`/api/shipping-methods?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to load shipping methods");
+      }
+      return response.json();
+    }
+
+    async function renderCheckoutShippingEstimates() {
+      const form = checkoutPagePanel.querySelector("[data-checkout-form]");
+      const panel = checkoutPagePanel.querySelector("[data-shipping-estimate-panel]");
+      const optionsRoot = checkoutPagePanel.querySelector("[data-shipping-method-options]");
+      if (!form || !panel || !optionsRoot) return;
+
+      const selectedMethod = form.querySelector('input[name="shippingMethodId"]:checked')?.value || "standard";
+      const address = getCheckoutFormPayload(form).shippingAddress;
+      const payload = await fetchShippingMethodsForCheckout(address).catch(() => ({ methods: [] }));
+      optionsRoot.innerHTML = payload.methods.length
+        ? payload.methods.map((method) => `
+          <label class="shipping-estimate__option">
+            <input type="radio" name="shippingMethodId" value="${escapeHtml(method.id)}" ${method.id === selectedMethod ? "checked" : ""}>
+            <strong>${escapeHtml(method.label)} · ${formatCurrency(method.fee)}</strong>
+            <span>${escapeHtml(method.estimatedDeliveryLabel)} · ${escapeHtml(method.addressZone)}</span>
+            <span>${escapeHtml(method.deliveryWindow?.label || "")}</span>
+          </label>
+        `).join("")
+        : `<p>${t("checkout.submitError")}</p>`;
+    }
+
     function getRequestedOrderId() {
       return getSearchParams().get("id") || "";
     }
@@ -3373,6 +3481,36 @@
 
       if (!response.ok) {
         throw new Error("Failed to load order");
+      }
+
+      return response.json();
+    }
+
+    async function fetchOrderFulfillment(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/fulfillment`);
+      if (!response.ok) {
+        return { fulfillment: null };
+      }
+      return response.json();
+    }
+
+    async function fetchOrderRefunds(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/refunds`);
+      if (!response.ok) {
+        return { refunds: [] };
+      }
+      return response.json();
+    }
+
+    async function cancelOrder(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "changed_mind", locale: activeLocale })
+      });
+
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Failed to cancel order");
       }
 
       return response.json();
@@ -3507,7 +3645,42 @@
       return response.json();
     }
 
-    function renderPersistedOrder(order) {
+    function createFulfillmentCardMarkup(fulfillment) {
+      if (!fulfillment) return "";
+
+      return `
+        <div class="order-source" data-fulfillment-card>
+          <p class="order-source__title">${escapeHtml(fulfillment.shippingMethodLabel || fulfillment.shippingMethodId || "")} · ${escapeHtml(fulfillment.carrier || "")}</p>
+          <p class="order-source__copy">${escapeHtml(fulfillment.estimatedDeliveryLabel || "")} · ${escapeHtml(fulfillment.addressZone || "")}</p>
+          <p class="order-source__copy" data-fulfillment-tracking-number>
+            ${fulfillment.trackingNumber ? escapeHtml(fulfillment.trackingNumber) : (activeLocale === LOCALE_KEY.EN_US ? "Tracking pending" : "待生成发货单号")}
+          </p>
+          <div class="lifecycle-timeline" data-fulfillment-events>
+            ${(fulfillment.events || []).map((event) => `<p>${escapeHtml(event.label)} · ${escapeHtml(event.location || "")}</p>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function createRefundProgressMarkup(refunds = []) {
+      if (!refunds.length) return "";
+      const refund = refunds[0];
+
+      return `
+        <div class="order-source" data-refund-progress>
+          <p class="order-source__title">${activeLocale === LOCALE_KEY.EN_US ? "Refund progress" : "退款进度"} · ${formatCurrency(refund.amount || 0)}</p>
+          <div class="lifecycle-timeline">
+            ${(refund.events || []).map((event) => `<p>${escapeHtml(event.label)}</p>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function canCancelOrder(order) {
+      return ["pending_payment", "paid", "processing"].includes(order.status);
+    }
+
+    function renderPersistedOrder(order, options = {}) {
       const latestTimelineEntry = order.timeline[order.timeline.length - 1];
 
       orderPageTitle.textContent = t("order.heroTitle");
@@ -3542,6 +3715,8 @@
               <p class="order-source__copy">${getPaymentStatusLabel(order.payment.status)}</p>
             </div>
           ` : ""}
+          ${createFulfillmentCardMarkup(options.fulfillment || order.fulfillment)}
+          ${createRefundProgressMarkup(options.refunds || (order.refund ? [order.refund] : []))}
           <div class="checkout-summary" data-order-items>
             ${order.items.map((item) => `
               <article class="checkout-summary__item">
@@ -3580,6 +3755,16 @@
             >
               ${t("cart.continueShopping")}
             </a>
+            ${canCancelOrder(order) ? `
+              <button
+                class="order-button order-button--secondary"
+                type="button"
+                data-order-cancel
+                data-order-id="${escapeHtml(order.id)}"
+              >
+                ${activeLocale === LOCALE_KEY.EN_US ? "Cancel order" : "取消订单"}
+              </button>
+            ` : ""}
             <a class="order-button order-button--primary" href="${STOREFRONT_PATH}">${t("order.backToStorefront")}</a>
           </div>
           ${createOrderStatusActionsMarkup(order)}
@@ -3638,6 +3823,7 @@
           </aside>
         </div>
       `;
+      renderCheckoutShippingEstimates();
     }
 
     async function fetchRecommendedProducts(order) {
@@ -3668,7 +3854,12 @@
       const requestedOrderId = getRequestedOrderId();
       if (requestedOrderId) {
         const payload = await fetchOrder(requestedOrderId);
-        renderPersistedOrder(payload.order);
+        const fulfillmentPayload = await fetchOrderFulfillment(requestedOrderId);
+        const refundsPayload = await fetchOrderRefunds(requestedOrderId);
+        renderPersistedOrder(payload.order, {
+          fulfillment: fulfillmentPayload.fulfillment,
+          refunds: refundsPayload.refunds || []
+        });
         return;
       }
 
@@ -6149,7 +6340,48 @@
       await renderPaymentPage();
     });
 
+    checkoutPagePanel.addEventListener("click", async (event) => {
+      const refreshButton = event.target.closest("[data-shipping-refresh]");
+      if (!refreshButton) {
+        return;
+      }
+
+      refreshButton.disabled = true;
+      try {
+        await renderCheckoutShippingEstimates();
+      } finally {
+        refreshButton.disabled = false;
+      }
+    });
+
+    checkoutPagePanel.addEventListener("input", (event) => {
+      const field = event.target.closest("[data-checkout-field]");
+      if (!field || !String(field.dataset.checkoutField || "").startsWith("shippingAddress.")) {
+        return;
+      }
+
+      window.clearTimeout(checkoutShippingEstimateTimer);
+      checkoutShippingEstimateTimer = window.setTimeout(() => {
+        renderCheckoutShippingEstimates();
+      }, 80);
+    });
+
     orderPagePanel.addEventListener("click", async (event) => {
+      const cancelButton = event.target.closest("[data-order-cancel]");
+      if (cancelButton) {
+        const orderId = cancelButton.dataset.orderId || getRequestedOrderId();
+        if (!orderId) return;
+
+        cancelButton.disabled = true;
+        try {
+          await cancelOrder(orderId);
+          await renderOrderPage();
+        } catch (error) {
+          cancelButton.disabled = false;
+        }
+        return;
+      }
+
       const statusButton = event.target.closest("[data-order-status-action]");
       if (!statusButton) {
         return;
@@ -6163,8 +6395,8 @@
       statusButton.disabled = true;
 
       try {
-        const payload = await updateOrderStatus(orderId, statusButton.dataset.nextStatus);
-        renderPersistedOrder(payload.order);
+        await updateOrderStatus(orderId, statusButton.dataset.nextStatus);
+        await renderOrderPage();
       } catch (error) {
         await renderOrderPage();
       }

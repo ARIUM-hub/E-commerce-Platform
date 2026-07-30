@@ -228,6 +228,29 @@ test("advances an order from the admin orders tab", async ({ page }) => {
   await expect(page.locator("[data-admin-order-row]").first()).toContainText("cancelled");
 });
 
+test("advances fulfillment and refund status from the admin orders tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+  const orderId = new URL(page.url()).searchParams.get("id");
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${orderId}"] [data-admin-order-fulfillment]`).click();
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${orderId}"]`)).toContainText(/preparing|处理中|仓库/);
+
+  await page.request.post(`/api/orders/${orderId}/cancel`, {
+    data: { reason: "changed_mind", locale: "en-US" }
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${orderId}"] [data-admin-refund-status]`).click();
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${orderId}"]`)).toContainText(/processing|退款处理中/);
+});
+
 test("toggles a coupon from the admin marketing tab", async ({ page }) => {
   await registerAdminFromUi(page);
   await page.goto("/socks-product-list.html?view=admin");
@@ -576,6 +599,63 @@ test("simulates a successful payment from the payment view", async ({ page }) =>
   await expect(page).toHaveURL(/view=order&id=SOCK-/);
   await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-payment]")).toContainText("Card");
+});
+
+test("updates checkout delivery estimates from the shipping address", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("Standard delivery");
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("west");
+
+  await page.locator('[data-checkout-field="shippingAddress.region"]').fill("AK");
+  await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("99501");
+  await page.locator("[data-shipping-refresh]").click();
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("remote");
+});
+
+test("shows fulfillment tracking on the order detail page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
+  const orderId = new URL(page.url()).searchParams.get("id");
+
+  await page.request.patch(`/api/orders/${orderId}/status`, { data: { status: "processing", locale: "en-US" } });
+  await page.request.patch(`/api/orders/${orderId}/status`, { data: { status: "shipped", locale: "en-US" } });
+  await page.goto(`/socks-product-list.html?view=order&id=${orderId}`);
+
+  await expect(page.locator("[data-fulfillment-card]")).toBeVisible();
+  await expect(page.locator("[data-fulfillment-tracking-number]")).toContainText(/TRK-/);
+  await expect(page.locator("[data-fulfillment-events]")).toContainText(/Label created|已生成发货单/);
+});
+
+test("cancels a paid order from detail and shows refund progress", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+
+  const cancelResponse = page.waitForResponse((response) => {
+    return response.url().includes("/cancel") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-cancel]").click();
+  expect((await cancelResponse).ok()).toBe(true);
+  await expect(page.locator("[data-order-status]")).toHaveText(/Refund pending|退款处理中/);
+  await expect(page.locator("[data-refund-progress]")).toContainText(/Refund requested|退款已申请/);
 });
 
 test("shows retry state after a failed demo payment", async ({ page }) => {
