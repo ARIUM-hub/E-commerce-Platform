@@ -117,6 +117,7 @@ const {
   updateRefundStatus
 } = require("./lib/repositories/refunds");
 const { createPricingSummary } = require("./lib/pricing");
+const { createCheckoutTotals } = require("./lib/checkout-totals");
 
 const config = createConfig(process.env);
 const logger = createLogger({ level: config.logLevel });
@@ -1254,7 +1255,6 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true });
       return;
     } catch (error) {
-      console.error(error);
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
@@ -2162,11 +2162,12 @@ const server = http.createServer(async (request, response) => {
 
       const orderItems = buildOrderItems(cart, products, locale);
       const marketing = getMarketingPayload();
-      const pricing = createPricingSummary({
+      const pricing = createCheckoutTotals({
         cart,
         products,
         marketing,
-        shippingFee: shippingMethod.fee
+        shippingFee: shippingMethod.fee,
+        shippingAddress: body.shippingAddress
       });
       const order = {
         id: buildOrderId({ length: withDatabase((db) => countOrders(db)) }),
@@ -2194,7 +2195,14 @@ const server = http.createServer(async (request, response) => {
           orderDiscount: pricing.orderDiscount,
           couponDiscount: pricing.couponDiscount,
           shipping: pricing.shipping,
-          total: pricing.total
+          paymentFee: pricing.paymentFee,
+          taxableAmount: pricing.taxableAmount,
+          tax: pricing.tax,
+          total: pricing.total,
+          grandTotal: pricing.grandTotal,
+          currency: pricing.currency,
+          taxRegion: pricing.taxRegion,
+          calculatedAt: pricing.calculatedAt
         },
         marketing: {
           coupon: pricing.coupon,
@@ -2232,6 +2240,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      console.error(error);
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }

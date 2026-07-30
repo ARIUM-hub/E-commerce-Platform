@@ -779,6 +779,44 @@ test("calculates full-reduction promotion when cart crosses the threshold", asyn
   ]);
 });
 
+test("calculates checkout totals with tax shipping and payment fee", async () => {
+  const { createCheckoutTotals } = require("../lib/checkout-totals");
+  const products = [
+    { id: "sock-01", price: 39, originalPrice: 59 },
+    { id: "sock-02", price: 45, originalPrice: 69 }
+  ];
+  const cart = {
+    couponCode: "",
+    items: [
+      { productId: "sock-01", quantity: 2 },
+      { productId: "sock-02", quantity: 1 }
+    ]
+  };
+
+  const totals = createCheckoutTotals({
+    cart,
+    products,
+    marketing: { promotions: [], coupons: [] },
+    shippingFee: 12,
+    paymentMethod: { id: "paypal", feeType: "fixed", feeAmount: 1 },
+    shippingAddress: { region: "WA", postalCode: "98101" },
+    now: new Date("2026-07-30T00:00:00.000Z")
+  });
+
+  expect(totals).toMatchObject({
+    subtotal: 187,
+    itemTotal: 123,
+    productDiscount: 64,
+    shipping: 12,
+    paymentFee: 1,
+    taxableAmount: 124,
+    tax: 10.91,
+    grandTotal: 146.91,
+    currency: "CNY",
+    taxRegion: "WA"
+  });
+});
+
 test("returns active marketing campaigns", async ({ request }) => {
   const response = await request.get("/api/marketing");
   expect(response.ok()).toBe(true);
@@ -1658,6 +1696,13 @@ test("creates a persisted order from the current cart and clears the cart", asyn
       shipping: 0,
       total: 78
     }
+  });
+  expect(payload.order.totals).toMatchObject({
+    tax: expect.any(Number),
+    paymentFee: 0,
+    grandTotal: expect.any(Number),
+    currency: "CNY",
+    taxRegion: "WA"
   });
   expect(payload.order.id).toMatch(/^SOCK-\d{8}-\d{4}$/);
   expect(payload.order.items).toEqual([
