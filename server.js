@@ -100,6 +100,9 @@ const {
   createPaymentAttempt,
   listPaymentAttemptsByOrder
 } = require("./lib/repositories/payments");
+const {
+  getShippingMethodsForAddress
+} = require("./lib/repositories/fulfillment");
 const { createPricingSummary } = require("./lib/pricing");
 
 const config = createConfig(process.env);
@@ -1232,6 +1235,16 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "GET" && requestUrl.pathname === "/api/trust-center") {
     const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
     sendJson(response, 200, getTrustCenterContent(locale));
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/shipping-methods") {
+    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+    const methods = getShippingMethodsForAddress({
+      region: requestUrl.searchParams.get("region") || "",
+      postalCode: requestUrl.searchParams.get("postalCode") || ""
+    }, locale);
+    sendJson(response, 200, { ok: true, methods });
     return;
   }
 

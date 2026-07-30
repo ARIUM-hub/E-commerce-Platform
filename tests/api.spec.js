@@ -1036,6 +1036,27 @@ const checkoutPayload = {
   shippingMethodId: "standard"
 };
 
+test("returns address-aware shipping methods with delivery windows", async ({ request }) => {
+  const westResponse = await request.get("/api/shipping-methods?region=WA&postalCode=98101&locale=en-US");
+  expect(westResponse.ok()).toBe(true);
+  const westPayload = await westResponse.json();
+
+  expect(westPayload.methods.map((method) => method.id)).toEqual(["standard", "express", "economy"]);
+  expect(westPayload.methods.find((method) => method.id === "standard")).toMatchObject({
+    fee: 0,
+    addressZone: "west",
+    deliveryDays: 4
+  });
+
+  const remoteResponse = await request.get("/api/shipping-methods?region=AK&postalCode=99501&locale=en-US");
+  expect(remoteResponse.ok()).toBe(true);
+  const remotePayload = await remoteResponse.json();
+  expect(remotePayload.methods.find((method) => method.id === "standard")).toMatchObject({
+    addressZone: "remote",
+    deliveryDays: 6
+  });
+});
+
 const registerPayload = {
   name: "Alex Chen",
   email: "alex@example.com",
