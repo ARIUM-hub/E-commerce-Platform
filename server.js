@@ -105,8 +105,17 @@ const {
   createFulfillmentSummary,
   findFulfillmentByOrderId,
   getShippingMethodForOrder,
-  getShippingMethodsForAddress
+  getShippingMethodsForAddress,
+  syncFulfillmentForOrderStatus,
+  updateFulfillmentStatus
 } = require("./lib/repositories/fulfillment");
+const {
+  createRefundForOrder,
+  createRefundSummary,
+  findRefundById,
+  listRefundsByOrderId,
+  updateRefundStatus
+} = require("./lib/repositories/refunds");
 const { createPricingSummary } = require("./lib/pricing");
 
 const config = createConfig(process.env);
@@ -150,7 +159,9 @@ const orderStatusLabels = {
   processing: { "zh-CN": "处理中", "en-US": "Processing" },
   shipped: { "zh-CN": "已发货", "en-US": "Shipped" },
   delivered: { "zh-CN": "已送达", "en-US": "Delivered" },
-  cancelled: { "zh-CN": "已取消", "en-US": "Cancelled" }
+  cancelled: { "zh-CN": "已取消", "en-US": "Cancelled" },
+  refund_pending: { "zh-CN": "退款处理中", "en-US": "Refund pending" },
+  refunded: { "zh-CN": "已退款", "en-US": "Refunded" }
 };
 const sessionCookieName = "socks_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
@@ -1108,7 +1119,9 @@ const allowedOrderTransitions = {
   processing: new Set(["shipped"]),
   shipped: new Set(["delivered"]),
   delivered: new Set([]),
-  cancelled: new Set([])
+  cancelled: new Set([]),
+  refund_pending: new Set(["refunded"]),
+  refunded: new Set([])
 };
 
 function parseOrderIdFromPath(pathname) {
@@ -1133,6 +1146,26 @@ function parseOrderPaymentsPath(pathname) {
 
 function parseOrderFulfillmentPath(pathname) {
   const match = pathname.match(/^\/api\/orders\/([^/]+)\/fulfillment$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderFulfillmentStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/fulfillment\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderCancelPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/cancel$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderRefundsPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/refunds$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseRefundStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/refunds\/([^/]+)\/status$/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -2323,6 +2356,209 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  const requestedCancelOrderId = parseOrderCancelPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedCancelOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+      const order = withDatabase((db) => findOrderById(db, requestedCancelOrderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      if (["cancelled", "refund_pending", "refunded"].includes(order.status)) {
+        sendError(response, 409, "ORDER_CANCEL_ALREADY_FINAL", "Order has already been cancelled or refunded.");
+        return;
+      }
+
+      if (!["pending_payment", "paid", "processing"].includes(order.status)) {
+        sendError(response, 409, "ORDER_CANCEL_NOT_ALLOWED", "Order can no longer be cancelled.");
+        return;
+      }
+
+      const result = withDatabase((db) => {
+        const transaction = db.transaction(() => {
+          const now = new Date().toISOString();
+          const fulfillment = findFulfillmentByOrderId(db, order.id);
+          order.updatedAt = now;
+          order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
+
+          if (order.status === "pending_payment") {
+            order.status = "cancelled";
+            order.timeline.push(createTimelineEntry("cancelled", locale));
+            const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+              order,
+              fulfillment,
+              orderStatus: "cancelled",
+              locale,
+              createTimelineEntry
+            });
+            if (fulfillmentResult.validationError) return fulfillmentResult;
+            saveOrder(db, order);
+            return { order, refund: null };
+          }
+
+          order.status = "refund_pending";
+          order.timeline.push(createTimelineEntry("refund_pending", locale));
+          const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+            order,
+            fulfillment,
+            orderStatus: "refund_pending",
+            locale,
+            createTimelineEntry
+          });
+          if (fulfillmentResult.validationError) return fulfillmentResult;
+
+          const refund = createRefundForOrder(db, order, {
+            reason: body.reason,
+            locale
+          });
+          order.refund = createRefundSummary(refund);
+          saveOrder(db, order);
+          return { order, refund };
+        });
+
+        return transaction();
+      });
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order, refund: result.refund });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedRefundsOrderId = parseOrderRefundsPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedRefundsOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedRefundsOrderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const refunds = withDatabase((db) => listRefundsByOrderId(db, requestedRefundsOrderId));
+      sendJson(response, 200, { ok: true, refunds });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedRefundStatusId = parseRefundStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedRefundStatusId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true" || (user && DEMO_ADMIN_EMAILS.has(user.email));
+      if (!isDemoAdmin) {
+        sendError(response, 403, "REFUND_FORBIDDEN", "Only demo admins can update refunds.");
+        return;
+      }
+
+      const refund = withDatabase((db) => findRefundById(db, requestedRefundStatusId));
+      if (!refund) {
+        sendError(response, 404, "REFUND_NOT_FOUND", "Refund was not found.");
+        return;
+      }
+      const order = withDatabase((db) => findOrderById(db, refund.orderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateRefundStatus(db, {
+        refund,
+        order,
+        status: body.status,
+        locale: normalizeLocale(body.locale),
+        saveOrder,
+        createTimelineEntry
+      }));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, refund: result.refund, order: result.order });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedFulfillmentStatusOrderId = parseOrderFulfillmentStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedFulfillmentStatusOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true" || (user && DEMO_ADMIN_EMAILS.has(user.email));
+      if (!isDemoAdmin) {
+        sendError(response, 403, "FULFILLMENT_FORBIDDEN", "Only demo admins can update fulfillment.");
+        return;
+      }
+
+      const order = withDatabase((db) => findOrderById(db, requestedFulfillmentStatusOrderId));
+      const fulfillment = withDatabase((db) => findFulfillmentByOrderId(db, requestedFulfillmentStatusOrderId));
+      if (!order || !fulfillment) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateFulfillmentStatus(db, {
+        order,
+        fulfillment,
+        status: body.status,
+        locale: normalizeLocale(body.locale),
+        saveOrder,
+        createTimelineEntry
+      }));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order, fulfillment: result.fulfillment });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   const requestedFulfillmentOrderId = parseOrderFulfillmentPath(requestUrl.pathname);
   if (request.method === "GET" && requestedFulfillmentOrderId) {
     try {
@@ -2411,8 +2647,29 @@ const server = http.createServer(async (request, response) => {
       order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
       order.timeline.push(createTimelineEntry(nextStatus, locale));
 
-      withDatabase((db) => saveOrder(db, order));
-      sendJson(response, 200, { ok: true, order });
+      const result = withDatabase((db) => {
+        const fulfillment = findFulfillmentByOrderId(db, order.id);
+        const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+          order,
+          fulfillment,
+          orderStatus: nextStatus,
+          locale,
+          createTimelineEntry
+        });
+        if (fulfillmentResult.validationError) {
+          return fulfillmentResult;
+        }
+
+        saveOrder(db, order);
+        return { order };
+      });
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order });
       return;
     } catch (error) {
       if (handleRequestBodyError(error, response)) {

@@ -2131,6 +2131,122 @@ test("rejects invalid order status transitions", async ({ request }) => {
   expect(payload.error.code).toBe("INVALID_ORDER_TRANSITION");
 });
 
+test("cancels pending payment orders without creating a refund", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+
+  const response = await request.post(`/api/orders/${order.id}/cancel`, {
+    data: { reason: "changed_mind", locale: "en-US" }
+  });
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+
+  expect(payload.order.status).toBe("cancelled");
+  expect(payload.refund).toBeNull();
+  expect(payload.order.fulfillment.status).toBe("cancelled");
+
+  const refundsResponse = await request.get(`/api/orders/${order.id}/refunds`);
+  expect(refundsResponse.ok()).toBe(true);
+  expect((await refundsResponse.json()).refunds).toEqual([]);
+});
+
+test("cancels paid orders into refund progress", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+
+  const response = await request.post(`/api/orders/${order.id}/cancel`, {
+    data: { reason: "changed_mind", locale: "en-US" }
+  });
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+
+  expect(payload.order.status).toBe("refund_pending");
+  expect(payload.order.refund).toMatchObject({
+    status: "requested",
+    amount: order.totals.total
+  });
+  expect(payload.refund).toMatchObject({
+    orderId: order.id,
+    status: "requested",
+    amount: order.totals.total
+  });
+
+  const refundsResponse = await request.get(`/api/orders/${order.id}/refunds`);
+  expect(refundsResponse.ok()).toBe(true);
+  const refundsPayload = await refundsResponse.json();
+  expect(refundsPayload.refunds).toHaveLength(1);
+  expect(refundsPayload.refunds[0].events).toEqual([
+    expect.objectContaining({ status: "requested" })
+  ]);
+});
+
+test("rejects cancellation after an order has shipped", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+  await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "processing", locale: "en-US" }
+  });
+  await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "shipped", locale: "en-US" }
+  });
+
+  const response = await request.post(`/api/orders/${order.id}/cancel`, {
+    data: { reason: "changed_mind", locale: "en-US" }
+  });
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("ORDER_CANCEL_NOT_ALLOWED");
+});
+
+test("generates tracking events and advances fulfillment to delivery", async ({ request }) => {
+  const { order } = await createOrderViaApi(request);
+  await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", outcome: "succeeded", locale: "en-US" }
+  });
+
+  const processingResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "processing", locale: "en-US" }
+  });
+  expect((await processingResponse.json()).order.fulfillment.status).toBe("preparing");
+
+  const shippedResponse = await request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "shipped", locale: "en-US" }
+  });
+  const shippedPayload = await shippedResponse.json();
+  expect(shippedPayload.order.fulfillment).toMatchObject({
+    status: "label_created",
+    trackingNumber: expect.stringMatching(/^TRK-/)
+  });
+
+  const inTransitResponse = await request.patch(`/api/orders/${order.id}/fulfillment/status`, {
+    headers: { "x-demo-admin": "true" },
+    data: { status: "in_transit", locale: "en-US" }
+  });
+  expect(inTransitResponse.ok()).toBe(true);
+
+  await request.patch(`/api/orders/${order.id}/fulfillment/status`, {
+    headers: { "x-demo-admin": "true" },
+    data: { status: "out_for_delivery", locale: "en-US" }
+  });
+  const deliveredResponse = await request.patch(`/api/orders/${order.id}/fulfillment/status`, {
+    headers: { "x-demo-admin": "true" },
+    data: { status: "delivered", locale: "en-US" }
+  });
+  const deliveredPayload = await deliveredResponse.json();
+
+  expect(deliveredPayload.order.status).toBe("delivered");
+  expect(deliveredPayload.fulfillment.events.map((event) => event.status)).toEqual([
+    "not_started",
+    "preparing",
+    "label_created",
+    "in_transit",
+    "out_for_delivery",
+    "delivered"
+  ]);
+});
+
 test("creates a successful payment attempt and marks the order paid", async ({ request }) => {
   const { order } = await createOrderViaApi(request);
 
