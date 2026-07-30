@@ -285,6 +285,30 @@ test("initializes SQLite fulfillment and refund lifecycle tables", async () => {
   db.close();
 });
 
+test("initializes SQLite payment configuration events and invoices", async () => {
+  const db = createDatabase(":memory:");
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+
+  const paymentMethodTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_methods'").get();
+  const paymentEventTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_events'").get();
+  const invoiceTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'invoices'").get();
+  const methods = db.prepare("SELECT id, status, sort_order AS sortOrder FROM payment_methods ORDER BY sort_order ASC").all();
+
+  expect(paymentMethodTable).toEqual({ name: "payment_methods" });
+  expect(paymentEventTable).toEqual({ name: "payment_events" });
+  expect(invoiceTable).toEqual({ name: "invoices" });
+  expect(methods).toEqual([
+    { id: "card", status: "active", sortOrder: 10 },
+    { id: "paypal", status: "active", sortOrder: 20 },
+    { id: "gift_card", status: "active", sortOrder: 30 },
+    { id: "cod", status: "inactive", sortOrder: 40 }
+  ]);
+
+  db.close();
+});
+
 test("records schema migrations during database initialization", async () => {
   await resetDatabase(testDbFile);
 
