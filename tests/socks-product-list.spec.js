@@ -229,6 +229,55 @@ test("updates inventory from the admin inventory tab", async ({ page }) => {
   await expect(row).toContainText("out-of-stock");
 });
 
+test("creates a product from the admin product workbench", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await page.locator("[data-admin-product-new]").click();
+
+  await expect(page.locator("[data-admin-product-form]")).toBeVisible();
+  await page.locator("[data-admin-product-id]").fill("sock-ui-new");
+  await page.locator("[data-admin-product-title]").fill("UI 新增中筒袜");
+  await page.locator("[data-admin-product-title-en]").fill("UI New Crew Socks");
+  await page.locator("[data-admin-product-category]").selectOption("crew");
+  await page.locator("[data-admin-product-category-label]").fill("中筒袜");
+  await page.locator("[data-admin-product-category-label-en]").fill("Crew Socks");
+  await page.locator("[data-admin-product-price]").fill("36");
+  await page.locator("[data-admin-product-original-price]").fill("49");
+  await page.locator("[data-admin-product-description]").fill("后台 UI 创建的商品。");
+  await page.locator("[data-admin-product-description-en]").fill("Created from admin UI.");
+  await page.locator("[data-admin-product-colors]").fill("Black, White");
+  await page.locator("[data-admin-product-materials]").fill("Cotton blend");
+  await page.locator("[data-admin-sku-template-input]").fill("39-40");
+  await page.locator("[data-admin-sku-generate]").click();
+  await expect(page.locator("[data-admin-sku-row]")).toHaveCount(2);
+  await page.locator("[data-admin-product-save]").click();
+
+  await expect(page.locator("[data-admin-product-row][data-product-id='sock-ui-new']")).toContainText("UI 新增中筒袜");
+  await page.goto("/socks-product-list.html?q=UI%20新增");
+  await expect(page.locator("[data-product-card][data-product-id='sock-ui-new']")).toBeVisible();
+});
+
+test("edits a product and bulk updates SKU rows from the admin product workbench", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await page.locator("[data-admin-product-row][data-product-id='sock-01'] [data-admin-product-edit]").click();
+
+  await expect(page.locator("[data-admin-product-form]")).toBeVisible();
+  await page.locator("[data-admin-product-title]").fill("UI 编辑后的袜子");
+  await page.locator("[data-admin-sku-row]").first().locator("[data-admin-sku-select]").check();
+  await page.locator("[data-admin-sku-bulk-stock]").fill("3");
+  await page.locator("[data-admin-sku-bulk-threshold]").fill("2");
+  await page.locator("[data-admin-sku-bulk-apply]").click();
+  await expect(page.locator("[data-admin-sku-row]").first()).toContainText("3");
+  await page.locator("[data-admin-product-save]").click();
+
+  await expect(page.locator("[data-admin-product-row][data-product-id='sock-01']")).toContainText("UI 编辑后的袜子");
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  await expect(page.locator("[data-detail-page-title]")).toHaveText("UI 编辑后的袜子");
+});
+
 test("advances an order from the admin orders tab", async ({ page }) => {
   await registerAdminFromUi(page);
   await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);

@@ -237,7 +237,16 @@
     let recentlyViewedProducts = [];
     let currentUser = null;
     let activeAdminTab = "dashboard";
-    let adminData = { summary: null, products: [], inventory: [], orders: [], marketing: null };
+    let adminData = {
+      summary: null,
+      products: [],
+      inventory: [],
+      orders: [],
+      marketing: null,
+      productDraft: null,
+      productMode: "list",
+      selectedSkuIds: new Set()
+    };
     let addressBook = [];
     let checkoutShippingEstimateTimer = null;
     let isCartDrawerOpen = false;
@@ -1845,6 +1854,45 @@
     });
 
     adminPanel.addEventListener("click", async (event) => {
+      const productNew = event.target.closest("[data-admin-product-new]");
+      if (productNew) {
+        adminData.productDraft = createEmptyAdminProductDraft();
+        adminData.productMode = "create";
+        await renderAdminProducts();
+        return;
+      }
+
+      const productEdit = event.target.closest("[data-admin-product-edit]");
+      if (productEdit) {
+        const row = productEdit.closest("[data-admin-product-row]");
+        adminData.productDraft = await fetchAdminProduct(row.dataset.productId);
+        adminData.productMode = "edit";
+        await renderAdminProducts();
+        return;
+      }
+
+      const skuGenerate = event.target.closest("[data-admin-sku-generate]");
+      if (skuGenerate) {
+        generateAdminSkuRowsFromTemplate(skuGenerate.closest("[data-admin-product-form]"));
+        await renderAdminProducts();
+        return;
+      }
+
+      const skuBulkApply = event.target.closest("[data-admin-sku-bulk-apply]");
+      if (skuBulkApply) {
+        applyAdminSkuBulkEdit(skuBulkApply.closest("[data-admin-product-form]"));
+        await renderAdminProducts();
+        return;
+      }
+
+      const productCancel = event.target.closest("[data-admin-product-cancel]");
+      if (productCancel) {
+        adminData.productDraft = null;
+        adminData.productMode = "list";
+        await renderAdminProducts();
+        return;
+      }
+
       const inventorySave = event.target.closest("[data-admin-inventory-save]");
       if (inventorySave) {
         const row = inventorySave.closest("[data-admin-inventory-row]");
@@ -1911,6 +1959,44 @@
       }
     });
 
+    adminPanel.addEventListener("submit", async (event) => {
+      const form = event.target.closest("[data-admin-product-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const error = form.querySelector("[data-admin-product-error]");
+      try {
+        const draft = syncAdminDraftFromForm(form);
+        await saveAdminProduct(draft, adminData.productMode);
+        adminData.productDraft = null;
+        adminData.productMode = "list";
+        adminData.products = [];
+        adminData.inventory = [];
+        await renderAdminProducts();
+      } catch (saveError) {
+        error.textContent = saveError.message;
+      }
+    });
+
+    adminPanel.addEventListener("change", async (event) => {
+      const upload = event.target.closest("[data-admin-product-image-upload]");
+      if (!upload) return;
+
+      const file = upload.files?.[0];
+      if (!file) return;
+
+      const form = upload.closest("[data-admin-product-form]");
+      const draft = syncAdminDraftFromForm(form);
+      const error = form.querySelector("[data-admin-product-error]");
+      try {
+        const payload = await uploadAdminProductImage(draft.id, file);
+        draft.gallery = [...(draft.gallery || []), payload.image];
+        await renderAdminProducts();
+      } catch (uploadError) {
+        error.textContent = uploadError.message;
+      }
+    });
+
     function renderSupportView() {
       if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
         return;
@@ -1970,6 +2056,40 @@
       });
       if (!response.ok) {
         throw await createCartRequestError(response, "Admin update failed");
+      }
+      return response.json();
+    }
+
+    async function fetchAdminProduct(productId) {
+      const payload = await fetchAdminJson(`/api/admin/products/${encodeURIComponent(productId)}`);
+      return payload.product;
+    }
+
+    async function saveAdminProduct(product, mode) {
+      const url = mode === "edit"
+        ? `/api/admin/products/${encodeURIComponent(product.id)}`
+        : "/api/admin/products";
+      const response = await fetch(url, {
+        method: mode === "edit" ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json", "x-demo-admin": "true" },
+        body: JSON.stringify({ product })
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Product save failed");
+      }
+      return response.json();
+    }
+
+    async function uploadAdminProductImage(productId, file) {
+      const formData = new FormData();
+      formData.append("image", file);
+      const response = await fetch(`/api/admin/products/${encodeURIComponent(productId)}/images`, {
+        method: "POST",
+        headers: { "x-demo-admin": "true" },
+        body: formData
+      });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Image upload failed");
       }
       return response.json();
     }
@@ -2072,19 +2192,206 @@
       `;
     }
 
+    function createEmptyAdminProductDraft() {
+      return {
+        id: "",
+        series: "",
+        title: "",
+        localizedContent: { "en-US": { title: "", categoryLabel: "", description: "" } },
+        categoryKey: "crew",
+        categoryLabel: "中筒袜",
+        price: 39,
+        originalPrice: 59,
+        discount: "",
+        description: "",
+        isRecommended: false,
+        isTopRated: false,
+        isBestSeller: false,
+        ratingValue: 4.8,
+        reviewCount: 0,
+        recentlyBoughtLabel: "",
+        shippingLabel: "满 $35 免配送费",
+        deliveryEstimate: "预计 3-5 日送达",
+        visualTone: "#f7f7f7",
+        visualShadow: "soft",
+        visualAccent: "#111111",
+        visualPattern: "minimal",
+        colors: ["Black"],
+        materials: ["Cotton blend"],
+        sizeChart: [],
+        gallery: [],
+        variants: []
+      };
+    }
+
+    function parseAdminListInput(value) {
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+    }
+
+    function parseAdminSizeTemplate(value) {
+      const sizes = new Set();
+      String(value || "").split(",").map((item) => item.trim()).filter(Boolean).forEach((item) => {
+        if (item.includes("-")) {
+          const [start, end] = item.split("-").map((part) => Number(part.trim()));
+          if (Number.isInteger(start) && Number.isInteger(end) && start <= end) {
+            for (let size = start; size <= end; size += 1) {
+              sizes.add(String(size));
+            }
+          }
+          return;
+        }
+        sizes.add(item);
+      });
+      return [...sizes];
+    }
+
+    function syncAdminDraftFromForm(form) {
+      const draft = adminData.productDraft || createEmptyAdminProductDraft();
+      const english = draft.localizedContent?.["en-US"] || {};
+      draft.id = form.querySelector("[data-admin-product-id]").value.trim();
+      draft.title = form.querySelector("[data-admin-product-title]").value.trim();
+      draft.categoryKey = form.querySelector("[data-admin-product-category]").value;
+      draft.category = draft.categoryKey;
+      draft.categoryLabel = form.querySelector("[data-admin-product-category-label]").value.trim();
+      draft.price = Number(form.querySelector("[data-admin-product-price]").value);
+      draft.originalPrice = Number(form.querySelector("[data-admin-product-original-price]").value);
+      draft.description = form.querySelector("[data-admin-product-description]").value.trim();
+      draft.colors = parseAdminListInput(form.querySelector("[data-admin-product-colors]").value);
+      draft.materials = parseAdminListInput(form.querySelector("[data-admin-product-materials]").value);
+      draft.localizedContent = {
+        ...draft.localizedContent,
+        "en-US": {
+          ...english,
+          title: form.querySelector("[data-admin-product-title-en]").value.trim(),
+          categoryLabel: form.querySelector("[data-admin-product-category-label-en]").value.trim(),
+          description: form.querySelector("[data-admin-product-description-en]").value.trim()
+        }
+      };
+      adminData.productDraft = draft;
+      return draft;
+    }
+
+    function generateAdminSkuRowsFromTemplate(form) {
+      const draft = syncAdminDraftFromForm(form);
+      const template = form.querySelector("[data-admin-sku-template-input]").value;
+      const stockQuantity = Number(form.querySelector("[data-admin-sku-template-stock]").value || 10);
+      const lowStockThreshold = Number(form.querySelector("[data-admin-sku-template-threshold]").value || 5);
+      const color = draft.colors[0] || "";
+      const material = draft.materials[0] || "";
+      const existingBySize = new Map((draft.variants || []).map((variant) => [variant.size, variant]));
+      const generated = parseAdminSizeTemplate(template).map((size) => ({
+        ...(existingBySize.get(size) || {}),
+        skuId: existingBySize.get(size)?.skuId || `${draft.id}-${size}`,
+        productId: draft.id,
+        size,
+        color: existingBySize.get(size)?.color || color,
+        material: existingBySize.get(size)?.material || material,
+        stockQuantity: existingBySize.get(size)?.stockQuantity ?? stockQuantity,
+        lowStockThreshold: existingBySize.get(size)?.lowStockThreshold ?? lowStockThreshold,
+        isAvailable: existingBySize.get(size)?.isAvailable ?? true
+      }));
+      draft.variants = generated;
+      draft.sizeChart = generated.map((variant) => ({
+        size: variant.size,
+        footLength: "",
+        usMen: "",
+        usWomen: ""
+      }));
+    }
+
+    function applyAdminSkuBulkEdit(form) {
+      const draft = syncAdminDraftFromForm(form);
+      const selected = new Set([...form.querySelectorAll("[data-admin-sku-select]:checked")].map((input) => input.value));
+      const stockValue = form.querySelector("[data-admin-sku-bulk-stock]").value;
+      const thresholdValue = form.querySelector("[data-admin-sku-bulk-threshold]").value;
+      draft.variants = draft.variants.map((variant) => selected.has(variant.skuId) ? {
+        ...variant,
+        stockQuantity: stockValue === "" ? variant.stockQuantity : Number(stockValue),
+        lowStockThreshold: thresholdValue === "" ? variant.lowStockThreshold : Number(thresholdValue)
+      } : variant);
+    }
+
+    function createAdminProductFormMarkup() {
+      const draft = adminData.productDraft;
+      if (!draft) return "";
+
+      const english = draft.localizedContent?.["en-US"] || {};
+      return `
+        <form class="admin-product-form" data-admin-product-form>
+          <div class="checkout-form__error" data-admin-product-error role="alert"></div>
+          <label class="checkout-field">商品 ID <input data-admin-product-id value="${escapeHtml(draft.id)}" ${adminData.productMode === "edit" ? "readonly" : ""}></label>
+          <label class="checkout-field">中文标题 <input data-admin-product-title value="${escapeHtml(draft.title)}"></label>
+          <label class="checkout-field">英文标题 <input data-admin-product-title-en value="${escapeHtml(english.title || "")}"></label>
+          <label class="checkout-field">分类
+            <select data-admin-product-category>
+              ${["sport", "daily", "crew", "no-show"].map((key) => `<option value="${key}" ${draft.categoryKey === key ? "selected" : ""}>${key}</option>`).join("")}
+            </select>
+          </label>
+          <label class="checkout-field">中文分类 <input data-admin-product-category-label value="${escapeHtml(draft.categoryLabel || "")}"></label>
+          <label class="checkout-field">英文分类 <input data-admin-product-category-label-en value="${escapeHtml(english.categoryLabel || "")}"></label>
+          <label class="checkout-field">价格 <input type="number" min="0" data-admin-product-price value="${escapeHtml(draft.price)}"></label>
+          <label class="checkout-field">原价 <input type="number" min="0" data-admin-product-original-price value="${escapeHtml(draft.originalPrice)}"></label>
+          <label class="checkout-field checkout-field--wide">中文描述 <textarea data-admin-product-description>${escapeHtml(draft.description || "")}</textarea></label>
+          <label class="checkout-field checkout-field--wide">英文描述 <textarea data-admin-product-description-en>${escapeHtml(english.description || "")}</textarea></label>
+          <label class="checkout-field">颜色，逗号分隔 <input data-admin-product-colors value="${escapeHtml((draft.colors || []).join(", "))}"></label>
+          <label class="checkout-field">材质，逗号分隔 <input data-admin-product-materials value="${escapeHtml((draft.materials || []).join(", "))}"></label>
+          <div class="order-source admin-gallery">
+            <input type="file" accept="image/*" data-admin-product-image-upload>
+            ${(draft.gallery || []).map((image) => `
+              <figure data-admin-product-gallery-item>
+                <img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || "")}">
+                <figcaption>${escapeHtml(image.alt || "")}</figcaption>
+              </figure>
+            `).join("")}
+          </div>
+          <div class="order-source" data-admin-sku-bulk-toolbar>
+            <input class="advanced-filters__input" placeholder="39-45" data-admin-sku-template-input>
+            <input class="advanced-filters__input" type="number" value="10" data-admin-sku-template-stock>
+            <input class="advanced-filters__input" type="number" value="5" data-admin-sku-template-threshold>
+            <button class="order-button order-button--secondary" type="button" data-admin-sku-generate>生成 SKU</button>
+            <input class="advanced-filters__input" type="number" placeholder="批量库存" data-admin-sku-bulk-stock>
+            <input class="advanced-filters__input" type="number" placeholder="批量阈值" data-admin-sku-bulk-threshold>
+            <button class="order-button order-button--secondary" type="button" data-admin-sku-bulk-apply>批量应用</button>
+          </div>
+          <div class="admin-table">
+            ${(draft.variants || []).map((variant) => `
+              <article class="admin-row" data-admin-sku-row data-sku-id="${escapeHtml(variant.skuId)}">
+                <input type="checkbox" value="${escapeHtml(variant.skuId)}" data-admin-sku-select>
+                <strong>${escapeHtml(variant.size)}</strong>
+                <span>${escapeHtml(variant.skuId)}</span>
+                <span>${escapeHtml(variant.color)}</span>
+                <span>${escapeHtml(variant.material)}</span>
+                <span>${escapeHtml(variant.stockQuantity)}</span>
+                <span>${escapeHtml(variant.lowStockThreshold)}</span>
+              </article>
+            `).join("")}
+          </div>
+          <button class="order-button" type="submit" data-admin-product-save>保存商品</button>
+          <button class="order-button order-button--secondary" type="button" data-admin-product-cancel>取消</button>
+        </form>
+      `;
+    }
+
     async function renderAdminProducts() {
       const payload = await fetchAdminJson("/api/admin/products");
       adminData.products = payload.products;
-      adminPanel.innerHTML = `<div class="admin-table">${payload.products.map((product) => `
-        <article class="admin-row" data-admin-product-row>
+      adminPanel.innerHTML = `
+        <div class="admin-toolbar">
+          <button class="order-button" type="button" data-admin-product-new>新增商品</button>
+        </div>
+        <div class="admin-table">${payload.products.map((product) => `
+        <article class="admin-row" data-admin-product-row data-product-id="${escapeHtml(product.id)}">
           <span>${escapeHtml(product.id)}</span>
           <strong>${escapeHtml(product.title)}</strong>
           <span>${escapeHtml(product.category)}</span>
           <span>${formatCurrency(product.price)}</span>
           <span>${product.variantCount} SKU</span>
           <span>${product.totalStock}</span>
+          <button class="order-button order-button--secondary" type="button" data-admin-product-edit>编辑</button>
         </article>
-      `).join("")}</div>`;
+      `).join("")}</div>
+        ${createAdminProductFormMarkup()}
+      `;
     }
 
     async function renderAdminInventory() {
