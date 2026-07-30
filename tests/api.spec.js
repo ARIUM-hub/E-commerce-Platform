@@ -1098,6 +1098,68 @@ const checkoutPayload = {
   shippingMethodId: "standard"
 };
 
+function createAdminProductFixture(id = "sock-admin-new") {
+  return {
+    id,
+    series: "Admin Studio",
+    title: "后台新增中筒袜",
+    localizedContent: {
+      "en-US": {
+        title: "Admin Crew Socks",
+        categoryLabel: "Crew Socks",
+        description: "A clean admin-created sock for testing."
+      }
+    },
+    categoryKey: "crew",
+    categoryLabel: "中筒袜",
+    price: 39,
+    originalPrice: 59,
+    discount: "34% OFF",
+    description: "后台创建的柔软中筒袜。",
+    isRecommended: true,
+    isTopRated: false,
+    isBestSeller: false,
+    ratingValue: 4.7,
+    reviewCount: 12,
+    recentlyBoughtLabel: "过去 24 小时有 80+ 人看过",
+    shippingLabel: "满 $35 免配送费",
+    deliveryEstimate: "预计 3-5 日送达",
+    visualTone: "#f7f7f7",
+    visualShadow: "soft",
+    visualAccent: "#111111",
+    visualPattern: "minimal",
+    colors: ["Black", "White"],
+    materials: ["Cotton blend"],
+    sizeChart: [
+      { size: "39", footLength: "24.5cm", usMen: "6.5", usWomen: "8" },
+      { size: "40", footLength: "25cm", usMen: "7", usWomen: "8.5" }
+    ],
+    gallery: [
+      { id: "img-admin-1", src: "/public/uploads/products/admin-placeholder.svg", alt: "后台新增中筒袜" }
+    ],
+    variants: [
+      {
+        skuId: `${id}-39`,
+        size: "39",
+        color: "Black",
+        material: "Cotton blend",
+        stockQuantity: 14,
+        lowStockThreshold: 4,
+        isAvailable: true
+      },
+      {
+        skuId: `${id}-40`,
+        size: "40",
+        color: "White",
+        material: "Cotton blend",
+        stockQuantity: 8,
+        lowStockThreshold: 3,
+        isAvailable: true
+      }
+    ]
+  };
+}
+
 test("returns address-aware shipping methods with delivery windows", async ({ request }) => {
   const westResponse = await request.get("/api/shipping-methods?region=WA&postalCode=98101&locale=en-US");
   expect(westResponse.ok()).toBe(true);
@@ -1222,6 +1284,115 @@ test("returns admin product summaries for demo admins", async ({ request }) => {
     lowStockCount: expect.any(Number),
     outOfStockCount: expect.any(Number)
   });
+});
+
+test("returns full admin product details for demo admins", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.get("/api/admin/products/sock-01", {
+    headers: { cookie }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.product).toMatchObject({
+    id: "sock-01",
+    title: expect.any(String),
+    gallery: expect.any(Array),
+    variants: expect.any(Array),
+    sizeChart: expect.any(Array)
+  });
+  expect(payload.product.variants[0]).toMatchObject({
+    skuId: expect.any(String),
+    size: expect.any(String),
+    stockQuantity: expect.any(Number)
+  });
+});
+
+test("creates an admin product and exposes it in storefront products", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const product = createAdminProductFixture("sock-admin-new");
+
+  const response = await request.post("/api/admin/products", {
+    headers: { cookie },
+    data: { product }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.product).toMatchObject({
+    id: "sock-admin-new",
+    title: "后台新增中筒袜"
+  });
+
+  const storefrontResponse = await request.get("/api/products?locale=zh-CN&pageSize=48");
+  const storefrontPayload = await storefrontResponse.json();
+  const created = storefrontPayload.items.find((item) => item.id === "sock-admin-new");
+  expect(created).toMatchObject({
+    id: "sock-admin-new",
+    title: "后台新增中筒袜",
+    categoryKey: "crew"
+  });
+  expect(created.variants).toHaveLength(2);
+});
+
+test("updates admin product details and storefront reads the saved payload", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const detailResponse = await request.get("/api/admin/products/sock-01", { headers: { cookie } });
+  const product = (await detailResponse.json()).product;
+
+  const response = await request.patch("/api/admin/products/sock-01", {
+    headers: { cookie },
+    data: {
+      product: {
+        ...product,
+        title: "后台编辑后的中筒袜",
+        price: 42,
+        variants: product.variants.map((variant, index) => index === 0
+          ? { ...variant, stockQuantity: 6, lowStockThreshold: 2 }
+          : variant)
+      }
+    }
+  });
+
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.product.title).toBe("后台编辑后的中筒袜");
+
+  const storefrontResponse = await request.get("/api/products?locale=zh-CN&pageSize=48");
+  const storefrontPayload = await storefrontResponse.json();
+  const updated = storefrontPayload.items.find((item) => item.id === "sock-01");
+  expect(updated.title).toBe("后台编辑后的中筒袜");
+  expect(updated.price).toBe(42);
+  expect(updated.variants[0].stockQuantity).toBe(6);
+});
+
+test("rejects non-admin access to admin product write APIs", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "buyer@example.com" });
+  const product = createAdminProductFixture("sock-non-admin");
+
+  const response = await request.post("/api/admin/products", {
+    headers: { cookie },
+    data: { product }
+  });
+
+  expect(response.status()).toBe(403);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ADMIN_FORBIDDEN");
+});
+
+test("rejects invalid admin product payloads", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const product = createAdminProductFixture("INVALID ID");
+
+  const response = await request.post("/api/admin/products", {
+    headers: { cookie },
+    data: { product }
+  });
+
+  expect(response.status()).toBe(400);
+  const payload = await response.json();
+  expect(payload.error.code).toBe("ADMIN_PRODUCT_ID_INVALID");
 });
 
 test("returns filtered admin inventory rows", async ({ request }) => {

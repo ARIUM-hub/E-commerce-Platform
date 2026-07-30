@@ -84,6 +84,11 @@ const {
   updateMarketingStatus
 } = require("./lib/repositories/admin");
 const {
+  createAdminProduct,
+  findAdminProductById,
+  updateAdminProduct
+} = require("./lib/repositories/admin-products");
+const {
   createOrderTransaction,
   countOrders,
   listOrders,
@@ -1208,6 +1213,11 @@ function parseAdminInventoryPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseAdminProductPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/products\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function parseAdminOrderPath(pathname) {
   const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -1405,6 +1415,70 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, products });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminProductId = parseAdminProductPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedAdminProductId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const product = withDatabase((db) => findAdminProductById(db, requestedAdminProductId));
+      if (!product) {
+        sendError(response, 404, "ADMIN_PRODUCT_NOT_FOUND", "Product was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, product });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/products") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => createAdminProduct(db, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 201, { ok: true, product: result.product });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "PATCH" && requestedAdminProductId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateAdminProduct(db, requestedAdminProductId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, product: result.product });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
