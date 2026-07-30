@@ -579,6 +579,22 @@ test("opens the payment view after checkout submit", async ({ page }) => {
   await expect(page.locator("[data-payment-submit]")).toContainText("Pay now");
 });
 
+test("shows configured payment methods and totals breakdown on the payment page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await expect(page.locator("[data-payment-method-card]")).toHaveCount(3);
+  await expect(page.locator("[data-payment-breakdown]")).toContainText("Tax");
+  await expect(page.locator("[data-payment-breakdown]")).toContainText("Grand total");
+});
+
 test("simulates a successful payment from the payment view", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
@@ -599,6 +615,22 @@ test("simulates a successful payment from the payment view", async ({ page }) =>
   await expect(page).toHaveURL(/view=order&id=SOCK-/);
   await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-payment]")).toContainText("Card");
+});
+
+test("shows invoice entry after successful payment", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+
+  await expect(page.locator("[data-invoice-card]")).toBeVisible();
+  await expect(page.locator("[data-invoice-card]")).toContainText(/INV-\d{8}-\d{4}/);
+  await expect(page.locator("[data-invoice-card]")).toContainText("Tax");
 });
 
 test("updates checkout delivery estimates from the shipping address", async ({ page }) => {

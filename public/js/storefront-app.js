@@ -3502,6 +3502,14 @@
       return response.json();
     }
 
+    async function fetchOrderInvoice(orderId) {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/invoice`);
+      if (!response.ok) {
+        return { invoice: null };
+      }
+      return response.json();
+    }
+
     async function cancelOrder(orderId) {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/cancel`, {
         method: "POST",
@@ -3538,6 +3546,15 @@
         return { payments: [] };
       }
 
+      return response.json();
+    }
+
+    async function fetchPaymentMethods(orderId) {
+      const params = new URLSearchParams({ orderId, locale: activeLocale });
+      const response = await fetch(`/api/payment-methods?${params.toString()}`);
+      if (!response.ok) {
+        return { methods: [] };
+      }
       return response.json();
     }
 
@@ -3676,6 +3693,25 @@
       `;
     }
 
+    function createInvoiceCardMarkup(invoice) {
+      if (!invoice) {
+        return `
+          <div class="order-source" data-invoice-card>
+            <p class="order-source__title">${activeLocale === LOCALE_KEY.EN_US ? "Invoice" : "发票"}</p>
+            <p class="order-source__copy">${activeLocale === LOCALE_KEY.EN_US ? "Available after successful payment." : "支付成功后可查看发票。"}</p>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="order-source invoice-card" data-invoice-card>
+          <p class="order-source__title">${escapeHtml(invoice.invoiceNumber)}</p>
+          <p class="order-source__copy">${activeLocale === LOCALE_KEY.EN_US ? "Tax" : "税费"} · ${formatCurrency(invoice.tax || 0)}</p>
+          <p class="order-source__copy">${activeLocale === LOCALE_KEY.EN_US ? "Grand total" : "应付总额"} · ${formatCurrency(invoice.grandTotal || 0)}</p>
+        </div>
+      `;
+    }
+
     function canCancelOrder(order) {
       return ["pending_payment", "paid", "processing"].includes(order.status);
     }
@@ -3715,6 +3751,7 @@
               <p class="order-source__copy">${getPaymentStatusLabel(order.payment.status)}</p>
             </div>
           ` : ""}
+          ${createInvoiceCardMarkup(options.invoice)}
           ${createFulfillmentCardMarkup(options.fulfillment || order.fulfillment)}
           ${createRefundProgressMarkup(options.refunds || (order.refund ? [order.refund] : []))}
           <div class="checkout-summary" data-order-items>
@@ -3778,7 +3815,9 @@
       const payload = await fetchOrder(orderId);
       const order = payload.order;
       const paymentsPayload = await fetchPaymentAttempts(orderId);
+      const methodsPayload = await fetchPaymentMethods(orderId);
       const payments = Array.isArray(paymentsPayload.payments) ? paymentsPayload.payments : [];
+      const paymentMethods = Array.isArray(methodsPayload.methods) ? methodsPayload.methods : [];
       const latestPayment = payments[0] || order.payment || null;
       const canPay = order.status === "pending_payment";
 
@@ -3795,14 +3834,26 @@
               </div>
               <div class="order-summary__row">
                 <span>${t("common.estimatedTotal")}</span>
-                <span class="order-summary__value">${formatCurrency(order.totals.total)}</span>
+                <span class="order-summary__value">${formatCurrency(order.totals.grandTotal ?? order.totals.total)}</span>
               </div>
             </div>
-            <fieldset class="checkout-shipping">
+            <section class="order-source" data-payment-breakdown>
+              <p class="order-source__title">${activeLocale === LOCALE_KEY.EN_US ? "Payment breakdown" : "支付明细"}</p>
+              <p>${t("common.subtotal")} · ${formatCurrency(order.totals.subtotal || 0)}</p>
+              <p>${t("common.shipping")} · ${formatCurrency(order.totals.shipping || 0)}</p>
+              <p>${activeLocale === LOCALE_KEY.EN_US ? "Tax" : "税费"} · ${formatCurrency(order.totals.tax || 0)}</p>
+              <p>${activeLocale === LOCALE_KEY.EN_US ? "Grand total" : "应付总额"} · ${formatCurrency(order.totals.grandTotal ?? order.totals.total)}</p>
+            </section>
+            <fieldset class="checkout-shipping" data-payment-methods>
               <legend>${t("payment.method")}</legend>
-              <label><input type="radio" name="method" value="card" data-payment-method="card" checked> ${t("payment.card")}</label>
-              <label><input type="radio" name="method" value="paypal" data-payment-method="paypal"> ${t("payment.paypal")}</label>
-              <label><input type="radio" name="method" value="gift_card" data-payment-method="gift_card"> ${t("payment.giftCard")}</label>
+              ${paymentMethods.map((method, index) => `
+                <label class="payment-method-card" data-payment-method-card>
+                  <input type="radio" name="method" value="${escapeHtml(method.id)}" data-payment-method="${escapeHtml(method.id)}" ${index === 0 ? "checked" : ""}>
+                  <strong>${escapeHtml(method.label)}</strong>
+                  <span>${escapeHtml(method.description)}</span>
+                  <span>${formatCurrency(method.fee || 0)}</span>
+                </label>
+              `).join("")}
             </fieldset>
             <div class="checkout-form__error" data-payment-error role="alert">${latestPayment?.status === "failed" ? t("payment.failed") : ""}</div>
             <button class="cart-drawer__checkout-button" type="submit" data-payment-submit ${canPay ? "" : "disabled"}>
@@ -3856,9 +3907,11 @@
         const payload = await fetchOrder(requestedOrderId);
         const fulfillmentPayload = await fetchOrderFulfillment(requestedOrderId);
         const refundsPayload = await fetchOrderRefunds(requestedOrderId);
+        const invoicePayload = await fetchOrderInvoice(requestedOrderId);
         renderPersistedOrder(payload.order, {
           fulfillment: fulfillmentPayload.fulfillment,
-          refunds: refundsPayload.refunds || []
+          refunds: refundsPayload.refunds || [],
+          invoice: invoicePayload.invoice
         });
         return;
       }
