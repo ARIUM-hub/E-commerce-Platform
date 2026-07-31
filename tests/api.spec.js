@@ -806,6 +806,25 @@ test("lists account tickets and matches guest tickets by normalized contact", ()
   db.close();
 });
 
+test("blocks repeated failed guest ticket lookups during cooldown", () => {
+  const { createSupportLookupLimiter } = require("../lib/support-lookup-limiter");
+  let now = 1000;
+  const limiter = createSupportLookupLimiter({ maxFailures: 3, cooldownMs: 60000, now: () => now });
+  expect(limiter.canAttempt("session-a")).toBe(true);
+  limiter.recordFailure("session-a");
+  limiter.recordFailure("session-a");
+  limiter.recordFailure("session-a");
+  expect(limiter.canAttempt("session-a")).toBe(false);
+  expect(limiter.retryAfterMs("session-a")).toBe(60000);
+  now += 60001;
+  expect(limiter.canAttempt("session-a")).toBe(true);
+  limiter.authorizeTicket("session-a", "ticket-1");
+  expect(limiter.canAccessTicket("session-a", "ticket-1")).toBe(true);
+  expect(limiter.canAccessTicket("session-b", "ticket-1")).toBe(false);
+  now += 60001;
+  expect(limiter.canAccessTicket("session-a", "ticket-1")).toBe(false);
+});
+
 test("creates and lists product reviews for a product", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
