@@ -701,6 +701,29 @@ test("initializes campaign version storage and imports runtime marketing data", 
   db.close();
 });
 
+test("saves campaign drafts with optimistic versions", async () => {
+  const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const created = createCampaignDraft(db, {
+    admin: { id: null },
+    body: {
+      resourceType: "coupon", resourceKey: "WEEKEND10", name: "周末袜券",
+      startsAt: "2026-08-01T00:00:00.000Z", endsAt: "2026-08-31T23:59:59.999Z",
+      rules: { type: "amount-off", discountAmount: 10, minimumSubtotal: 79, eligibleCategoryKeys: ["daily"] }
+    }
+  });
+  const saved = saveCampaignDraft(db, created.campaign.id, {
+    admin: { id: null }, body: { expectedVersion: 1, name: "周末袜券 V2", rules: created.campaign.rules }
+  });
+  const conflict = saveCampaignDraft(db, created.campaign.id, {
+    admin: { id: null }, body: { expectedVersion: 1, name: "过期页面", rules: created.campaign.rules }
+  });
+  expect(saved.campaign.currentVersion).toBe(2);
+  expect(conflict.validationError.code).toBe("MARKETING_VERSION_CONFLICT");
+  db.close();
+});
+
 test("serializes only public ticket messages for customers", async () => {
   const { createSupportTicket, findSupportTicketById } = require("../lib/repositories/support");
   const db = createDatabase(testDbFile);
