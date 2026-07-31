@@ -351,6 +351,37 @@ test("runs database initialization idempotently without duplicate seeds", async 
   }
 });
 
+test("initializes admin order operation tables and indexes", async () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+
+  const tableNames = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name IN ('refund_items', 'inventory_movements', 'admin_action_events')
+    ORDER BY name
+  `).all().map((row) => row.name);
+  const refundColumns = db.prepare("PRAGMA table_info(refunds)").all().map((column) => column.name);
+  const trackingIndex = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'index' AND name = 'idx_fulfillments_tracking_unique'
+  `).get();
+  const migration = db.prepare("SELECT id FROM schema_migrations WHERE id = ?")
+    .get("0008_admin_order_operations");
+
+  expect(tableNames).toEqual(["admin_action_events", "inventory_movements", "refund_items"]);
+  expect(refundColumns).toEqual(expect.arrayContaining([
+    "return_request_id",
+    "operation_id",
+    "refund_type",
+    "amount_cents"
+  ]));
+  expect(trackingIndex).toEqual({ name: "idx_fulfillments_tracking_unique" });
+  expect(migration).toEqual({ id: "0008_admin_order_operations" });
+  db.close();
+});
+
 test("initializes SQLite support ticket table", async () => {
   const db = createDatabase(":memory:");
   try {
