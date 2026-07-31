@@ -1491,6 +1491,114 @@
       padding: 16px;
     }
 
+    .support-ticket-page {
+      display: grid;
+      gap: 24px;
+      max-width: 1180px;
+      margin: 0 auto 48px;
+      padding: 0 24px;
+    }
+
+    .support-ticket-page__layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.3fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .support-ticket-page__layout > *,
+    .support-ticket-card,
+    .support-ticket-detail,
+    .support-ticket-lookup {
+      min-width: 0;
+    }
+
+    .support-ticket-history,
+    .support-ticket-detail,
+    .support-ticket-timeline,
+    .support-ticket-reply,
+    .support-ticket-lookup {
+      display: grid;
+      gap: 12px;
+    }
+
+    .support-ticket-card,
+    .support-ticket-detail,
+    .support-ticket-lookup {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      padding: 18px;
+      box-shadow: 0 14px 36px rgb(0 0 0 / 6%);
+    }
+
+    .support-ticket-card {
+      display: grid;
+      gap: 9px;
+    }
+
+    .support-ticket-card > div,
+    .support-ticket-detail > header,
+    .support-ticket-message > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .support-ticket-card h3,
+    .support-ticket-card p,
+    .support-ticket-detail h2,
+    .support-ticket-message p {
+      margin: 0;
+    }
+
+    .support-ticket-card p,
+    .support-ticket-message time {
+      color: var(--text-subtle);
+      font-size: 13px;
+    }
+
+    .support-ticket-message {
+      display: grid;
+      gap: 7px;
+      border-left: 3px solid #111111;
+      background: #f7f7f7;
+      padding: 13px 14px;
+    }
+
+    .support-ticket-reply,
+    .support-ticket-lookup {
+      margin-top: 6px;
+    }
+
+    .support-ticket-reply label,
+    .support-ticket-lookup label {
+      display: grid;
+      gap: 7px;
+      font-weight: 800;
+    }
+
+    .support-ticket-reply textarea,
+    .support-ticket-lookup input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 11px 12px;
+      color: var(--text-main);
+      font: inherit;
+    }
+
+    .support-ticket-page__error {
+      min-height: 1.5em;
+      margin: 0;
+      color: #a3261a;
+      font-weight: 800;
+    }
+
     .admin-shell {
       display: grid;
       gap: 18px;
@@ -4232,6 +4340,14 @@
         width: 100%;
       }
 
+      .support-ticket-page {
+        padding: 0 16px;
+      }
+
+      .support-ticket-page__layout {
+        grid-template-columns: 1fr;
+      }
+
       .admin-row > *,
       .admin-operation-section {
         min-width: 0;
@@ -4600,6 +4716,8 @@
       </section>
     </div>
 
+    <div data-support-tickets-view hidden></div>
+
     <div class="admin-view" data-admin-view hidden>
       <section class="hero hero--compact">
         <p class="hero__eyebrow" data-admin-eyebrow>Admin</p>
@@ -4813,6 +4931,7 @@
 
   <script src="/public/js/admin-review-management.js" defer></script>
   <script src="/public/js/admin-support-management.js" defer></script>
+  <script src="/public/js/customer-support-tickets.js" defer></script>
   <script src="/public/js/storefront-app.js" defer></script>
 </body>
 </html>

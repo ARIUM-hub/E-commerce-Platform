@@ -41,6 +41,7 @@
     const ADDRESSES_VIEW_KEY = "addresses";
     const ORDERS_VIEW_KEY = "orders";
     const SUPPORT_VIEW_KEY = "support";
+    const SUPPORT_TICKETS_VIEW_KEY = "support-tickets";
     const ADMIN_VIEW_KEY = "admin";
     const RETURN_VIEW_KEY = "return";
     const RETURNS_VIEW_KEY = "returns";
@@ -96,6 +97,7 @@
     const ordersView = document.querySelector("[data-orders-view]");
     const orderView = document.querySelector("[data-order-view]");
     const supportView = document.querySelector("[data-support-view]");
+    const supportTicketsView = document.querySelector("[data-support-tickets-view]");
     const adminView = document.querySelector("[data-admin-view]");
     const returnView = document.querySelector("[data-return-view]");
     const returnsView = document.querySelector("[data-returns-view]");
@@ -1360,6 +1362,10 @@
         return SUPPORT_VIEW_KEY;
       }
 
+      if (view === SUPPORT_TICKETS_VIEW_KEY) {
+        return SUPPORT_TICKETS_VIEW_KEY;
+      }
+
       if (view === ADMIN_VIEW_KEY) {
         return ADMIN_VIEW_KEY;
       }
@@ -1796,6 +1802,9 @@
         </label>
         <div class="support-contact__error" data-support-contact-error role="alert"></div>
         <button class="support-contact__submit" type="submit" data-support-contact-submit>${t("support.submit")}</button>
+        <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=${SUPPORT_TICKETS_VIEW_KEY}">
+          ${activeLocale === LOCALE_KEY.EN_US ? "View my tickets" : "查看我的工单"}
+        </a>
       `;
     }
 
@@ -1867,6 +1876,9 @@
           <strong>${t("support.successTitle")}</strong>
           <p>${escapeHtml(payload.ticket.ticketNumber)}</p>
           <p>${t("support.responseTime")}</p>
+          <a class="order-button order-button--secondary" href="${STOREFRONT_PATH}?view=${SUPPORT_TICKETS_VIEW_KEY}">
+            ${activeLocale === LOCALE_KEY.EN_US ? "Track this ticket" : "追踪此工单"}
+          </a>
         `;
         supportContactForm.reset();
       } finally {
@@ -2253,6 +2265,34 @@
         throw await createCartRequestError(response, "Review management request failed");
       }
       return response.json();
+    }
+
+    async function requestCustomerSupportJson(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      const requestOptions = { method: options.method || "GET", headers };
+      if (options.body !== undefined) {
+        headers["Content-Type"] = "application/json";
+        requestOptions.body = JSON.stringify(options.body);
+      }
+      const response = await fetch(path, requestOptions);
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Support ticket request failed");
+      }
+      return response.json();
+    }
+
+    function mountCustomerSupportTickets() {
+      const supportModule = window.StorefrontCustomerSupport;
+      if (!supportModule) return null;
+      supportModule.mount({
+        root: supportTicketsView,
+        currentUser,
+        locale: () => activeLocale,
+        request: requestCustomerSupportJson,
+        escapeHtml
+      });
+      supportModule.setUser(currentUser);
+      return supportModule;
     }
 
     function createAdminOperationId(prefix) {
@@ -3177,12 +3217,14 @@
       const response = await fetch("/api/session");
       if (!response.ok) {
         currentUser = null;
+        window.StorefrontCustomerSupport?.setUser(null);
         renderAuthShell();
         return null;
       }
 
       const payload = await response.json();
       currentUser = payload.authenticated ? payload.user : null;
+      window.StorefrontCustomerSupport?.setUser(currentUser);
       renderAuthShell();
       return payload;
     }
@@ -3221,6 +3263,7 @@
       currentUser = null;
       window.StorefrontAdminReviews?.destroy();
       window.StorefrontAdminSupport?.destroy();
+      window.StorefrontCustomerSupport?.setUser(null);
       renderAuthShell();
     }
 
@@ -3651,6 +3694,12 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         await fetchTrustCenter();
+        renderCartState();
+        return;
+      }
+
+      if (getCurrentView() === SUPPORT_TICKETS_VIEW_KEY) {
+        await mountCustomerSupportTickets()?.render();
         renderCartState();
         return;
       }
@@ -6596,6 +6645,7 @@
       const isOrdersView = currentView === ORDERS_VIEW_KEY;
       const isOrderView = currentView === ORDER_VIEW_KEY;
       const isSupportView = currentView === SUPPORT_VIEW_KEY;
+      const isSupportTicketsView = currentView === SUPPORT_TICKETS_VIEW_KEY;
       const isAdminView = currentView === ADMIN_VIEW_KEY;
       const isReturnView = currentView === RETURN_VIEW_KEY;
       const isReturnsView = currentView === RETURNS_VIEW_KEY;
@@ -6613,6 +6663,7 @@
       ordersView.hidden = !isOrdersView;
       orderView.hidden = !isOrderView;
       supportView.hidden = !isSupportView;
+      supportTicketsView.hidden = !isSupportTicketsView;
       adminView.hidden = !isAdminView;
       returnView.hidden = !isReturnView;
       returnsView.hidden = !isReturnsView;
@@ -7242,6 +7293,7 @@
       try {
         const payload = await submitAuthForm(authForm);
         currentUser = payload.user;
+        window.StorefrontCustomerSupport?.setUser(currentUser);
         setCartStateFromPayload(payload);
         renderAuthShell();
         renderCartState();
@@ -7658,6 +7710,14 @@
         return;
       }
 
+      if (getCurrentView() === SUPPORT_TICKETS_VIEW_KEY) {
+        await cartLoadPromise;
+        const supportModule = mountCustomerSupportTickets();
+        if (!supportModule) throw new Error("Customer support ticket module failed to load");
+        await supportModule.render();
+        return;
+      }
+
       if (getCurrentView() === ADMIN_VIEW_KEY) {
         await cartLoadPromise;
         await renderAdminView();
@@ -7748,6 +7808,11 @@
 
       if (getCurrentView() === SUPPORT_VIEW_KEY) {
         supportCurrentTitle.textContent = t("support.loadFailure");
+        return;
+      }
+
+      if (getCurrentView() === SUPPORT_TICKETS_VIEW_KEY) {
+        supportTicketsView.innerHTML = '<div class="empty-state">客服工单暂时无法加载。</div>';
         return;
       }
 

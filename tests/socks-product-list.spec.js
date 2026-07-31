@@ -616,6 +616,53 @@ test("submits trust center contact form and shows ticket number", async ({ page 
   await expect(page.locator("[data-support-ticket]")).toContainText(/SUP-\d{8}-\d{4}/);
 });
 
+test("opens support ticket history and replies as a signed-in customer", async ({ page }) => {
+  await registerFromUi(page, { email: "history@example.com" });
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "History Buyer",
+      contact: "history@example.com",
+      topic: "orders",
+      message: "订单历史问题",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=support-tickets");
+  const row = page.locator(`[data-support-ticket-row][data-ticket-id='${ticket.id}']`);
+  await expect(row).toContainText("订单历史问题");
+  await row.locator("[data-support-ticket-open]").click();
+  await page.locator("[data-support-ticket-reply]").fill("这是登录用户补充的信息。");
+  await page.locator("[data-support-ticket-reply-submit]").click();
+  await expect(page.locator("[data-support-ticket-detail]")).toContainText("这是登录用户补充的信息。");
+});
+
+test("tracks a guest support ticket without exposing internal notes", async ({ page }) => {
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "Guest",
+      contact: "guest@example.com",
+      topic: "product",
+      message: "商品咨询",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=support-tickets");
+  await page.locator("[data-support-ticket-number]").fill(ticket.ticketNumber);
+  await page.locator("[data-support-ticket-contact]").fill("guest@example.com");
+  await page.locator("[data-support-ticket-lookup]").click();
+  await expect(page.locator("[data-support-ticket-detail]")).toContainText("商品咨询");
+  await expect(page.locator("[data-support-ticket-detail]")).not.toContainText("客户不可见");
+
+  await page.locator("[data-support-ticket-contact]").fill("wrong@example.com");
+  await page.locator("[data-support-ticket-lookup]").click();
+  await expect(page.locator("[data-support-ticket-error]")).toContainText(/未找到|not found/i);
+  await expect(page.locator("[data-support-ticket-error]")).not.toContainText("联系方式不匹配");
+});
+
 test("renders trust center in English", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=support&section=privacy&locale=en-US");
 
