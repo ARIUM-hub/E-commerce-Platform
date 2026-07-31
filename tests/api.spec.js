@@ -520,7 +520,9 @@ test("initializes SQLite support ticket table", async () => {
 });
 
 test("creates and lists product reviews for a product", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
+    headers: { cookie },
     data: {
       author: "Maya Chen",
       rating: 5,
@@ -563,6 +565,68 @@ test("creates and lists product reviews for a product", async ({ request }) => {
       })
     ])
   });
+});
+
+test("publishes safe signed-in reviews and queues anonymous reviews", async ({ request }) => {
+  const anonymous = await request.post("/api/products/sock-01/reviews", {
+    data: { author: "Guest", rating: 4, body: "穿着舒适，长度合适。", locale: "zh-CN" }
+  });
+  const anonymousReview = (await anonymous.json()).review;
+  expect(anonymousReview.status).toBe("pending");
+
+  const cookie = await registerApiUser(request, { email: "reviewer@example.com" });
+  const signedIn = await request.post("/api/products/sock-01/reviews", {
+    headers: { cookie },
+    data: { author: "Buyer", rating: 5, body: "面料柔软，日常穿很好。", locale: "zh-CN" }
+  });
+  const signedInReview = (await signedIn.json()).review;
+  expect(signedInReview.status).toBe("published");
+
+  const publicList = await request.get("/api/products/sock-01/reviews");
+  const ids = (await publicList.json()).reviews.map((review) => review.id);
+  expect(ids).toContain(signedInReview.id);
+  expect(ids).not.toContain(anonymousReview.id);
+});
+
+test("queues signed-in reviews with links or duplicate content", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "risk-reviewer@example.com" });
+  const first = await request.post("/api/products/sock-03/reviews", {
+    headers: { cookie },
+    data: { author: "Risk Buyer", rating: 4, body: "这双袜子的支撑感不错。", locale: "zh-CN" }
+  });
+  expect((await first.json()).review.status).toBe("published");
+
+  const duplicate = await request.post("/api/products/sock-03/reviews", {
+    headers: { cookie },
+    data: { author: "Risk Buyer", rating: 4, body: "这双袜子的支撑感不错。", locale: "zh-CN" }
+  });
+  expect((await duplicate.json()).review).toMatchObject({
+    status: "pending",
+    riskFlags: ["duplicate_content"]
+  });
+
+  const linked = await request.post("/api/products/sock-03/reviews", {
+    headers: { cookie },
+    data: { author: "Risk Buyer", rating: 4, body: "更多信息请看 https://example.com", locale: "zh-CN" }
+  });
+  expect((await linked.json()).review).toMatchObject({
+    status: "pending",
+    riskFlags: ["external_link"]
+  });
+});
+
+test("queues the fourth signed-in review submitted within ten minutes", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "frequent-reviewer@example.com" });
+  const reviews = [];
+  for (let index = 1; index <= 4; index += 1) {
+    const response = await request.post("/api/products/sock-04/reviews", {
+      headers: { cookie },
+      data: { author: "Frequent Buyer", rating: 4, body: `十分钟内的第 ${index} 条不同评价。`, locale: "zh-CN" }
+    });
+    reviews.push((await response.json()).review);
+  }
+  expect(reviews.slice(0, 3).every((review) => review.status === "published")).toBe(true);
+  expect(reviews[3]).toMatchObject({ status: "pending", riskFlags: ["high_frequency"] });
 });
 
 test("lists seeded product reviews for product detail pages", async ({ request }) => {
