@@ -825,6 +825,95 @@ test("blocks repeated failed guest ticket lookups during cooldown", () => {
   expect(limiter.canAccessTicket("session-a", "ticket-1")).toBe(false);
 });
 
+test("assigns and resolves support tickets with idempotent admin actions", () => {
+  const { addAdminSupportMessage, updateSupportTicket } = require("../lib/repositories/admin-support-actions");
+  const { createSupportTicket } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const ticket = createSupportTicket(db, {
+    name: "Owner",
+    contact: "owner@example.com",
+    topic: "orders",
+    message: "订单需要帮助",
+    locale: "zh-CN"
+  }).ticket;
+  const admin = { id: null };
+  const assigned = updateSupportTicket(db, {
+    admin,
+    ticketId: ticket.id,
+    body: {
+      operationId: "op-ticket-assign",
+      action: "assign",
+      assignedAdminUserId: null,
+      expectedVersion: 1
+    }
+  });
+  const replied = addAdminSupportMessage(db, {
+    admin,
+    ticketId: ticket.id,
+    body: {
+      operationId: "op-ticket-reply",
+      visibility: "public",
+      message: "我们正在处理。"
+    }
+  });
+
+  expect(assigned.ticket.version).toBe(2);
+  expect(replied.ticket.messages.at(-1).body).toBe("我们正在处理。");
+  expect(addAdminSupportMessage(db, {
+    admin,
+    ticketId: ticket.id,
+    body: {
+      operationId: "op-ticket-reply",
+      visibility: "public",
+      message: "我们正在处理。"
+    }
+  }).replayed).toBe(true);
+  db.close();
+});
+
+test("rejects stale support versions and hides internal support notes from customers", () => {
+  const { addAdminSupportMessage, updateSupportTicket } = require("../lib/repositories/admin-support-actions");
+  const { createSupportTicket, findSupportTicketById } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const ticket = createSupportTicket(db, {
+    name: "Owner",
+    contact: "owner@example.com",
+    topic: "orders",
+    message: "订单需要帮助",
+    locale: "zh-CN"
+  }).ticket;
+  const admin = { id: null };
+  const first = updateSupportTicket(db, {
+    admin,
+    ticketId: ticket.id,
+    body: { operationId: "op-ticket-priority", action: "priority", priority: "high", expectedVersion: 1 }
+  });
+  const conflict = updateSupportTicket(db, {
+    admin,
+    ticketId: ticket.id,
+    body: { operationId: "op-ticket-stale", action: "status", status: "in_progress", expectedVersion: 1 }
+  });
+  addAdminSupportMessage(db, {
+    admin,
+    ticketId: ticket.id,
+    body: { operationId: "op-ticket-note", visibility: "internal", message: "仅供客服查看" }
+  });
+
+  expect(first.ticket.priority).toBe("high");
+  expect(conflict.validationError.code).toBe("SUPPORT_VERSION_CONFLICT");
+  expect(findSupportTicketById(db, ticket.id, { audience: "customer" }).messages.map((message) => message.body))
+    .not.toContain("仅供客服查看");
+  expect(findSupportTicketById(db, ticket.id, { audience: "admin" }).messages.map((message) => message.body))
+    .toContain("仅供客服查看");
+  db.close();
+});
+
 test("creates and lists product reviews for a product", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
