@@ -177,6 +177,11 @@
     const adminReturnDrawerTitle = document.querySelector("[data-admin-return-drawer-title]");
     const adminReturnDrawerClose = document.querySelector("[data-admin-return-drawer-close]");
     const adminReturnBackdrop = document.querySelector("[data-admin-return-backdrop]");
+    const adminReviewDrawer = document.querySelector("[data-admin-review-drawer]");
+    const adminReviewDrawerBody = document.querySelector("[data-admin-review-drawer-body]");
+    const adminReviewDrawerTitle = document.querySelector("[data-admin-review-drawer-title]");
+    const adminReviewDrawerClose = document.querySelector("[data-admin-review-drawer-close]");
+    const adminReviewBackdrop = document.querySelector("[data-admin-review-backdrop]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -2227,10 +2232,45 @@
       return response.json();
     }
 
+    async function requestAdminReviewJson(path, options = {}) {
+      const headers = { ...(options.headers || {}), "x-demo-admin": "true" };
+      const requestOptions = { method: options.method || "GET", headers };
+      if (options.body !== undefined) {
+        headers["Content-Type"] = "application/json";
+        requestOptions.body = JSON.stringify(options.body);
+      }
+      const response = await fetch(path, requestOptions);
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Review management request failed");
+      }
+      return response.json();
+    }
+
     function createAdminOperationId(prefix) {
       const suffix = globalThis.crypto?.randomUUID?.()
         || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       return `${prefix}-${suffix}`;
+    }
+
+    function mountAdminReviewManagement() {
+      const reviewModule = window.StorefrontAdminReviews;
+      if (!reviewModule) return null;
+      reviewModule.mount({
+        panel: adminPanel,
+        drawer: adminReviewDrawer,
+        drawerBody: adminReviewDrawerBody,
+        drawerTitle: adminReviewDrawerTitle,
+        drawerClose: adminReviewDrawerClose,
+        backdrop: adminReviewBackdrop,
+        locale: () => activeLocale,
+        request: requestAdminReviewJson,
+        createOperationId: createAdminOperationId,
+        escapeHtml,
+        onSummaryChange(summary) {
+          adminData.reviewSummary = summary;
+        }
+      });
+      return reviewModule;
     }
 
     function yuanInputToCents(value) {
@@ -2677,6 +2717,9 @@
       adminAuthRequired.hidden = state !== "auth";
       adminForbidden.hidden = state !== "forbidden";
       adminConsole.hidden = state !== "ready";
+      if (state !== "ready") {
+        window.StorefrontAdminReviews?.destroy();
+      }
     }
 
     function renderAdminTabs() {
@@ -3030,6 +3073,14 @@
       if (activeAdminTab === "inventory") return renderAdminInventory();
       if (activeAdminTab === "orders") return renderAdminOrders();
       if (activeAdminTab === "returns") return renderAdminReturns();
+      if (activeAdminTab === "reviews") {
+        const reviewModule = mountAdminReviewManagement();
+        if (!reviewModule) {
+          adminPanel.innerHTML = '<div class="empty-state">评论管理模块加载失败。</div>';
+          return;
+        }
+        return reviewModule.render();
+      }
       if (activeAdminTab === "marketing") return renderAdminMarketing();
       if (activeAdminTab === "payments") return renderAdminPayments();
       return renderAdminDashboard();
@@ -3132,6 +3183,7 @@
       }
 
       currentUser = null;
+      window.StorefrontAdminReviews?.destroy();
       renderAuthShell();
     }
 
@@ -5047,6 +5099,12 @@
               <span class="detail-review__rating">${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}</span>
             </div>
             <p>${escapeHtml(review.body)}</p>
+            ${review.reply ? `
+              <aside class="detail-review__merchant-reply" data-review-merchant-reply>
+                <strong>${activeLocale === LOCALE_KEY.EN_US ? "Seller response" : "商家回复"}</strong>
+                <p>${escapeHtml(review.reply.body)}</p>
+              </aside>
+            ` : ""}
             ${reasonTags.length ? `
               <div class="detail-review__reasons" aria-label="${activeLocale === LOCALE_KEY.EN_US ? "Negative review reason tags" : "差评原因标签"}">
                 ${reasonTags.map((tag) => `<span class="detail-review__reason-tag" data-review-reason-tag>${escapeHtml(tag)}</span>`).join("")}

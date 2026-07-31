@@ -1616,6 +1616,165 @@
       background: #ffffff;
     }
 
+    .admin-review-workspace,
+    .admin-review-detail {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .admin-review-workspace__header,
+    .admin-review-batch,
+    .admin-review-detail__meta,
+    .admin-review-detail__actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .admin-review-workspace__header h2,
+    .admin-review-detail h3,
+    .admin-review-detail p,
+    .admin-review-detail blockquote {
+      margin: 0;
+    }
+
+    .admin-review-filters {
+      display: grid;
+      grid-template-columns: minmax(210px, 1.4fr) repeat(3, minmax(130px, 0.7fr)) auto;
+      gap: 12px;
+      align-items: end;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f7f7f7;
+    }
+
+    .admin-review-filters label,
+    .admin-review-batch label {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .admin-review-filters input,
+    .admin-review-filters select,
+    .admin-review-batch select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text-main);
+      padding: 9px 11px;
+      font: inherit;
+    }
+
+    .admin-review-filters__actions,
+    .admin-review-detail__actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .admin-review-batch {
+      justify-content: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .admin-review-batch label {
+      min-width: 180px;
+    }
+
+    .admin-review-error {
+      flex: 1 1 220px;
+      min-height: 1.5em;
+      margin: 0;
+      color: #a3261a;
+      font-weight: 800;
+    }
+
+    .admin-review-row {
+      grid-template-columns: 34px minmax(150px, 0.9fr) 92px minmax(220px, 1.5fr) 92px 82px 96px;
+    }
+
+    .admin-review-row__select {
+      display: grid;
+      place-items: center;
+      min-height: 44px;
+    }
+
+    .admin-review-row__select input {
+      width: 20px;
+      height: 20px;
+      accent-color: #111111;
+    }
+
+    .admin-review-row__identity {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .admin-review-row__body {
+      display: -webkit-box;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text-main);
+      line-height: 1.45;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    .admin-review-status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 30px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: #ffffff;
+      padding: 5px 10px;
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .admin-review-status[data-status="pending"] {
+      border-style: dashed;
+      background: #f3f3f3;
+    }
+
+    .admin-review-status[data-status="rejected"],
+    .admin-review-status[data-status="hidden"] {
+      color: #555555;
+      background: #eeeeee;
+    }
+
+    .admin-review-detail blockquote {
+      border-left: 3px solid #111111;
+      background: #f7f7f7;
+      padding: 14px 16px;
+      color: var(--text-main);
+      line-height: 1.65;
+    }
+
+    .admin-review-detail__flags {
+      color: #7c2d12;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
     .admin-operation-drawer {
       position: fixed;
       inset: 0 0 0 auto;
@@ -2836,6 +2995,22 @@
       line-height: 1.6;
     }
 
+    .detail-review__merchant-reply {
+      display: grid;
+      gap: 6px;
+      margin-top: 2px;
+      border-left: 3px solid #111111;
+      border-radius: 0 12px 12px 0;
+      background: #ffffff;
+      padding: 12px 14px;
+    }
+
+    .detail-review__merchant-reply strong {
+      color: #111111;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+    }
+
     .detail-review__reasons,
     .detail-review__media,
     .detail-review__footer {
@@ -3943,6 +4118,24 @@
         grid-template-columns: 1fr;
       }
 
+      .admin-review-filters {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-review-filters__actions,
+      .admin-review-filters__actions .order-button,
+      .admin-review-batch,
+      .admin-review-batch label,
+      .admin-review-batch .order-button,
+      .admin-review-detail__actions,
+      .admin-review-detail__actions .order-button {
+        width: 100%;
+      }
+
+      .admin-review-row__select {
+        justify-content: start;
+      }
+
       .admin-row > *,
       .admin-operation-section {
         min-width: 0;
@@ -4335,6 +4528,7 @@
             <button type="button" data-admin-tab="inventory">库存</button>
             <button type="button" data-admin-tab="orders">订单</button>
             <button type="button" data-admin-tab="returns">售后</button>
+            <button type="button" data-admin-tab="reviews">评论</button>
             <button type="button" data-admin-tab="marketing">优惠</button>
             <button type="button" data-admin-tab="payments">支付</button>
           </nav>
@@ -4368,6 +4562,19 @@
       <div class="admin-operation-drawer__body" data-admin-return-drawer-body></div>
     </aside>
     <div class="admin-operation-backdrop" data-admin-return-backdrop hidden></div>
+
+    <aside class="admin-operation-drawer" data-admin-review-drawer data-open="false" aria-hidden="true"
+      role="dialog" aria-modal="true" aria-labelledby="admin-review-drawer-title">
+      <div class="admin-operation-drawer__header">
+        <div>
+          <p class="hero__eyebrow">Review operations</p>
+          <h2 id="admin-review-drawer-title" tabindex="-1" data-admin-review-drawer-title>管理评论</h2>
+        </div>
+        <button class="order-button order-button--secondary" type="button" data-admin-review-drawer-close aria-label="关闭评论管理面板">关闭</button>
+      </div>
+      <div class="admin-operation-drawer__body" data-admin-review-drawer-body></div>
+    </aside>
+    <div class="admin-operation-backdrop" data-admin-review-backdrop hidden></div>
 
     <div class="order-view" data-order-view hidden>
       <section class="hero">
@@ -4494,6 +4701,7 @@
   </aside>
   <div class="cart-backdrop" data-cart-backdrop></div>
 
+  <script src="/public/js/admin-review-management.js" defer></script>
   <script src="/public/js/storefront-app.js" defer></script>
 </body>
 </html>

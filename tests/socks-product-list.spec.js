@@ -185,6 +185,64 @@ test("renders admin dashboard tabs for demo admins", async ({ page }) => {
   await expect(page.locator("[data-admin-kpi]")).not.toHaveCount(0);
 });
 
+test("moderates and replies from the admin reviews workspace", async ({ page }) => {
+  const created = await page.request.post("/api/products/sock-01/reviews", {
+    data: {
+      author: "Guest",
+      rating: 2,
+      body: "袜口偏紧，需要人工审核。",
+      locale: "zh-CN"
+    }
+  });
+  expect(created.ok()).toBe(true);
+  const review = (await created.json()).review;
+
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='reviews']").click();
+
+  const row = page.locator(`[data-admin-review-row][data-review-id='${review.id}']`);
+  await row.locator("[data-admin-review-select]").check();
+  await page.locator("[data-admin-review-batch-action]").selectOption("publish");
+  await page.locator("[data-admin-review-batch-submit]").click();
+  await expect(row).toContainText(/已发布|published/i);
+
+  await row.locator("[data-admin-review-open]").click();
+  await page.locator("[data-admin-review-reply]").fill("感谢反馈，我们会继续优化袜口弹性。");
+  await page.locator("[data-admin-review-reply-submit]").click();
+  await expect(page.locator("[data-admin-review-drawer]")).toContainText("感谢反馈，我们会继续优化袜口弹性。");
+
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  const publicReview = page.locator(`[data-review-item][data-review-id='${review.id}']`);
+  await expect(publicReview).toBeVisible();
+  await expect(publicReview.locator("[data-review-merchant-reply]")).toContainText("感谢反馈，我们会继续优化袜口弹性。");
+});
+
+test("keeps the admin review drawer accessible on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='reviews']").click();
+
+  const trigger = page.locator("[data-admin-review-row] [data-admin-review-open]").first();
+  await trigger.click();
+  const drawer = page.locator("[data-admin-review-drawer]");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator("[data-admin-review-drawer-title]")).toBeFocused();
+  const drawerLayout = await drawer.evaluate((element) => ({
+    width: element.getBoundingClientRect().width,
+    innerWidth: window.innerWidth,
+    cssWidth: getComputedStyle(element).width,
+    boxSizing: getComputedStyle(element).boxSizing
+  }));
+  expect(drawerLayout.width, JSON.stringify(drawerLayout)).toBeLessThanOrEqual(drawerLayout.innerWidth);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
 test("renders admin products inventory orders and marketing tabs", async ({ page }) => {
   await registerAdminFromUi(page);
 
