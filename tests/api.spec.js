@@ -655,6 +655,30 @@ test("initializes SQLite support ticket table", async () => {
   }
 });
 
+test("initializes support workflow tables and backfills the opening customer message", async () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const columns = db.prepare("PRAGMA table_info(support_tickets)").all().map((column) => column.name);
+  const tables = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table'
+      AND name IN ('support_ticket_messages', 'support_ticket_events') ORDER BY name
+  `).all().map((row) => row.name);
+  const tickets = db.prepare("SELECT COUNT(*) AS count FROM support_tickets").get().count;
+  const messages = db.prepare("SELECT COUNT(*) AS count FROM support_ticket_messages").get().count;
+
+  expect(columns).toEqual(expect.arrayContaining([
+    "priority", "assigned_admin_user_id", "resolved_at", "closed_at",
+    "last_message_at", "version", "parent_ticket_id"
+  ]));
+  expect(tables).toEqual(["support_ticket_events", "support_ticket_messages"]);
+  expect(messages).toBe(tickets);
+  expect(db.prepare("SELECT id FROM schema_migrations WHERE id = ?").get("0010_support_ticket_workflow"))
+    .toEqual({ id: "0010_support_ticket_workflow" });
+  db.close();
+});
+
 test("creates and lists product reviews for a product", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
