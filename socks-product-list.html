@@ -21,6 +21,10 @@
       box-sizing: border-box;
     }
 
+    html {
+      overflow-x: clip;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
@@ -1504,6 +1508,13 @@
       box-shadow: 0 18px 45px rgba(17, 17, 17, 0.07);
     }
 
+    [data-admin-console],
+    .admin-panel,
+    .admin-tabs {
+      width: 100%;
+      min-width: 0;
+    }
+
     .admin-state {
       display: grid;
       gap: 12px;
@@ -1623,6 +1634,11 @@
       transform: translateX(0);
     }
 
+    .admin-operation-drawer[data-open="false"] {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
     .admin-operation-drawer__header,
     .admin-operation-section__header,
     .admin-operation-form__actions {
@@ -1661,6 +1677,15 @@
       border: 1px solid var(--line-strong);
       border-radius: 8px;
       font: inherit;
+    }
+
+    .admin-operation-drawer button:focus-visible,
+    .admin-operation-drawer input:focus-visible,
+    .admin-operation-drawer select:focus-visible,
+    .admin-operation-drawer textarea:focus-visible,
+    .admin-operation-drawer h2:focus-visible {
+      outline: 3px solid #111111;
+      outline-offset: 3px;
     }
 
     .admin-refund-row {
@@ -3902,6 +3927,33 @@
         width: 100%;
       }
 
+      .admin-operation-drawer {
+        width: 100vw;
+        padding: 18px;
+      }
+
+      .admin-operation-drawer__header,
+      .admin-operation-form__actions,
+      .admin-refund-row {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+      }
+
+      .admin-row {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-row > *,
+      .admin-operation-section {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .admin-operation-drawer__header,
+      .admin-operation-form__actions {
+        flex-direction: column;
+      }
+
       .detail-back-link {
         width: 100%;
       }
@@ -3951,6 +4003,12 @@
       .site-footer__bottom {
         flex-direction: column;
         align-items: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .admin-operation-drawer {
+        transition: none;
       }
     }
   </style>
@@ -4285,11 +4343,12 @@
       </section>
     </div>
 
-    <aside class="admin-operation-drawer" data-admin-order-drawer data-open="false" aria-hidden="true">
+    <aside class="admin-operation-drawer" data-admin-order-drawer data-open="false" aria-hidden="true"
+      role="dialog" aria-modal="true" aria-labelledby="admin-order-drawer-title">
       <div class="admin-operation-drawer__header">
         <div>
           <p class="hero__eyebrow">Order operations</p>
-          <h2 tabindex="-1" data-admin-order-drawer-title>处理订单</h2>
+          <h2 id="admin-order-drawer-title" tabindex="-1" data-admin-order-drawer-title>处理订单</h2>
         </div>
         <button class="order-button order-button--secondary" type="button" data-admin-order-drawer-close aria-label="关闭订单处理面板">关闭</button>
       </div>
@@ -4297,11 +4356,12 @@
     </aside>
     <div class="admin-operation-backdrop" data-admin-order-backdrop hidden></div>
 
-    <aside class="admin-operation-drawer" data-admin-return-drawer data-open="false" aria-hidden="true">
+    <aside class="admin-operation-drawer" data-admin-return-drawer data-open="false" aria-hidden="true"
+      role="dialog" aria-modal="true" aria-labelledby="admin-return-drawer-title">
       <div class="admin-operation-drawer__header">
         <div>
           <p class="hero__eyebrow">After-sales review</p>
-          <h2 tabindex="-1" data-admin-return-drawer-title>审核售后</h2>
+          <h2 id="admin-return-drawer-title" tabindex="-1" data-admin-return-drawer-title>审核售后</h2>
         </div>
         <button class="order-button order-button--secondary" type="button" data-admin-return-drawer-close aria-label="关闭售后审核面板">关闭</button>
       </div>

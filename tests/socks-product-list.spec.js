@@ -430,6 +430,42 @@ test("reviews a return request from the admin return drawer", async ({ page }) =
   await expect(page.locator(`[data-admin-return-row][data-return-id="${returnRequest.id}"]`)).toContainText(/已通过|approved/);
 });
 
+test("keeps admin operation drawers accessible on desktop and mobile", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Accessible Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  const trigger = page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`);
+  await trigger.click();
+  const drawer = page.locator("[data-admin-order-drawer]");
+  await expect(drawer).toHaveAttribute("role", "dialog");
+  await expect(drawer).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator("[data-admin-order-drawer-title]")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await trigger.click();
+  const drawerBox = await drawer.boundingBox();
+  expect(drawerBox.width).toBeLessThanOrEqual(375.1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+});
+
 test("toggles a coupon from the admin marketing tab", async ({ page }) => {
   await registerAdminFromUi(page);
   await page.goto("/socks-product-list.html?view=admin");
