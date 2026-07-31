@@ -382,6 +382,34 @@ test("initializes admin order operation tables and indexes", async () => {
   db.close();
 });
 
+test("restocks SKU inventory once for the same admin operation", async () => {
+  const { restockItems } = require("../lib/repositories/inventory-movements");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const before = db.prepare("SELECT stock_quantity FROM product_variants WHERE sku_id = ?")
+    .get("sock-01-39").stock_quantity;
+  const input = {
+    operationId: "op-restock-test",
+    reason: "return_refund_completed",
+    sourceType: "return_request",
+    sourceId: "return-test",
+    items: [{ productId: "sock-01", skuId: "sock-01-39", quantity: 2 }]
+  };
+
+  const first = restockItems(db, input);
+  const second = restockItems(db, input);
+  const after = db.prepare("SELECT stock_quantity FROM product_variants WHERE sku_id = ?")
+    .get("sock-01-39").stock_quantity;
+
+  expect(first.movements).toHaveLength(1);
+  expect(first.replayed).toBe(false);
+  expect(second.replayed).toBe(true);
+  expect(after).toBe(before + 2);
+  db.close();
+});
+
 test("initializes SQLite support ticket table", async () => {
   const db = createDatabase(":memory:");
   try {
