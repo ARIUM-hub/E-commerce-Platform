@@ -1601,6 +1601,103 @@ test("lists admin orders and advances an order status", async ({ request }) => {
   expect(statusPayload.order.timeline.map((entry) => entry.status)).toContain("cancelled");
 });
 
+test("ships a processing order with an admin supplied carrier and tracking number", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "processing", locale: "zh-CN" }
+  });
+
+  const response = await request.post(`/api/admin/orders/${order.id}/actions/ship`, {
+    headers: { cookie },
+    data: {
+      operationId: "op-api-ship-001",
+      carrier: "ups",
+      trackingNumber: "1Z999AA10123456784",
+      note: "仓库已交接",
+      locale: "zh-CN"
+    }
+  });
+
+  const payload = await response.json();
+  expect(response.ok(), JSON.stringify(payload)).toBe(true);
+  expect(payload.order.status).toBe("shipped");
+  expect(payload.fulfillment).toMatchObject({
+    carrier: "ups",
+    trackingNumber: "1Z999AA10123456784",
+    status: "label_created"
+  });
+});
+
+test("cancels a paid unshipped order with one inventory restock", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const dbAfterCheckout = createDatabase(testDbFile);
+  const stockAfterCheckout = dbAfterCheckout.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get("sock-01-39").stock_quantity;
+  dbAfterCheckout.close();
+
+  const body = {
+    operationId: "op-api-cancel-001",
+    reason: "customer_request",
+    note: "客户要求取消",
+    locale: "zh-CN"
+  };
+  const first = await request.post(`/api/admin/orders/${order.id}/actions/cancel`, {
+    headers: { cookie },
+    data: body
+  });
+  const second = await request.post(`/api/admin/orders/${order.id}/actions/cancel`, {
+    headers: { cookie },
+    data: body
+  });
+
+  const payload = await first.json();
+  const replayPayload = await second.json();
+  expect(first.ok(), JSON.stringify(payload)).toBe(true);
+  expect(second.ok(), JSON.stringify(replayPayload)).toBe(true);
+  expect(payload.order.status).toBe("refund_pending");
+  expect(payload.refund.amount).toBe(order.totals.total);
+  expect(replayPayload.replayed).toBe(true);
+
+  const dbAfterCancel = createDatabase(testDbFile);
+  const stockAfterCancel = dbAfterCancel.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get("sock-01-39").stock_quantity;
+  const movementCount = dbAfterCancel.prepare(`
+    SELECT COUNT(*) AS count FROM inventory_movements WHERE operation_id = ?
+  `).get(body.operationId).count;
+  dbAfterCancel.close();
+  expect(stockAfterCancel).toBe(stockAfterCheckout + 1);
+  expect(movementCount).toBe(1);
+});
+
 test("returns and toggles admin marketing resources", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "admin@socks.test" });
 

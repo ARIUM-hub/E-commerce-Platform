@@ -93,6 +93,10 @@ const {
   updateAdminProduct
 } = require("./lib/repositories/admin-products");
 const {
+  cancelAdminOrder,
+  shipAdminOrder
+} = require("./lib/repositories/admin-order-actions");
+const {
   createOrderTransaction,
   countOrders,
   listOrders,
@@ -123,6 +127,7 @@ const {
   findInvoiceByOrderId
 } = require("./lib/repositories/invoices");
 const {
+  confirmShipment,
   createFulfillmentForOrder,
   createFulfillmentSummary,
   findFulfillmentByOrderId,
@@ -1259,6 +1264,11 @@ function parseAdminOrderStatusPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function parseAdminOrderActionPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/actions\/(ship|cancel)$/);
+  return match ? { orderId: decodeURIComponent(match[1]), action: match[2] } : null;
+}
+
 function parseAdminMarketingStatusPath(pathname) {
   const match = pathname.match(/^\/api\/admin\/marketing\/([^/]+)\/([^/]+)\/status$/);
   return match ? { type: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) } : null;
@@ -1607,6 +1617,66 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, orders });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminOrderAction = parseAdminOrderActionPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminOrderAction) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => {
+        const order = findAdminOrder(db, requestedAdminOrderAction.orderId);
+        if (!order) {
+          return {
+            validationError: {
+              statusCode: 404,
+              code: "ADMIN_ORDER_NOT_FOUND",
+              message: "Order was not found."
+            }
+          };
+        }
+        if (requestedAdminOrderAction.action === "ship") {
+          return shipAdminOrder(db, {
+            admin,
+            order,
+            body,
+            confirmShipment,
+            saveOrder,
+            createTimelineEntry
+          });
+        }
+        return cancelAdminOrder(db, {
+          admin,
+          order,
+          body,
+          saveOrder,
+          createTimelineEntry
+        });
+      });
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message
+        );
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+      logger.error("admin.order_action.failed", {
+        message: error.message,
+        code: error.code || "",
+        stack: error.stack || ""
+      });
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
