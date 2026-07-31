@@ -724,6 +724,101 @@ test("saves campaign drafts with optimistic versions", async () => {
   db.close();
 });
 
+[
+  {
+    name: "coupon discount exceeds minimum",
+    campaign: { resourceType: "coupon", resourceKey: "INVALID80", rules: { type: "amount-off", discountAmount: 80, minimumSubtotal: 79, eligibleCategoryKeys: ["daily"] } },
+    field: "rules.discountAmount"
+  },
+  {
+    name: "coupon code already exists",
+    campaign: { resourceType: "coupon", resourceKey: "SOCK10", rules: { type: "amount-off", discountAmount: 10, minimumSubtotal: 79, eligibleCategoryKeys: ["daily"] } },
+    field: "resourceKey"
+  },
+  {
+    name: "threshold discount exceeds threshold",
+    campaign: { resourceType: "promotion", resourceKey: "invalid-threshold", rules: { kind: "threshold", threshold: 10, discountAmount: 20, stackableWithCoupon: false } },
+    field: "rules.discountAmount"
+  },
+  {
+    name: "limited product does not exist",
+    campaign: { resourceType: "promotion", resourceKey: "missing-product", rules: { kind: "limited-time-product", productId: "sock-missing", promotionalPrice: 10 } },
+    field: "rules.productId"
+  },
+  {
+    name: "limited price is not below product price",
+    campaign: { resourceType: "promotion", resourceKey: "invalid-price", rules: { kind: "limited-time-product", productId: "sock-02", promotionalPrice: 999 } },
+    field: "rules.promotionalPrice"
+  },
+  {
+    name: "bundle default size is unavailable",
+    campaign: { resourceType: "bundle", resourceKey: "invalid-size", rules: { productIds: ["sock-01", "sock-05"], defaultSizes: { "sock-01": "999", "sock-05": "43" }, discountAmount: 12 } },
+    field: "rules.defaultSizes.sock-01"
+  },
+  {
+    name: "bundle product does not exist",
+    campaign: { resourceType: "bundle", resourceKey: "invalid-product", rules: { productIds: ["sock-01", "sock-missing"], defaultSizes: { "sock-01": "43", "sock-missing": "43" }, discountAmount: 12 } },
+    field: "rules.productIds"
+  },
+  {
+    name: "bundle discount exceeds item total",
+    campaign: { resourceType: "bundle", resourceKey: "invalid-bundle-discount", rules: { productIds: ["sock-01", "sock-05"], defaultSizes: { "sock-01": "43", "sock-05": "43" }, discountAmount: 9999 } },
+    field: "rules.discountAmount"
+  }
+].forEach(({ name, campaign, field }) => {
+  test(`rejects invalid campaign rules: ${name}`, () => {
+    const { validateCampaignForPublish } = require("../lib/repositories/marketing-campaigns");
+    const db = createDatabase(testDbFile);
+    initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+    const result = validateCampaignForPublish(db, {
+      id: `case-${campaign.resourceKey}`, name: campaign.resourceKey,
+      startsAt: "2026-08-01T00:00:00.000Z", endsAt: "2026-08-31T23:59:59.999Z",
+      ...campaign
+    });
+    expect(result.validationError.code).toBe("MARKETING_CAMPAIGN_INVALID");
+    expect(result.validationError.fields).toContain(field);
+    db.close();
+  });
+});
+
+test("detects overlapping product promotion conflicts", async () => {
+  const { validateCampaignForPublish } = require("../lib/repositories/marketing-campaigns");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const result = validateCampaignForPublish(db, {
+    id: "promotion-conflict-test", resourceType: "promotion", resourceKey: "conflict-test", name: "冲突训练价",
+    startsAt: "2026-06-01T00:00:00.000Z", endsAt: "2026-10-01T00:00:00.000Z",
+    rules: { kind: "limited-time-product", productId: "sock-02", promotionalPrice: 40 }
+  });
+  expect(result.validationError.code).toBe("MARKETING_CAMPAIGN_CONFLICT");
+  expect(result.validationError.conflicts).toEqual(expect.arrayContaining([
+    expect.objectContaining({ resourceKey: "limited-sock-02" })
+  ]));
+  db.close();
+});
+
+test("detects bundle set conflicts but allows different coupon codes", () => {
+  const { validateCampaignForPublish } = require("../lib/repositories/marketing-campaigns");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const bundle = validateCampaignForPublish(db, {
+    id: "bundle-conflict-test", resourceType: "bundle", resourceKey: "same-products-reversed", name: "重复组合",
+    startsAt: "2026-08-01T00:00:00.000Z", endsAt: "2026-08-31T23:59:59.999Z",
+    rules: { productIds: ["sock-05", "sock-01"], defaultSizes: { "sock-01": "43", "sock-05": "43" }, discountAmount: 10 }
+  });
+  const coupon = validateCampaignForPublish(db, {
+    id: "coupon-no-conflict-test", resourceType: "coupon", resourceKey: "AUGUST12", name: "八月券",
+    startsAt: "2026-08-01T00:00:00.000Z", endsAt: "2026-08-31T23:59:59.999Z",
+    rules: { type: "amount-off", discountAmount: 12, minimumSubtotal: 99, eligibleCategoryKeys: ["daily"] }
+  });
+  expect(bundle.validationError.code).toBe("MARKETING_CAMPAIGN_CONFLICT");
+  expect(bundle.validationError.conflicts).toEqual(expect.arrayContaining([
+    expect.objectContaining({ resourceKey: "daily-refresh-bundle" })
+  ]));
+  expect(coupon.validationError).toBeUndefined();
+  db.close();
+});
+
 test("serializes only public ticket messages for customers", async () => {
   const { createSupportTicket, findSupportTicketById } = require("../lib/repositories/support");
   const db = createDatabase(testDbFile);
