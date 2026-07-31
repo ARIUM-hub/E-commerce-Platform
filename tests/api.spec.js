@@ -1698,6 +1698,160 @@ test("cancels a paid unshipped order with one inventory restock", async ({ reque
   expect(movementCount).toBe(1);
 });
 
+test("creates itemized partial refunds and rejects cumulative over-refunds", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 2 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const item = order.items[0];
+  const dbAfterCheckout = createDatabase(testDbFile);
+  const stockAfterCheckout = dbAfterCheckout.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get(item.skuId).stock_quantity;
+  dbAfterCheckout.close();
+
+  const first = await request.post(`/api/admin/orders/${order.id}/actions/refund`, {
+    headers: { cookie },
+    data: {
+      operationId: "op-partial-refund-001",
+      reason: "quality_issue",
+      note: "局部瑕疵补偿",
+      items: [{ skuId: item.skuId, quantity: 1, refundAmount: 1000 }],
+      locale: "zh-CN"
+    }
+  });
+  const firstPayload = await first.json();
+  expect(first.status(), JSON.stringify(firstPayload)).toBe(201);
+  expect(firstPayload.refund.items[0]).toMatchObject({
+    skuId: item.skuId,
+    quantity: 1,
+    refundAmount: 1000
+  });
+
+  const excessive = await request.post(`/api/admin/orders/${order.id}/actions/refund`, {
+    headers: { cookie },
+    data: {
+      operationId: "op-partial-refund-002",
+      reason: "quality_issue",
+      items: [{ skuId: item.skuId, quantity: 2, refundAmount: 999999 }],
+      locale: "zh-CN"
+    }
+  });
+  expect(excessive.status()).toBe(409);
+  await expect(excessive.json()).resolves.toMatchObject({
+    error: { code: expect.stringMatching(/ADMIN_REFUND_(QUANTITY|AMOUNT)_EXCEEDED/) }
+  });
+
+  const dbAfterRefund = createDatabase(testDbFile);
+  const stockAfterRefund = dbAfterRefund.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get(item.skuId).stock_quantity;
+  dbAfterRefund.close();
+  expect(stockAfterRefund).toBe(stockAfterCheckout);
+});
+
+test("reviews return refunds and restocks inventory once on completion", async ({ request }) => {
+  const buyerCookie = await registerApiUser(request, { email: "return-buyer@example.com" });
+  await request.post("/api/cart/items", {
+    headers: { cookie: buyerCookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie: buyerCookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: buyerCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const createReturnResponse = await request.post("/api/returns", {
+    headers: { cookie: buyerCookie },
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "quality_issue",
+      contact: "return-buyer@example.com",
+      note: "商品存在瑕疵。",
+      items: [{ skuId: order.items[0].skuId, quantity: 1 }],
+      locale: "zh-CN"
+    }
+  });
+  const returnRequest = (await createReturnResponse.json()).returnRequest;
+  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const reviewing = await request.post(`/api/admin/returns/${returnRequest.id}/actions/review`, {
+    headers: { cookie: adminCookie },
+    data: {
+      operationId: "op-review-001",
+      action: "start_review",
+      reason: "review_started",
+      locale: "zh-CN"
+    }
+  });
+  const reviewingPayload = await reviewing.json();
+  expect(reviewing.ok(), JSON.stringify(reviewingPayload)).toBe(true);
+  expect(reviewingPayload.returnRequest.status).toBe("reviewing");
+
+  const approved = await request.post(`/api/admin/returns/${returnRequest.id}/actions/review`, {
+    headers: { cookie: adminCookie },
+    data: {
+      operationId: "op-review-002",
+      action: "approve",
+      reason: "evidence_confirmed",
+      refundItems: [{ skuId: order.items[0].skuId, quantity: 1, refundAmount: 1000 }],
+      locale: "zh-CN"
+    }
+  });
+  const approvedPayload = await approved.json();
+  expect(approved.ok(), JSON.stringify(approvedPayload)).toBe(true);
+  expect(approvedPayload.returnRequest.status).toBe("approved");
+  expect(approvedPayload.refund.returnRequestId).toBe(returnRequest.id);
+
+  const dbBeforeCompletion = createDatabase(testDbFile);
+  const stockBeforeCompletion = dbBeforeCompletion.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get(order.items[0].skuId).stock_quantity;
+  dbBeforeCompletion.close();
+  const completeBody = {
+    operationId: "op-review-003",
+    action: "complete",
+    reason: "item_received",
+    locale: "zh-CN"
+  };
+  const completed = await request.post(`/api/admin/returns/${returnRequest.id}/actions/review`, {
+    headers: { cookie: adminCookie },
+    data: completeBody
+  });
+  const replayed = await request.post(`/api/admin/returns/${returnRequest.id}/actions/review`, {
+    headers: { cookie: adminCookie },
+    data: completeBody
+  });
+  expect((await completed.json()).returnRequest.status).toBe("completed");
+  expect((await replayed.json()).replayed).toBe(true);
+
+  const dbAfterCompletion = createDatabase(testDbFile);
+  const stockAfterCompletion = dbAfterCompletion.prepare(
+    "SELECT stock_quantity FROM product_variants WHERE sku_id = ?"
+  ).get(order.items[0].skuId).stock_quantity;
+  const movementCount = dbAfterCompletion.prepare(`
+    SELECT COUNT(*) AS count FROM inventory_movements WHERE operation_id = ?
+  `).get(completeBody.operationId).count;
+  dbAfterCompletion.close();
+  expect(stockAfterCompletion).toBe(stockBeforeCompletion + 1);
+  expect(movementCount).toBe(1);
+});
+
 test("returns and toggles admin marketing resources", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "admin@socks.test" });
 

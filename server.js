@@ -94,6 +94,8 @@ const {
 } = require("./lib/repositories/admin-products");
 const {
   cancelAdminOrder,
+  createAdminPartialRefund,
+  reviewAdminReturnRequest,
   shipAdminOrder
 } = require("./lib/repositories/admin-order-actions");
 const {
@@ -1265,8 +1267,13 @@ function parseAdminOrderStatusPath(pathname) {
 }
 
 function parseAdminOrderActionPath(pathname) {
-  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/actions\/(ship|cancel)$/);
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/actions\/(ship|cancel|refund)$/);
   return match ? { orderId: decodeURIComponent(match[1]), action: match[2] } : null;
+}
+
+function parseAdminReturnActionPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/returns\/([^/]+)\/actions\/review$/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function parseAdminMarketingStatusPath(pathname) {
@@ -1650,6 +1657,9 @@ const server = http.createServer(async (request, response) => {
             createTimelineEntry
           });
         }
+        if (requestedAdminOrderAction.action === "refund") {
+          return createAdminPartialRefund(db, { admin, order, body });
+        }
         return cancelAdminOrder(db, {
           admin,
           order,
@@ -1668,11 +1678,56 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      sendJson(response, 200, { ok: true, ...result });
+      const statusCode = requestedAdminOrderAction.action === "refund" && !result.replayed ? 201 : 200;
+      sendJson(response, statusCode, { ok: true, ...result });
       return;
     } catch (error) {
       if (handleRequestBodyError(error, response)) return;
       logger.error("admin.order_action.failed", {
+        message: error.message,
+        code: error.code || "",
+        stack: error.stack || ""
+      });
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminReturnId = parseAdminReturnActionPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminReturnId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => {
+        const returnRequest = findReturnRequestById(db, requestedAdminReturnId);
+        if (!returnRequest) {
+          return {
+            validationError: {
+              statusCode: 404,
+              code: "RETURN_NOT_FOUND",
+              message: "Return request was not found."
+            }
+          };
+        }
+        return reviewAdminReturnRequest(db, { admin, returnRequest, body });
+      });
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message
+        );
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+      logger.error("admin.return_action.failed", {
         message: error.message,
         code: error.code || "",
         stack: error.stack || ""
