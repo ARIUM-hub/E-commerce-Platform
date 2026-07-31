@@ -410,6 +410,40 @@ test("restocks SKU inventory once for the same admin operation", async () => {
   db.close();
 });
 
+test("calculates remaining refundable quantity and cents per order item", async () => {
+  const { getRefundableOrderSummary } = require("../lib/repositories/refunds");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const order = {
+    id: "order-refund-summary",
+    items: [
+      {
+        productId: "sock-01",
+        skuId: "sock-01-39",
+        title: "袜子",
+        size: "39",
+        quantity: 2,
+        price: 39
+      }
+    ],
+    totals: { subtotal: 78, discount: 10, total: 68 }
+  };
+
+  const summary = getRefundableOrderSummary(db, order);
+
+  expect(summary.items[0]).toMatchObject({
+    skuId: "sock-01-39",
+    purchasedQuantity: 2,
+    refundedQuantity: 0,
+    remainingQuantity: 2,
+    refundableAmountCents: 6800
+  });
+  expect(summary.remainingOrderAmountCents).toBe(6800);
+  db.close();
+});
+
 test("initializes SQLite support ticket table", async () => {
   const db = createDatabase(":memory:");
   try {
