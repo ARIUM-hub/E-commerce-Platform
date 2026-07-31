@@ -382,6 +382,30 @@ test("initializes admin order operation tables and indexes", async () => {
   db.close();
 });
 
+test("initializes product review moderation storage and backfills published reviews", async () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const columns = db.prepare("PRAGMA table_info(product_reviews)").all().map((column) => column.name);
+  const replyTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'product_review_replies'").get();
+  const pendingIndex = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_product_reviews_moderation'").get();
+  const migration = db.prepare("SELECT id FROM schema_migrations WHERE id = ?").get("0009_product_review_moderation");
+  const statuses = db.prepare("SELECT DISTINCT status FROM product_reviews ORDER BY status").all();
+  const missingUpdatedAt = db.prepare("SELECT COUNT(*) AS count FROM product_reviews WHERE updated_at IS NULL OR updated_at = ''").get().count;
+
+  expect(columns).toEqual(expect.arrayContaining([
+    "user_id", "session_id", "status", "moderation_reason", "moderation_note",
+    "moderated_by", "moderated_at", "risk_flags", "updated_at"
+  ]));
+  expect(replyTable).toEqual({ name: "product_review_replies" });
+  expect(pendingIndex).toEqual({ name: "idx_product_reviews_moderation" });
+  expect(migration).toEqual({ id: "0009_product_review_moderation" });
+  expect(statuses).toEqual([{ status: "published" }]);
+  expect(missingUpdatedAt).toBe(0);
+  db.close();
+});
+
 test("restocks SKU inventory once for the same admin operation", async () => {
   const { restockItems } = require("../lib/repositories/inventory-movements");
   const db = createDatabase(testDbFile);
