@@ -243,6 +243,31 @@ test("keeps the admin review drawer accessible on mobile", async ({ page }) => {
   await expect(trigger).toBeFocused();
 });
 
+test("assigns and replies from the admin support workspace", async ({ page }) => {
+  await registerAdminFromUi(page);
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "Buyer",
+      contact: "buyer@example.com",
+      topic: "delivery",
+      message: "物流没有更新",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='support']").click();
+  await page.locator(`[data-admin-ticket-row][data-ticket-id='${ticket.id}'] [data-admin-ticket-open]`).click();
+  await page.locator("[data-admin-ticket-priority]").selectOption("urgent");
+  await page.locator("[data-admin-ticket-update]").click();
+  await page.locator("[data-admin-ticket-public-message]").fill("我们已联系承运商核查。");
+  await page.locator("[data-admin-ticket-public-submit]").click();
+
+  await expect(page.locator("[data-admin-ticket-drawer]")).toContainText("我们已联系承运商核查。");
+  await expect(page.locator(`[data-admin-ticket-row][data-ticket-id='${ticket.id}']`)).toContainText(/紧急|urgent/i);
+});
+
 test("renders admin products inventory orders and marketing tabs", async ({ page }) => {
   await registerAdminFromUi(page);
 

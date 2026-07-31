@@ -1775,6 +1775,85 @@
       overflow-wrap: anywhere;
     }
 
+    .admin-support-row {
+      grid-template-columns: minmax(170px, 1fr) 90px 100px 72px minmax(190px, 1.2fr) 100px 84px;
+    }
+
+    .admin-support-settings {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .admin-support-settings label {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      font-weight: 800;
+    }
+
+    .admin-support-settings select {
+      min-height: 44px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 10px 12px;
+      color: var(--text-main);
+      font: inherit;
+    }
+
+    .admin-support-timeline,
+    .admin-support-composer {
+      display: grid;
+      gap: 12px;
+    }
+
+    .admin-support-message {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 13px;
+    }
+
+    .admin-support-message > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--text-subtle);
+      font-size: 12px;
+    }
+
+    .admin-support-message p,
+    .admin-support-message em {
+      margin: 0;
+    }
+
+    .admin-support-message.is-internal,
+    .admin-support-internal-form {
+      background-color: #eeeeee;
+      background-image: repeating-linear-gradient(-45deg, transparent, transparent 8px, rgb(0 0 0 / 4%) 8px, rgb(0 0 0 / 4%) 16px);
+    }
+
+    .admin-support-message em {
+      width: fit-content;
+      border: 1px solid #555555;
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: #333333;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .admin-support-internal-form {
+      border: 1px dashed #777777;
+      border-radius: 14px;
+      padding: 14px;
+    }
+
     .admin-operation-drawer {
       position: fixed;
       inset: 0 0 0 auto;
@@ -4145,6 +4224,14 @@
         justify-content: start;
       }
 
+      .admin-support-settings {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-support-settings .order-button {
+        width: 100%;
+      }
+
       .admin-row > *,
       .admin-operation-section {
         min-width: 0;
@@ -4538,6 +4625,7 @@
             <button type="button" data-admin-tab="orders">订单</button>
             <button type="button" data-admin-tab="returns">售后</button>
             <button type="button" data-admin-tab="reviews">评论</button>
+            <button type="button" data-admin-tab="support">客服</button>
             <button type="button" data-admin-tab="marketing">优惠</button>
             <button type="button" data-admin-tab="payments">支付</button>
           </nav>
@@ -4584,6 +4672,19 @@
       <div class="admin-operation-drawer__body" data-admin-review-drawer-body></div>
     </aside>
     <div class="admin-operation-backdrop" data-admin-review-backdrop hidden></div>
+
+    <aside class="admin-operation-drawer" data-admin-ticket-drawer data-open="false" aria-hidden="true"
+      role="dialog" aria-modal="true" aria-labelledby="admin-ticket-drawer-title">
+      <div class="admin-operation-drawer__header">
+        <div>
+          <p class="hero__eyebrow">Customer support</p>
+          <h2 id="admin-ticket-drawer-title" tabindex="-1" data-admin-ticket-drawer-title>处理客服工单</h2>
+        </div>
+        <button class="order-button order-button--secondary" type="button" data-admin-ticket-drawer-close aria-label="关闭客服工单面板">关闭</button>
+      </div>
+      <div class="admin-operation-drawer__body" data-admin-ticket-drawer-body></div>
+    </aside>
+    <div class="admin-operation-backdrop" data-admin-ticket-backdrop hidden></div>
 
     <div class="order-view" data-order-view hidden>
       <section class="hero">
@@ -4711,6 +4812,7 @@
   <div class="cart-backdrop" data-cart-backdrop></div>
 
   <script src="/public/js/admin-review-management.js" defer></script>
+  <script src="/public/js/admin-support-management.js" defer></script>
   <script src="/public/js/storefront-app.js" defer></script>
 </body>
 </html>

@@ -182,6 +182,11 @@
     const adminReviewDrawerTitle = document.querySelector("[data-admin-review-drawer-title]");
     const adminReviewDrawerClose = document.querySelector("[data-admin-review-drawer-close]");
     const adminReviewBackdrop = document.querySelector("[data-admin-review-backdrop]");
+    const adminTicketDrawer = document.querySelector("[data-admin-ticket-drawer]");
+    const adminTicketDrawerBody = document.querySelector("[data-admin-ticket-drawer-body]");
+    const adminTicketDrawerTitle = document.querySelector("[data-admin-ticket-drawer-title]");
+    const adminTicketDrawerClose = document.querySelector("[data-admin-ticket-drawer-close]");
+    const adminTicketBackdrop = document.querySelector("[data-admin-ticket-backdrop]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -2277,6 +2282,24 @@
       return reviewModule;
     }
 
+    function mountAdminSupportManagement() {
+      const supportModule = window.StorefrontAdminSupport;
+      if (!supportModule) return null;
+      supportModule.mount({
+        panel: adminPanel,
+        drawer: adminTicketDrawer,
+        drawerBody: adminTicketDrawerBody,
+        drawerTitle: adminTicketDrawerTitle,
+        drawerClose: adminTicketDrawerClose,
+        backdrop: adminTicketBackdrop,
+        request: requestAdminReviewJson,
+        createOperationId: createAdminOperationId,
+        escapeHtml,
+        adminUserId: currentUser?.id || null
+      });
+      return supportModule;
+    }
+
     function yuanInputToCents(value) {
       return Math.round(Number(value || 0) * 100);
     }
@@ -2723,6 +2746,7 @@
       adminConsole.hidden = state !== "ready";
       if (state !== "ready") {
         window.StorefrontAdminReviews?.destroy();
+        window.StorefrontAdminSupport?.destroy();
       }
     }
 
@@ -3085,6 +3109,14 @@
         }
         return reviewModule.render();
       }
+      if (activeAdminTab === "support") {
+        const supportModule = mountAdminSupportManagement();
+        if (!supportModule) {
+          adminPanel.innerHTML = '<div class="empty-state">客服工单模块加载失败。</div>';
+          return;
+        }
+        return supportModule.render();
+      }
       if (activeAdminTab === "marketing") return renderAdminMarketing();
       if (activeAdminTab === "payments") return renderAdminPayments();
       return renderAdminDashboard();
@@ -3188,6 +3220,7 @@
 
       currentUser = null;
       window.StorefrontAdminReviews?.destroy();
+      window.StorefrontAdminSupport?.destroy();
       renderAuthShell();
     }
 

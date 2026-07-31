@@ -1012,6 +1012,38 @@ test("rejects ordinary users from admin support routes", async ({ request }) => 
   expect((await response.json()).error.code).toBe("ADMIN_FORBIDDEN");
 });
 
+test("includes operational support KPIs in the admin summary", () => {
+  const { getAdminSummary } = require("../lib/repositories/admin");
+  const { createSupportTicket } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.exec("DELETE FROM support_ticket_events; DELETE FROM support_ticket_messages; DELETE FROM support_tickets;");
+  const tickets = ["紧急问题", "等待客户", "超时问题"].map((message) => createSupportTicket(db, {
+    name: "Buyer",
+    contact: "buyer@example.com",
+    topic: "orders",
+    message,
+    locale: "zh-CN"
+  }).ticket);
+  const now = new Date("2026-07-31T12:00:00.000Z");
+  db.prepare("UPDATE support_tickets SET priority = 'urgent', last_message_at = ? WHERE id = ?")
+    .run(now.toISOString(), tickets[0].id);
+  db.prepare("UPDATE support_tickets SET status = 'waiting_customer', last_message_at = ? WHERE id = ?")
+    .run(now.toISOString(), tickets[1].id);
+  db.prepare("UPDATE support_tickets SET last_message_at = ? WHERE id = ?")
+    .run("2026-07-29T11:59:59.000Z", tickets[2].id);
+
+  expect(getAdminSummary(db, now).summary).toMatchObject({
+    unassignedSupportCount: 3,
+    urgentSupportCount: 1,
+    waitingCustomerSupportCount: 1,
+    overdueSupportCount: 1
+  });
+  db.close();
+});
+
 test("creates and lists product reviews for a product", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
