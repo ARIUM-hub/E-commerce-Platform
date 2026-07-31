@@ -629,6 +629,72 @@ test("queues the fourth signed-in review submitted within ten minutes", async ({
   expect(reviews[3]).toMatchObject({ status: "pending", riskFlags: ["high_frequency"] });
 });
 
+test("lists admin reviews with moderation filters and summary", () => {
+  const { listAdminProductReviews } = require("../lib/repositories/product-reviews");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const result = listAdminProductReviews(db, { status: "published", rating: "5", q: "包裹" });
+  expect(result.summary).toEqual(expect.objectContaining({
+    published: expect.any(Number),
+    pending: expect.any(Number),
+    lowRating: expect.any(Number)
+  }));
+  expect(result.reviews).not.toHaveLength(0);
+  expect(result.reviews.every((review) => {
+    return review.status === "published"
+      && review.rating === 5
+      && `${review.author} ${review.body} ${review.productTitle}`.includes("包裹");
+  })).toBe(true);
+  db.close();
+});
+
+test("adds review moderation KPIs to the admin dashboard", () => {
+  const { getAdminSummary } = require("../lib/repositories/admin");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare("UPDATE product_reviews SET status = 'pending' WHERE id = ?").run("seed-review-sock-02-01");
+  const pendingReviewCount = db.prepare("SELECT COUNT(*) AS count FROM product_reviews WHERE status = 'pending'").get().count;
+  const lowRatingReviewCount = db.prepare("SELECT COUNT(*) AS count FROM product_reviews WHERE status = 'published' AND rating <= 2").get().count;
+  const dashboard = getAdminSummary(db);
+  expect(dashboard.summary).toMatchObject({ pendingReviewCount, lowRatingReviewCount });
+  expect(dashboard.workQueue).toEqual(expect.arrayContaining([
+    { type: "reviews-pending", label: "Pending reviews", count: pendingReviewCount },
+    { type: "reviews-low-rating", label: "Low-rating reviews", count: lowRatingReviewCount }
+  ]));
+  db.close();
+});
+
+test("serializes active merchant replies without exposing admin identifiers", () => {
+  const { listProductReviews } = require("../lib/repositories/product-reviews");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare(`
+    INSERT INTO product_review_replies (
+      id, review_id, body, admin_user_id, created_at, updated_at, withdrawn_at
+    ) VALUES (?, ?, ?, NULL, ?, ?, NULL)
+  `).run(
+    "reply-public-test",
+    "seed-review-sock-02-01",
+    "感谢您的真实反馈。",
+    "2026-07-31T10:00:00.000Z",
+    "2026-07-31T10:00:00.000Z"
+  );
+  const review = listProductReviews(db, "sock-02")
+    .find((item) => item.id === "seed-review-sock-02-01");
+  expect(review.reply).toEqual({
+    body: "感谢您的真实反馈。",
+    updatedAt: "2026-07-31T10:00:00.000Z"
+  });
+  expect(review.reply.adminUserId).toBeUndefined();
+  db.close();
+});
+
 test("lists seeded product reviews for product detail pages", async ({ request }) => {
   const response = await request.get("/api/products/sock-02/reviews");
 
