@@ -679,6 +679,133 @@ test("initializes support workflow tables and backfills the opening customer mes
   db.close();
 });
 
+test("serializes only public ticket messages for customers", async () => {
+  const { createSupportTicket, findSupportTicketById } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const ticket = createSupportTicket(db, {
+    name: "Owner",
+    contact: "owner@example.com",
+    topic: "orders",
+    message: "订单需要帮助",
+    locale: "zh-CN"
+  }).ticket;
+  db.prepare(`INSERT INTO support_ticket_messages
+    (id, ticket_id, visibility, author_type, author_user_id, body, created_at)
+    VALUES (?, ?, 'internal', 'admin', NULL, ?, ?)`)
+    .run("message-internal-test", ticket.id, "客户不可见", new Date().toISOString());
+
+  const customer = findSupportTicketById(db, ticket.id, { audience: "customer" });
+  const admin = findSupportTicketById(db, ticket.id, { audience: "admin" });
+  expect(customer.messages.some((message) => message.body === "客户不可见")).toBe(false);
+  expect(admin.messages.some((message) => message.body === "客户不可见")).toBe(true);
+  db.close();
+});
+
+test("creates the opening message and safely links a closed parent ticket", () => {
+  const { createSupportTicket } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const owner = { sessionId: null, userId: null };
+  const parent = createSupportTicket(db, {
+    name: "Owner",
+    contact: "owner@example.com",
+    topic: "orders",
+    message: "原工单",
+    locale: "zh-CN"
+  }, owner).ticket;
+  db.prepare("UPDATE support_tickets SET status = 'closed' WHERE id = ?").run(parent.id);
+
+  const child = createSupportTicket(db, {
+    name: "Owner",
+    contact: "OWNER@example.com",
+    topic: "orders",
+    message: "关闭后的后续问题",
+    locale: "zh-CN",
+    parentTicketId: parent.id
+  }, { ...owner, authorizedParentTicketIds: new Set([parent.id]) });
+  expect(child.ticket.parentTicketId).toBe(parent.id);
+  expect(db.prepare("SELECT body FROM support_ticket_messages WHERE ticket_id = ?").all(child.ticket.id))
+    .toEqual([{ body: "关闭后的后续问题" }]);
+
+  const rejected = createSupportTicket(db, {
+    name: "Other",
+    contact: "other@example.com",
+    topic: "orders",
+    message: "尝试关联他人工单",
+    locale: "zh-CN",
+    parentTicketId: parent.id
+  }, { sessionId: null, userId: null, authorizedParentTicketIds: new Set() });
+  expect(rejected.validationError.code).toBe("SUPPORT_PARENT_TICKET_INVALID");
+  db.close();
+});
+
+test("adds a customer ticket message and resumes a waiting conversation", () => {
+  const { addCustomerTicketMessage, createSupportTicket } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const ticket = createSupportTicket(db, {
+    name: "Owner",
+    contact: "owner@example.com",
+    topic: "orders",
+    message: "原始问题",
+    locale: "zh-CN"
+  }).ticket;
+  db.prepare("UPDATE support_tickets SET status = 'waiting_customer' WHERE id = ?").run(ticket.id);
+
+  const result = addCustomerTicketMessage(db, { ...ticket, status: "waiting_customer" }, {}, "补充订单截图信息");
+  expect(result.ticket.status).toBe("in_progress");
+  expect(result.ticket.version).toBe(2);
+  expect(result.ticket.messages.map((message) => message.body)).toEqual(["原始问题", "补充订单截图信息"]);
+  expect(db.prepare("SELECT event_type FROM support_ticket_events WHERE ticket_id = ?").all(ticket.id))
+    .toEqual([{ event_type: "customer_replied" }]);
+  db.close();
+});
+
+test("lists account tickets and matches guest tickets by normalized contact", () => {
+  const {
+    createSupportTicket,
+    findSupportTicketForGuest,
+    listSupportTicketsForUser
+  } = require("../lib/repositories/support");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO users (id, name, email, password, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run("support-user", "Support User", "support-user@example.com", "unused", now, now);
+  const accountTicket = createSupportTicket(db, {
+    name: "Support User",
+    contact: "support-user@example.com",
+    topic: "orders",
+    message: "账号工单",
+    locale: "zh-CN"
+  }, { userId: "support-user" }).ticket;
+  const guestTicket = createSupportTicket(db, {
+    name: "Guest",
+    contact: "Guest@Example.com",
+    topic: "delivery",
+    message: "匿名工单",
+    locale: "zh-CN"
+  }).ticket;
+
+  expect(listSupportTicketsForUser(db, "support-user").map((ticket) => ticket.id))
+    .toEqual([accountTicket.id]);
+  expect(findSupportTicketForGuest(db, guestTicket.ticketNumber, " guest@example.COM ").id)
+    .toBe(guestTicket.id);
+  expect(findSupportTicketForGuest(db, guestTicket.ticketNumber, "other@example.com")).toBeNull();
+  db.close();
+});
+
 test("creates and lists product reviews for a product", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "maya-reviewer@example.com" });
   const createResponse = await request.post("/api/products/sock-02/reviews", {
