@@ -95,6 +95,7 @@ const {
 const {
   cancelAdminOrder,
   createAdminPartialRefund,
+  listAdminActionsForResource,
   reviewAdminReturnRequest,
   shipAdminOrder
 } = require("./lib/repositories/admin-order-actions");
@@ -109,6 +110,7 @@ const {
 const {
   createReturnRequest,
   findReturnRequestById,
+  listAdminReturnRequests,
   listReturnRequestsByUser,
   updateReturnRequestStatus
 } = require("./lib/repositories/returns");
@@ -142,6 +144,7 @@ const {
   createRefundForOrder,
   createRefundSummary,
   findRefundById,
+  getRefundableOrderSummary,
   listRefundsByOrderId,
   updateRefundStatus
 } = require("./lib/repositories/refunds");
@@ -1737,19 +1740,45 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/returns") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const returnRequests = withDatabase((db) => listAdminReturnRequests(db, {
+        status: requestUrl.searchParams.get("status") || "",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, returnRequests });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
   const requestedAdminOrderId = parseAdminOrderPath(requestUrl.pathname);
   if (request.method === "GET" && requestedAdminOrderId) {
     try {
       const admin = await requireAdmin(request, response);
       if (!admin) return;
 
-      const order = withDatabase((db) => findAdminOrder(db, requestedAdminOrderId));
-      if (!order) {
+      const detail = withDatabase((db) => {
+        const order = findAdminOrder(db, requestedAdminOrderId);
+        if (!order) return null;
+        return {
+          order,
+          refunds: listRefundsByOrderId(db, requestedAdminOrderId),
+          refundable: getRefundableOrderSummary(db, order),
+          adminActions: listAdminActionsForResource(db, "order", requestedAdminOrderId)
+        };
+      });
+      if (!detail) {
         sendError(response, 404, "ADMIN_ORDER_NOT_FOUND", "Order was not found.");
         return;
       }
 
-      sendJson(response, 200, { ok: true, order });
+      sendJson(response, 200, { ok: true, ...detail });
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");

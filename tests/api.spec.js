@@ -1852,6 +1852,173 @@ test("reviews return refunds and restocks inventory once on completion", async (
   expect(movementCount).toBe(1);
 });
 
+test("returns admin order operation detail with refunds refundable items and audit events", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  await request.post(`/api/admin/orders/${order.id}/actions/refund`, {
+    headers: { cookie },
+    data: {
+      operationId: "op-detail-refund-001",
+      reason: "quality_issue",
+      items: [{ skuId: order.items[0].skuId, quantity: 1, refundAmount: 1000 }],
+      locale: "zh-CN"
+    }
+  });
+
+  const response = await request.get(`/api/admin/orders/${order.id}`, {
+    headers: { cookie }
+  });
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.order.id).toBe(order.id);
+  expect(payload.refunds).toHaveLength(1);
+  expect(payload.refundable.items[0]).toMatchObject({
+    skuId: order.items[0].skuId,
+    refundedQuantity: 1,
+    remainingQuantity: 0
+  });
+  expect(payload.adminActions).toEqual([
+    expect.objectContaining({ operationId: "op-detail-refund-001", action: "refund" })
+  ]);
+});
+
+test("lists and filters return requests for demo admins", async ({ request }) => {
+  const buyerCookie = await registerApiUser(request, { email: "returns-list@example.com" });
+  await request.post("/api/cart/items", {
+    headers: { cookie: buyerCookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie: buyerCookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/orders/${order.id}/status`, {
+    headers: { cookie: buyerCookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const returnResponse = await request.post("/api/returns", {
+    headers: { cookie: buyerCookie },
+    data: {
+      orderId: order.id,
+      type: "refund_only",
+      reason: "quality_issue",
+      contact: "returns-list@example.com",
+      items: [{ skuId: order.items[0].skuId, quantity: 1 }],
+      locale: "zh-CN"
+    }
+  });
+  const created = (await returnResponse.json()).returnRequest;
+  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+
+  const response = await request.get(`/api/admin/returns?status=submitted&q=${encodeURIComponent(order.id)}`, {
+    headers: { cookie: adminCookie }
+  });
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.returnRequests).toEqual([
+    expect.objectContaining({
+      id: created.id,
+      orderId: order.id,
+      type: "refund_only",
+      status: "submitted",
+      refunds: []
+    })
+  ]);
+});
+
+test("keeps an order active after a partial refund succeeds", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  await request.patch(`/api/admin/orders/${order.id}/status`, {
+    headers: { cookie },
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const refundResponse = await request.post(`/api/admin/orders/${order.id}/actions/refund`, {
+    headers: { cookie },
+    data: {
+      operationId: "op-partial-status-001",
+      reason: "quality_issue",
+      items: [{ skuId: order.items[0].skuId, quantity: 1, refundAmount: 1000 }],
+      locale: "zh-CN"
+    }
+  });
+  const refund = (await refundResponse.json()).refund;
+
+  await request.patch(`/api/refunds/${refund.id}/status`, {
+    headers: { cookie },
+    data: { status: "processing", locale: "zh-CN" }
+  });
+  const succeeded = await request.patch(`/api/refunds/${refund.id}/status`, {
+    headers: { cookie },
+    data: { status: "succeeded", locale: "zh-CN" }
+  });
+  const payload = await succeeded.json();
+
+  expect(payload.refund.status).toBe("succeeded");
+  expect(payload.order.status).toBe("paid");
+  expect(payload.order.timeline.map((entry) => entry.status)).not.toContain("refunded");
+});
+
+test("protects admin order actions and rejects mismatched idempotency replays", async ({ request }) => {
+  const buyerCookie = await registerApiUser(request, { email: "action-buyer@example.com" });
+  const forbidden = await request.post("/api/admin/orders/missing/actions/cancel", {
+    headers: { cookie: buyerCookie },
+    data: { operationId: "op-forbidden", reason: "customer_request", locale: "zh-CN" }
+  });
+  expect(forbidden.status()).toBe(403);
+  expect((await forbidden.json()).error.code).toBe("ADMIN_FORBIDDEN");
+
+  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  await request.post("/api/cart/items", {
+    headers: { cookie: adminCookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  const orderResponse = await request.post("/api/orders", {
+    headers: { cookie: adminCookie },
+    data: checkoutPayload
+  });
+  const order = (await orderResponse.json()).order;
+  const firstBody = {
+    operationId: "op-mismatch-001",
+    reason: "customer_request",
+    note: "第一次请求",
+    locale: "zh-CN"
+  };
+  const first = await request.post(`/api/admin/orders/${order.id}/actions/cancel`, {
+    headers: { cookie: adminCookie },
+    data: firstBody
+  });
+  expect(first.ok()).toBe(true);
+
+  const mismatch = await request.post(`/api/admin/orders/${order.id}/actions/cancel`, {
+    headers: { cookie: adminCookie },
+    data: { ...firstBody, note: "不同的请求内容" }
+  });
+  expect(mismatch.status()).toBe(409);
+  expect((await mismatch.json()).error.code).toBe("ADMIN_OPERATION_DUPLICATE_MISMATCH");
+});
+
 test("returns and toggles admin marketing resources", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "admin@socks.test" });
 
