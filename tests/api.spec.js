@@ -679,6 +679,28 @@ test("initializes support workflow tables and backfills the opening customer mes
   db.close();
 });
 
+test("initializes campaign version storage and imports runtime marketing data", async () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const tables = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table'
+      AND name IN ('marketing_campaigns', 'marketing_campaign_versions') ORDER BY name
+  `).all().map((row) => row.name);
+  const runtimeCount = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM promotions) + (SELECT COUNT(*) FROM coupons) + (SELECT COUNT(*) FROM bundles) AS count
+  `).get().count;
+  const campaignCount = db.prepare("SELECT COUNT(*) AS count FROM marketing_campaigns").get().count;
+  const versionCount = db.prepare("SELECT COUNT(*) AS count FROM marketing_campaign_versions").get().count;
+  const bundleColumns = db.prepare("PRAGMA table_info(bundles)").all().map((column) => column.name);
+  expect(tables).toEqual(["marketing_campaign_versions", "marketing_campaigns"]);
+  expect(campaignCount).toBe(runtimeCount);
+  expect(versionCount).toBe(runtimeCount);
+  expect(bundleColumns).toEqual(expect.arrayContaining(["starts_at", "ends_at"]));
+  expect(db.prepare("SELECT id FROM schema_migrations WHERE id = ?").get("0011_marketing_campaign_versions"))
+    .toEqual({ id: "0011_marketing_campaign_versions" });
+  db.close();
+});
+
 test("serializes only public ticket messages for customers", async () => {
   const { createSupportTicket, findSupportTicketById } = require("../lib/repositories/support");
   const db = createDatabase(testDbFile);
