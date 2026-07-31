@@ -384,6 +384,52 @@ test("creates a partial refund from the admin order operation drawer", async ({ 
   await expect(page.locator("[data-admin-order-refunds]")).toContainText(/10\.00|¥10/);
 });
 
+test("reviews a return request from the admin return drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Return Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const returnResponse = await page.request.post("/api/returns", {
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "quality_issue",
+      contact: "admin@socks.test",
+      note: "商品存在瑕疵。",
+      items: [{ skuId: order.items[0].skuId, quantity: 1 }],
+      locale: "zh-CN"
+    }
+  });
+  const returnRequest = (await returnResponse.json()).returnRequest;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='returns']").click();
+  await page.locator(`[data-admin-return-row][data-return-id="${returnRequest.id}"] [data-admin-return-open]`).click();
+  await page.locator("[data-admin-return-action='start_review']").click();
+  await expect(page.locator("[data-admin-return-drawer]")).toContainText(/审核中|reviewing/);
+  await page.locator("[data-admin-return-action='approve']").click();
+  await page.locator("[data-admin-return-refund-amount]").first().fill("10.00");
+  await page.locator("[data-admin-return-confirm]").click();
+
+  await expect(page.locator("[data-admin-return-drawer]")).toContainText(/已通过|approved/);
+  await expect(page.locator(`[data-admin-return-row][data-return-id="${returnRequest.id}"]`)).toContainText(/已通过|approved/);
+});
+
 test("toggles a coupon from the admin marketing tab", async ({ page }) => {
   await registerAdminFromUi(page);
   await page.goto("/socks-product-list.html?view=admin");

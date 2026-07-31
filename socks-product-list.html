@@ -4276,6 +4276,7 @@
             <button type="button" data-admin-tab="products">商品</button>
             <button type="button" data-admin-tab="inventory">库存</button>
             <button type="button" data-admin-tab="orders">订单</button>
+            <button type="button" data-admin-tab="returns">售后</button>
             <button type="button" data-admin-tab="marketing">优惠</button>
             <button type="button" data-admin-tab="payments">支付</button>
           </nav>
@@ -4295,6 +4296,18 @@
       <div class="admin-operation-drawer__body" data-admin-order-drawer-body></div>
     </aside>
     <div class="admin-operation-backdrop" data-admin-order-backdrop hidden></div>
+
+    <aside class="admin-operation-drawer" data-admin-return-drawer data-open="false" aria-hidden="true">
+      <div class="admin-operation-drawer__header">
+        <div>
+          <p class="hero__eyebrow">After-sales review</p>
+          <h2 tabindex="-1" data-admin-return-drawer-title>审核售后</h2>
+        </div>
+        <button class="order-button order-button--secondary" type="button" data-admin-return-drawer-close aria-label="关闭售后审核面板">关闭</button>
+      </div>
+      <div class="admin-operation-drawer__body" data-admin-return-drawer-body></div>
+    </aside>
+    <div class="admin-operation-backdrop" data-admin-return-backdrop hidden></div>
 
     <div class="order-view" data-order-view hidden>
       <section class="hero">

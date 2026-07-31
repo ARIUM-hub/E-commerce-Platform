@@ -172,6 +172,11 @@
     const adminOrderDrawerTitle = document.querySelector("[data-admin-order-drawer-title]");
     const adminOrderDrawerClose = document.querySelector("[data-admin-order-drawer-close]");
     const adminOrderBackdrop = document.querySelector("[data-admin-order-backdrop]");
+    const adminReturnDrawer = document.querySelector("[data-admin-return-drawer]");
+    const adminReturnDrawerBody = document.querySelector("[data-admin-return-drawer-body]");
+    const adminReturnDrawerTitle = document.querySelector("[data-admin-return-drawer-title]");
+    const adminReturnDrawerClose = document.querySelector("[data-admin-return-drawer-close]");
+    const adminReturnBackdrop = document.querySelector("[data-admin-return-backdrop]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -250,6 +255,10 @@
       marketing: null,
       orderDetail: null,
       orderDrawerTrigger: null,
+      returnRequests: [],
+      returnDetail: null,
+      returnDrawerTrigger: null,
+      returnPendingAction: "",
       productDraft: null,
       productMode: "list",
       selectedSkuIds: new Set()
@@ -1920,6 +1929,13 @@
         return;
       }
 
+      const returnOpen = event.target.closest("[data-admin-return-open]");
+      if (returnOpen) {
+        const row = returnOpen.closest("[data-admin-return-row]");
+        await openAdminReturnDrawer(row.dataset.returnId, returnOpen);
+        return;
+      }
+
       const orderAction = event.target.closest("[data-admin-order-action]");
       if (orderAction) {
         const row = orderAction.closest("[data-admin-order-row]");
@@ -2013,9 +2029,13 @@
 
     adminOrderDrawerClose.addEventListener("click", closeAdminOrderDrawer);
     adminOrderBackdrop.addEventListener("click", closeAdminOrderDrawer);
+    adminReturnDrawerClose.addEventListener("click", closeAdminReturnDrawer);
+    adminReturnBackdrop.addEventListener("click", closeAdminReturnDrawer);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && adminOrderDrawer.dataset.open === "true") {
         closeAdminOrderDrawer();
+      } else if (event.key === "Escape" && adminReturnDrawer.dataset.open === "true") {
+        closeAdminReturnDrawer();
       }
     });
 
@@ -2068,6 +2088,78 @@
         await refreshAdminOrderDrawer(orderId);
       } catch (actionError) {
         error.textContent = actionError.message;
+        submitButton.disabled = false;
+      }
+    });
+
+    adminReturnDrawer.addEventListener("click", async (event) => {
+      const cancel = event.target.closest("[data-admin-return-form-cancel]");
+      if (cancel) {
+        adminData.returnPendingAction = "";
+        renderAdminReturnDrawer(adminData.returnDetail);
+        return;
+      }
+
+      const actionButton = event.target.closest("[data-admin-return-action]");
+      if (!actionButton) return;
+
+      const action = actionButton.dataset.adminReturnAction;
+      if (["approve", "reject"].includes(action)) {
+        adminData.returnPendingAction = action;
+        renderAdminReturnDrawer(adminData.returnDetail);
+        adminReturnDrawer.querySelector("[data-admin-return-review-form] input:not([type='hidden']), [data-admin-return-review-form] select, [data-admin-return-review-form] textarea")?.focus();
+        return;
+      }
+
+      const error = adminReturnDrawer.querySelector("[data-admin-return-error]");
+      actionButton.disabled = true;
+      try {
+        await postAdminReturnAction(adminData.returnDetail.id, {
+          operationId: createAdminOperationId("return"),
+          action,
+          reason: action === "start_review" ? "review_started" : "item_received",
+          locale: activeLocale
+        });
+        adminData.returnPendingAction = "";
+        await renderAdminReturns();
+        await refreshAdminReturnDrawer(adminData.returnDetail.id);
+      } catch (reviewError) {
+        error.textContent = reviewError.message;
+        actionButton.disabled = false;
+      }
+    });
+
+    adminReturnDrawer.addEventListener("submit", async (event) => {
+      const form = event.target.closest("[data-admin-return-review-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const action = form.dataset.returnAction;
+      const error = form.querySelector("[data-admin-return-error]");
+      const submitButton = form.querySelector("[data-admin-return-confirm]");
+      error.textContent = "";
+      submitButton.disabled = true;
+
+      const refundItems = [...form.querySelectorAll("[data-admin-return-refund-row]")].map((row) => ({
+        skuId: row.dataset.skuId,
+        quantity: Number(row.querySelector("[data-admin-return-refund-quantity]").value),
+        refundAmount: yuanInputToCents(row.querySelector("[data-admin-return-refund-amount]").value)
+      }));
+
+      try {
+        await postAdminReturnAction(form.dataset.returnId, {
+          operationId: form.dataset.operationId,
+          action,
+          reason: form.querySelector("[data-admin-return-reason]").value,
+          note: form.querySelector("[data-admin-return-note]").value.trim(),
+          refundItems,
+          locale: activeLocale
+        });
+        adminData.returnPendingAction = "";
+        await renderAdminReturns();
+        await refreshAdminReturnDrawer(form.dataset.returnId);
+      } catch (reviewError) {
+        error.textContent = reviewError.message;
         submitButton.disabled = false;
       }
     });
@@ -2331,6 +2423,169 @@
       adminOrderBackdrop.hidden = true;
       document.body.classList.remove("is-admin-drawer-open");
       adminData.orderDrawerTrigger?.focus();
+    }
+
+    async function postAdminReturnAction(returnRequestId, body) {
+      const response = await fetch(
+        `/api/admin/returns/${encodeURIComponent(returnRequestId)}/actions/review`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-demo-admin": "true" },
+          body: JSON.stringify(body)
+        }
+      );
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Return review failed");
+      }
+      return response.json();
+    }
+
+    function getAdminReturnActions(status) {
+      if (status === "submitted") return ["start_review"];
+      if (status === "reviewing") return ["approve", "reject"];
+      if (status === "approved") return ["complete"];
+      return [];
+    }
+
+    function getAdminReturnActionLabel(action) {
+      return {
+        start_review: "开始审核",
+        approve: "通过申请",
+        reject: "拒绝申请",
+        complete: "完成售后"
+      }[action] || action;
+    }
+
+    function createAdminReturnReviewForm(returnRequest, action) {
+      if (!action) return "";
+      const requiresRefund = action === "approve"
+        && ["return_refund", "refund_only"].includes(returnRequest.type);
+      return `
+        <form class="admin-operation-form" data-admin-return-review-form
+          data-return-id="${escapeHtml(returnRequest.id)}"
+          data-return-action="${escapeHtml(action)}"
+          data-operation-id="${escapeHtml(createAdminOperationId("return"))}">
+          ${requiresRefund ? `
+            <div class="admin-operation-list">
+              ${(returnRequest.items || []).map((item) => `
+                <div class="admin-refund-row" data-admin-return-refund-row data-sku-id="${escapeHtml(item.skuId)}">
+                  <div>
+                    <strong>${escapeHtml(item.title)} · ${escapeHtml(item.size)}</strong>
+                    <small>申请 ${item.quantity} 件</small>
+                  </div>
+                  <label>数量
+                    <input type="number" min="1" max="${item.quantity}" value="${item.quantity}" data-admin-return-refund-quantity>
+                  </label>
+                  <label>退款金额
+                    <input type="number" min="0.01" step="0.01" value="0" data-admin-return-refund-amount>
+                  </label>
+                </div>
+              `).join("")}
+            </div>
+          ` : ""}
+          ${action === "reject" ? `
+            <label>拒绝原因
+              <select data-admin-return-reason required>
+                <option value="">请选择原因</option>
+                <option value="evidence_insufficient">凭证不足</option>
+                <option value="outside_policy">不符合售后政策</option>
+                <option value="item_condition">商品状态不符合要求</option>
+              </select>
+            </label>
+          ` : `
+            <input type="hidden" value="${action === "approve" ? "evidence_confirmed" : "item_received"}" data-admin-return-reason>
+          `}
+          <label>审核备注
+            <textarea rows="2" data-admin-return-note></textarea>
+          </label>
+          <p class="admin-operation-form__error" data-admin-return-error aria-live="polite"></p>
+          <div class="admin-operation-form__actions">
+            <button class="order-button order-button--secondary" type="button" data-admin-return-form-cancel>返回</button>
+            <button class="order-button order-button--primary" type="submit" data-admin-return-confirm>${escapeHtml(getAdminReturnActionLabel(action))}</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function renderAdminReturnDrawer(returnRequest) {
+      adminReturnDrawerTitle.textContent = `审核售后 ${returnRequest.returnNumber}`;
+      const actions = getAdminReturnActions(returnRequest.status);
+      adminReturnDrawerBody.innerHTML = `
+        <section class="admin-operation-section">
+          <p><strong>申请状态</strong> ${escapeHtml(returnRequest.statusLabel || returnRequest.status)}</p>
+          <p><strong>订单号</strong> ${escapeHtml(returnRequest.orderId)}</p>
+          <p><strong>售后类型</strong> ${escapeHtml(returnRequest.type)}</p>
+          <p><strong>申请原因</strong> ${escapeHtml(returnRequest.reason)}</p>
+          <p><strong>联系方式</strong> ${escapeHtml(returnRequest.contact)}</p>
+        </section>
+        <section class="admin-operation-section">
+          <h3>申请商品</h3>
+          <div class="admin-operation-list">
+            ${(returnRequest.items || []).map((item) => `
+              <p><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.size)} · ×${item.quantity}</p>
+            `).join("")}
+          </div>
+        </section>
+        <section class="admin-operation-section">
+          <h3>退款记录</h3>
+          ${(returnRequest.refunds || []).length ? returnRequest.refunds.map((refund) => `
+            <p>${escapeHtml(refund.status)} · ${formatCurrency(refund.amount || 0)}</p>
+          `).join("") : "<p>暂无退款记录</p>"}
+        </section>
+        ${actions.length ? `
+          <section class="admin-operation-section">
+            <h3>可执行操作</h3>
+            <div class="admin-operation-form__actions">
+              ${actions.map((action) => `
+                <button class="order-button ${action === "reject" ? "order-button--secondary" : "order-button--primary"}"
+                  type="button" data-admin-return-action="${escapeHtml(action)}">
+                  ${escapeHtml(getAdminReturnActionLabel(action))}
+                </button>
+              `).join("")}
+            </div>
+            <p class="admin-operation-form__error" data-admin-return-error aria-live="polite"></p>
+          </section>
+        ` : ""}
+        ${createAdminReturnReviewForm(returnRequest, adminData.returnPendingAction)}
+        <section class="admin-operation-section">
+          <h3>状态记录</h3>
+          <div class="admin-operation-list">
+            ${(returnRequest.timeline || []).map((event) => `
+              <p>${escapeHtml(event.label || event.status)} · ${escapeHtml(event.at)}</p>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    async function refreshAdminReturnDrawer(returnRequestId) {
+      const payload = await fetchAdminJson("/api/admin/returns");
+      adminData.returnRequests = payload.returnRequests || [];
+      const returnRequest = adminData.returnRequests.find((item) => item.id === returnRequestId);
+      if (!returnRequest) throw new Error("售后申请不存在");
+      adminData.returnDetail = returnRequest;
+      renderAdminReturnDrawer(returnRequest);
+    }
+
+    async function openAdminReturnDrawer(returnRequestId, trigger) {
+      adminData.returnDrawerTrigger = trigger;
+      adminData.returnPendingAction = "";
+      adminReturnDrawerBody.innerHTML = "<p>正在加载售后申请...</p>";
+      adminReturnDrawer.dataset.open = "true";
+      adminReturnDrawer.setAttribute("aria-hidden", "false");
+      adminReturnBackdrop.hidden = false;
+      document.body.classList.add("is-admin-drawer-open");
+      await refreshAdminReturnDrawer(returnRequestId);
+      adminReturnDrawerTitle.focus();
+    }
+
+    function closeAdminReturnDrawer() {
+      adminReturnDrawer.dataset.open = "false";
+      adminReturnDrawer.setAttribute("aria-hidden", "true");
+      adminReturnBackdrop.hidden = true;
+      document.body.classList.remove("is-admin-drawer-open");
+      adminData.returnPendingAction = "";
+      adminData.returnDrawerTrigger?.focus();
     }
 
     async function fetchAdminProduct(productId) {
@@ -2716,6 +2971,23 @@
         : `<div class="empty-state" data-admin-orders-empty>No orders yet.</div>`;
     }
 
+    async function renderAdminReturns() {
+      const payload = await fetchAdminJson("/api/admin/returns");
+      adminData.returnRequests = payload.returnRequests || [];
+      adminPanel.innerHTML = adminData.returnRequests.length
+        ? `<div class="admin-table">${adminData.returnRequests.map((returnRequest) => `
+          <article class="admin-row" data-admin-return-row data-return-id="${escapeHtml(returnRequest.id)}">
+            <strong>${escapeHtml(returnRequest.returnNumber)}</strong>
+            <span>${escapeHtml(returnRequest.orderId)}</span>
+            <span>${escapeHtml(returnRequest.type)}</span>
+            <span>${escapeHtml(returnRequest.statusLabel || returnRequest.status)}</span>
+            <span>${escapeHtml(new Date(returnRequest.createdAt).toLocaleString(activeLocale))}</span>
+            <button class="order-button order-button--primary" type="button" data-admin-return-open>审核售后</button>
+          </article>
+        `).join("")}</div>`
+        : `<div class="empty-state" data-admin-returns-empty>暂无售后申请。</div>`;
+    }
+
     async function renderAdminMarketing() {
       const payload = await fetchAdminJson("/api/admin/marketing");
       adminData.marketing = payload;
@@ -2757,6 +3029,7 @@
       if (activeAdminTab === "products") return renderAdminProducts();
       if (activeAdminTab === "inventory") return renderAdminInventory();
       if (activeAdminTab === "orders") return renderAdminOrders();
+      if (activeAdminTab === "returns") return renderAdminReturns();
       if (activeAdminTab === "marketing") return renderAdminMarketing();
       if (activeAdminTab === "payments") return renderAdminPayments();
       return renderAdminDashboard();
