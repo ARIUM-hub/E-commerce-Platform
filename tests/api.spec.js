@@ -820,6 +820,7 @@ test("blocks repeated failed guest ticket lookups during cooldown", () => {
   expect(limiter.canAttempt("session-a")).toBe(true);
   limiter.authorizeTicket("session-a", "ticket-1");
   expect(limiter.canAccessTicket("session-a", "ticket-1")).toBe(true);
+  expect([...limiter.getAuthorizedTicketIds("session-a")]).toEqual(["ticket-1"]);
   expect(limiter.canAccessTicket("session-b", "ticket-1")).toBe(false);
   now += 60001;
   expect(limiter.canAccessTicket("session-a", "ticket-1")).toBe(false);
@@ -912,6 +913,103 @@ test("rejects stale support versions and hides internal support notes from custo
   expect(findSupportTicketById(db, ticket.id, { audience: "admin" }).messages.map((message) => message.body))
     .toContain("仅供客服查看");
   db.close();
+});
+
+test("lets customers track and reply to their support tickets", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "support-owner@example.com" });
+  const created = await request.post("/api/support/contact", {
+    headers: { cookie },
+    data: {
+      name: "Owner",
+      contact: "support-owner@example.com",
+      topic: "orders",
+      message: "订单需要帮助",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+  const reply = await request.post(`/api/me/support/tickets/${ticket.id}/messages`, {
+    headers: { cookie },
+    data: { message: "补充订单截图信息。" }
+  });
+  expect(reply.ok()).toBe(true);
+  const detail = await request.get(`/api/me/support/tickets/${ticket.id}`, { headers: { cookie } });
+  expect((await detail.json()).ticket.messages.at(-1).body).toBe("补充订单截图信息。");
+});
+
+test("hides internal notes and returns the same not-found error to non-owners", async ({ request }) => {
+  const ownerCookie = await registerApiUser(request, { email: "ticket-owner@example.com" });
+  const outsiderCookie = await registerApiUser(request, { email: "ticket-outsider@example.com" });
+  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const created = await request.post("/api/support/contact", {
+    headers: { cookie: ownerCookie },
+    data: {
+      name: "Owner",
+      contact: "ticket-owner@example.com",
+      topic: "orders",
+      message: "需要售后",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+  const note = await request.post(`/api/admin/support/tickets/${ticket.id}/actions/message`, {
+    headers: { cookie: adminCookie },
+    data: {
+      operationId: "op-internal-note-api",
+      visibility: "internal",
+      message: "客户不可见的处理备注"
+    }
+  });
+  expect(note.ok()).toBe(true);
+  const ownerDetail = await request.get(`/api/me/support/tickets/${ticket.id}`, { headers: { cookie: ownerCookie } });
+  expect((await ownerDetail.json()).ticket.messages.some((item) => item.body.includes("客户不可见"))).toBe(false);
+  const outsiderDetail = await request.get(`/api/me/support/tickets/${ticket.id}`, { headers: { cookie: outsiderCookie } });
+  expect(outsiderDetail.status()).toBe(404);
+  expect((await outsiderDetail.json()).error.code).toBe("SUPPORT_TICKET_NOT_FOUND");
+});
+
+test("authorizes successful guest lookups and rate limits uniform failures", async ({ request }) => {
+  const created = await request.post("/api/support/contact", {
+    data: {
+      name: "Guest",
+      contact: "guest-lookup@example.com",
+      topic: "product",
+      message: "匿名咨询",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+  const lookup = await request.post("/api/support/tickets/lookup", {
+    data: { ticketNumber: ticket.ticketNumber, contact: "GUEST-LOOKUP@example.com" }
+  });
+  expect(lookup.ok()).toBe(true);
+  const reply = await request.post(`/api/support/tickets/${ticket.ticketNumber}/messages`, {
+    data: { message: "已授权会话的补充内容" }
+  });
+  expect(reply.ok()).toBe(true);
+
+  for (let index = 0; index < 5; index += 1) {
+    const failure = await request.post("/api/support/tickets/lookup", {
+      data: {
+        ticketNumber: index % 2 ? "SUP-NOT-FOUND" : ticket.ticketNumber,
+        contact: "wrong@example.com"
+      }
+    });
+    expect(failure.status()).toBe(404);
+    expect((await failure.json()).error.code).toBe("SUPPORT_TICKET_NOT_FOUND");
+  }
+  const blocked = await request.post("/api/support/tickets/lookup", {
+    data: { ticketNumber: ticket.ticketNumber, contact: "wrong@example.com" }
+  });
+  expect(blocked.status()).toBe(429);
+  expect((await blocked.json()).error.code).toBe("SUPPORT_LOOKUP_RATE_LIMITED");
+});
+
+test("rejects ordinary users from admin support routes", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "support-buyer@example.com" });
+  const response = await request.get("/api/admin/support/tickets", { headers: { cookie } });
+  expect(response.status()).toBe(403);
+  expect((await response.json()).error.code).toBe("ADMIN_FORBIDDEN");
 });
 
 test("creates and lists product reviews for a product", async ({ request }) => {

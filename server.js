@@ -28,6 +28,8 @@ const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
 const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
 const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
+const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
+const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createProductReview,
@@ -80,9 +82,20 @@ const {
   removeRecentView
 } = require("./lib/repositories/marketing");
 const {
+  addCustomerTicketMessage,
   createSupportTicket,
-  getTrustCenterContent
+  findSupportTicketById,
+  findSupportTicketByNumber,
+  findSupportTicketForGuest,
+  getTrustCenterContent,
+  listAdminSupportTickets,
+  listSupportTicketsForUser
 } = require("./lib/repositories/support");
+const {
+  addAdminSupportMessage,
+  updateSupportTicket
+} = require("./lib/repositories/admin-support-actions");
+const { createSupportLookupLimiter } = require("./lib/support-lookup-limiter");
 const {
   findAdminOrder,
   getAdminSummary,
@@ -1298,6 +1311,7 @@ function parseAdminPaymentMethodPath(pathname) {
 }
 
 const router = createRouter();
+const supportLookupLimiter = createSupportLookupLimiter();
 registerHealthRoutes(router);
 registerProductRoutes(router, {
   createProductQuestion,
@@ -1329,6 +1343,30 @@ registerAdminReviewRoutes(router, {
   requireAdmin,
   upsertMerchantReply,
   withdrawMerchantReply,
+  withDatabase
+});
+registerSupportTicketRoutes(router, {
+  addCustomerTicketMessage,
+  createSupportTicket,
+  findSupportTicketById,
+  findSupportTicketByNumber,
+  findSupportTicketForGuest,
+  handleRequestBodyError,
+  listSupportTicketsForUser,
+  readActiveCart,
+  readRequestBody,
+  requireUser,
+  supportLookupLimiter,
+  withDatabase
+});
+registerAdminSupportRoutes(router, {
+  addAdminSupportMessage,
+  findSupportTicketById,
+  handleRequestBodyError,
+  listAdminSupportTickets,
+  readRequestBody,
+  requireAdmin,
+  updateSupportTicket,
   withDatabase
 });
 
@@ -1395,32 +1433,6 @@ const server = http.createServer(async (request, response) => {
       postalCode: requestUrl.searchParams.get("postalCode") || ""
     }, locale);
     sendJson(response, 200, { ok: true, methods });
-    return;
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/support/contact") {
-    try {
-      const body = await readRequestBody(request);
-      const { session, user } = await getSessionContext(request);
-      const result = withDatabase((db) => createSupportTicket(db, body, {
-        sessionId: session?.id || null,
-        userId: user?.id || null
-      }));
-
-      if (result.validationError) {
-        sendError(response, 400, result.validationError.code, result.validationError.message);
-        return;
-      }
-
-      sendJson(response, 201, { ticket: result.ticket });
-    } catch (error) {
-      if (handleRequestBodyError(error, response)) {
-        return;
-      }
-
-      console.error(error);
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-    }
     return;
   }
 
