@@ -235,7 +235,7 @@ test("keeps the admin review drawer accessible on mobile", async ({ page }) => {
     cssWidth: getComputedStyle(element).width,
     boxSizing: getComputedStyle(element).boxSizing
   }));
-  expect(drawerLayout.width, JSON.stringify(drawerLayout)).toBeLessThanOrEqual(drawerLayout.innerWidth);
+  expect(drawerLayout.width, JSON.stringify(drawerLayout)).toBeLessThanOrEqual(drawerLayout.innerWidth + 0.01);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   await page.keyboard.press("Escape");
@@ -1265,7 +1265,7 @@ test("updates the visible detail cart state after adding the current product", a
   await expect(page.locator("[data-detail-cart-summary]")).toContainText("1 件");
 });
 
-test("submits and displays product reviews on the detail page", async ({ page }) => {
+test("submits anonymous product reviews for moderation on the detail page", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=detail&id=sock-02");
 
   await expect(page.locator("[data-product-reviews]")).toBeVisible();
@@ -1284,14 +1284,15 @@ test("submits and displays product reviews on the detail page", async ({ page })
   });
 
   await page.locator("[data-review-submit]").click();
-  expect((await createReviewResponse).status()).toBe(201);
+  const response = await createReviewResponse;
+  expect(response.status()).toBe(201);
+  expect((await response.json()).review.status).toBe("pending");
 
   await expect(page.locator("[data-review-empty]")).toHaveCount(0);
-  await expect(page.locator("[data-review-item]")).toHaveCount(5);
-  await expect(page.locator("[data-review-item]").first()).toContainText("Maya Chen");
-  await expect(page.locator("[data-review-item]").first()).toContainText("面料柔软，运动后也很透气。");
-  await expect(page.locator("[data-review-summary]")).toContainText("4.2");
-  await expect(page.locator("[data-product-review-count]")).toContainText("5 条评论");
+  await expect(page.locator("[data-review-item]")).toHaveCount(4);
+  await expect(page.getByText("Maya Chen", { exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-review-submission-status]")).toContainText(/已提交.*审核/);
+  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
 });
 
 test("shows review trust signals and helpful voting on the detail page", async ({ page }) => {

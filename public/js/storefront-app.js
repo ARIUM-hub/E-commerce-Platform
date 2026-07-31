@@ -492,6 +492,8 @@
           reviewSubmit: "提交评论",
           reviewSubmitting: "提交中...",
           reviewError: "评论提交失败，请检查昵称、评分和内容。",
+          reviewPending: "评论已提交，等待审核。",
+          reviewPublished: "评论已发布。",
           verifiedPurchase: "Verified Purchase",
           helpful: ({ count }) => `有帮助 ${count}`,
           helpfulSubmitting: "记录中...",
@@ -859,6 +861,8 @@
           reviewSubmit: "Submit review",
           reviewSubmitting: "Submitting...",
           reviewError: "Review submission failed. Check name, rating, and content.",
+          reviewPending: "Review submitted and awaiting moderation.",
+          reviewPublished: "Review published.",
           verifiedPurchase: "Verified Purchase",
           helpful: ({ count }) => `Helpful ${count}`,
           helpfulSubmitting: "Saving...",
@@ -5180,6 +5184,11 @@
       const reviews = Array.isArray(payload.reviews) ? payload.reviews : [];
       const summary = payload.summary || { count: 0, averageRating: 0 };
       const averageRating = Number(summary.averageRating || 0).toFixed(1);
+      const submissionStatus = payload.review?.status === "pending"
+        ? t("detail.reviewPending")
+        : payload.review?.status === "published"
+          ? t("detail.reviewPublished")
+          : "";
 
       return `
         <section class="detail-section detail-reviews" data-product-reviews data-product-id="${escapeHtml(productId)}">
@@ -5216,6 +5225,7 @@
               ${t("detail.reviewBody")}
               <textarea name="body" maxlength="500" rows="4" data-review-body></textarea>
             </label>
+            <p class="detail-review-form__status" data-review-submission-status role="status">${escapeHtml(submissionStatus)}</p>
             <p class="detail-review-form__error" data-review-error role="alert"></p>
             <button class="detail-review-form__submit" type="submit" data-review-submit>${t("detail.reviewSubmit")}</button>
           </form>
