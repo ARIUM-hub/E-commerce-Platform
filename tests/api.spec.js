@@ -410,6 +410,43 @@ test("restocks SKU inventory once for the same admin operation", async () => {
   db.close();
 });
 
+test("rolls back writes when an admin action returns a validation error", async () => {
+  const { executeIdempotentAction } = require("../lib/repositories/admin-order-actions");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.exec("CREATE TABLE admin_action_transaction_probe (value TEXT NOT NULL)");
+
+  const result = executeIdempotentAction(db, {
+    admin: { id: null },
+    operationId: "op-validation-rollback",
+    action: "probe",
+    resourceType: "order",
+    resourceId: "order-probe",
+    reason: "validation_probe",
+    beforeStatus: "paid",
+    requestPayload: { value: "must-not-persist" },
+    run() {
+      db.prepare("INSERT INTO admin_action_transaction_probe (value) VALUES (?)")
+        .run("must-not-persist");
+      return {
+        validationError: {
+          statusCode: 409,
+          code: "ADMIN_PROBE_REJECTED",
+          message: "Probe action was rejected."
+        }
+      };
+    }
+  });
+
+  expect(result.validationError.code).toBe("ADMIN_PROBE_REJECTED");
+  expect(db.prepare("SELECT COUNT(*) AS count FROM admin_action_transaction_probe").get().count).toBe(0);
+  expect(db.prepare("SELECT COUNT(*) AS count FROM admin_action_events WHERE operation_id = ?")
+    .get("op-validation-rollback").count).toBe(0);
+  db.close();
+});
+
 test("calculates remaining refundable quantity and cents per order item", async () => {
   const { getRefundableOrderSummary } = require("../lib/repositories/refunds");
   const db = createDatabase(testDbFile);
