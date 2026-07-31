@@ -316,6 +316,74 @@ test("advances fulfillment and refund status from the admin orders tab", async (
   await expect(page.locator(`[data-admin-order-row][data-order-id="${orderId}"]`)).toContainText(/processing|退款处理中/);
 });
 
+test("ships an order from the admin order operation drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Admin Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "processing", locale: "zh-CN" }
+  });
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`).click();
+  await expect(page.locator("[data-admin-order-drawer]")).toHaveAttribute("data-open", "true");
+  await page.locator("[data-admin-carrier]").selectOption("ups");
+  await page.locator("[data-admin-tracking-number]").fill("1Z999AA10123456784");
+  await page.locator("[data-admin-ship-submit]").click();
+
+  await expect(page.locator("[data-admin-order-drawer]")).toContainText("1Z999AA10123456784");
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${order.id}"]`)).toContainText(/已发货|shipped/);
+});
+
+test("creates a partial refund from the admin order operation drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Admin Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`).click();
+  await page.locator("[data-admin-refund-quantity]").first().fill("1");
+  await page.locator("[data-admin-refund-amount]").first().fill("10.00");
+  await page.locator("[data-admin-refund-reason]").selectOption("quality_issue");
+  await page.locator("[data-admin-refund-submit]").click();
+
+  await expect(page.locator("[data-admin-order-refunds]")).toContainText(/10\.00|¥10/);
+});
+
 test("toggles a coupon from the admin marketing tab", async ({ page }) => {
   await registerAdminFromUi(page);
   await page.goto("/socks-product-list.html?view=admin");

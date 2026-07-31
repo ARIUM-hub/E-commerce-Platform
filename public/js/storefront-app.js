@@ -167,6 +167,11 @@
     const adminConsole = document.querySelector("[data-admin-console]");
     const adminTabs = document.querySelector("[data-admin-tabs]");
     const adminPanel = document.querySelector("[data-admin-panel]");
+    const adminOrderDrawer = document.querySelector("[data-admin-order-drawer]");
+    const adminOrderDrawerBody = document.querySelector("[data-admin-order-drawer-body]");
+    const adminOrderDrawerTitle = document.querySelector("[data-admin-order-drawer-title]");
+    const adminOrderDrawerClose = document.querySelector("[data-admin-order-drawer-close]");
+    const adminOrderBackdrop = document.querySelector("[data-admin-order-backdrop]");
     const cartToggleButton = document.querySelector("[data-cart-toggle]");
     const cartLabel = document.querySelector("[data-cart-label]");
     const cartCount = document.querySelector("[data-cart-count]");
@@ -243,6 +248,8 @@
       inventory: [],
       orders: [],
       marketing: null,
+      orderDetail: null,
+      orderDrawerTrigger: null,
       productDraft: null,
       productMode: "list",
       selectedSkuIds: new Set()
@@ -1906,6 +1913,13 @@
         return;
       }
 
+      const orderOpen = event.target.closest("[data-admin-order-open]");
+      if (orderOpen) {
+        const row = orderOpen.closest("[data-admin-order-row]");
+        await openAdminOrderDrawer(row.dataset.orderId, orderOpen);
+        return;
+      }
+
       const orderAction = event.target.closest("[data-admin-order-action]");
       if (orderAction) {
         const row = orderAction.closest("[data-admin-order-row]");
@@ -1997,6 +2011,67 @@
       }
     });
 
+    adminOrderDrawerClose.addEventListener("click", closeAdminOrderDrawer);
+    adminOrderBackdrop.addEventListener("click", closeAdminOrderDrawer);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && adminOrderDrawer.dataset.open === "true") {
+        closeAdminOrderDrawer();
+      }
+    });
+
+    adminOrderDrawer.addEventListener("submit", async (event) => {
+      const form = event.target.closest("[data-admin-order-action-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const action = form.dataset.adminOrderActionForm;
+      const orderId = form.dataset.orderId;
+      const error = form.querySelector("[data-admin-action-error]");
+      const submitButton = form.querySelector("button[type='submit']");
+      error.textContent = "";
+      submitButton.disabled = true;
+
+      try {
+        let body;
+        if (action === "ship") {
+          body = {
+            operationId: form.dataset.operationId,
+            carrier: form.querySelector("[data-admin-carrier]").value,
+            trackingNumber: form.querySelector("[data-admin-tracking-number]").value.trim(),
+            note: form.querySelector("[data-admin-action-note]").value.trim(),
+            locale: activeLocale
+          };
+        } else if (action === "cancel") {
+          body = {
+            operationId: form.dataset.operationId,
+            reason: form.querySelector("[data-admin-cancel-reason]").value,
+            note: form.querySelector("[data-admin-action-note]").value.trim(),
+            locale: activeLocale
+          };
+        } else {
+          const items = [...form.querySelectorAll("[data-admin-refund-row]")].map((row) => ({
+            skuId: row.dataset.skuId,
+            quantity: Number(row.querySelector("[data-admin-refund-quantity]").value),
+            refundAmount: yuanInputToCents(row.querySelector("[data-admin-refund-amount]").value)
+          })).filter((item) => item.quantity > 0 && item.refundAmount > 0);
+          body = {
+            operationId: form.dataset.operationId,
+            reason: form.querySelector("[data-admin-refund-reason]").value,
+            note: form.querySelector("[data-admin-action-note]").value.trim(),
+            items,
+            locale: activeLocale
+          };
+        }
+
+        await postAdminOrderAction(orderId, action, body);
+        await renderAdminOrders();
+        await refreshAdminOrderDrawer(orderId);
+      } catch (actionError) {
+        error.textContent = actionError.message;
+        submitButton.disabled = false;
+      }
+    });
+
     function renderSupportView() {
       if (getCurrentView() !== SUPPORT_VIEW_KEY || trustCenterState.sections.length === 0) {
         return;
@@ -2058,6 +2133,204 @@
         throw await createCartRequestError(response, "Admin update failed");
       }
       return response.json();
+    }
+
+    function createAdminOperationId(prefix) {
+      const suffix = globalThis.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      return `${prefix}-${suffix}`;
+    }
+
+    function yuanInputToCents(value) {
+      return Math.round(Number(value || 0) * 100);
+    }
+
+    async function postAdminOrderAction(orderId, action, body) {
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(orderId)}/actions/${encodeURIComponent(action)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-demo-admin": "true" },
+          body: JSON.stringify(body)
+        }
+      );
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Order action failed");
+      }
+      return response.json();
+    }
+
+    function createAdminShipmentForm(order) {
+      if (order.status !== "processing") return "";
+      return `
+        <section class="admin-operation-section">
+          <div class="admin-operation-section__header">
+            <div>
+              <p class="hero__eyebrow">Fulfillment</p>
+              <h3>确认发货</h3>
+            </div>
+          </div>
+          <form class="admin-operation-form" data-admin-order-action-form="ship"
+            data-order-id="${escapeHtml(order.id)}" data-operation-id="${escapeHtml(createAdminOperationId("ship"))}">
+            <label>承运商
+              <select data-admin-carrier required>
+                <option value="">请选择承运商</option>
+                <option value="ups">UPS</option>
+                <option value="usps">USPS</option>
+                <option value="fedex">FedEx</option>
+                <option value="dhl">DHL</option>
+              </select>
+            </label>
+            <label>运单号
+              <input data-admin-tracking-number autocomplete="off" required>
+            </label>
+            <label>操作备注
+              <textarea rows="2" data-admin-action-note></textarea>
+            </label>
+            <p class="admin-operation-form__error" data-admin-action-error aria-live="polite"></p>
+            <button class="order-button order-button--primary" type="submit" data-admin-ship-submit>确认发货</button>
+          </form>
+        </section>
+      `;
+    }
+
+    function createAdminCancelForm(order) {
+      if (!["pending_payment", "paid", "processing"].includes(order.status)) return "";
+      const createsRefund = order.status !== "pending_payment";
+      return `
+        <section class="admin-operation-section">
+          <p class="hero__eyebrow">Cancellation</p>
+          <h3>取消订单</h3>
+          <p>${createsRefund ? "取消后将创建整单退款并回补库存。" : "取消后将回补库存，不创建退款。"}</p>
+          <form class="admin-operation-form" data-admin-order-action-form="cancel"
+            data-order-id="${escapeHtml(order.id)}" data-operation-id="${escapeHtml(createAdminOperationId("cancel"))}">
+            <label>取消原因
+              <select data-admin-cancel-reason required>
+                <option value="">请选择原因</option>
+                <option value="customer_request">客户要求取消</option>
+                <option value="inventory_issue">库存异常</option>
+                <option value="payment_risk">支付风险</option>
+              </select>
+            </label>
+            <label>操作备注
+              <textarea rows="2" data-admin-action-note></textarea>
+            </label>
+            <label><input type="checkbox" required data-admin-cancel-confirm> 我已确认取消影响</label>
+            <p class="admin-operation-form__error" data-admin-action-error aria-live="polite"></p>
+            <button class="order-button order-button--secondary" type="submit" data-admin-cancel-submit>确认取消</button>
+          </form>
+        </section>
+      `;
+    }
+
+    function createAdminRefundForm(detail) {
+      const order = detail.order;
+      const refundableItems = (detail.refundable?.items || []).filter((item) => {
+        return item.remainingQuantity > 0 && item.refundableAmountCents > 0;
+      });
+      if (!["paid", "processing", "shipped", "delivered"].includes(order.status) || !refundableItems.length) {
+        return "";
+      }
+
+      return `
+        <section class="admin-operation-section">
+          <p class="hero__eyebrow">Refund</p>
+          <h3>部分退款</h3>
+          <form class="admin-operation-form" data-admin-order-action-form="refund"
+            data-order-id="${escapeHtml(order.id)}" data-operation-id="${escapeHtml(createAdminOperationId("refund"))}">
+            <div class="admin-operation-list">
+              ${refundableItems.map((item) => `
+                <div class="admin-refund-row" data-admin-refund-row data-sku-id="${escapeHtml(item.skuId)}">
+                  <div>
+                    <strong>${escapeHtml(item.title)} · ${escapeHtml(item.size)}</strong>
+                    <small>剩余 ${item.remainingQuantity} 件，可退 ${formatCurrency(item.refundableAmountCents / 100)}</small>
+                  </div>
+                  <label>数量
+                    <input type="number" min="0" max="${item.remainingQuantity}" value="0" data-admin-refund-quantity>
+                  </label>
+                  <label>金额
+                    <input type="number" min="0" max="${item.refundableAmountCents / 100}" step="0.01" value="0" data-admin-refund-amount>
+                  </label>
+                </div>
+              `).join("")}
+            </div>
+            <label>退款原因
+              <select data-admin-refund-reason required>
+                <option value="">请选择原因</option>
+                <option value="quality_issue">质量问题</option>
+                <option value="wrong_item">错发漏发</option>
+                <option value="customer_service">客服补偿</option>
+              </select>
+            </label>
+            <label>操作备注
+              <textarea rows="2" data-admin-action-note></textarea>
+            </label>
+            <p class="admin-operation-form__error" data-admin-action-error aria-live="polite"></p>
+            <button class="order-button order-button--primary" type="submit" data-admin-refund-submit>创建退款</button>
+          </form>
+        </section>
+      `;
+    }
+
+    function renderAdminOrderDrawer(detail) {
+      const order = detail.order;
+      adminOrderDrawerTitle.textContent = `处理订单 ${order.id}`;
+      adminOrderDrawerBody.innerHTML = `
+        <section class="admin-operation-section">
+          <p><strong>订单状态</strong> ${escapeHtml(order.status)}</p>
+          <p><strong>客户</strong> ${escapeHtml(order.customer?.name || "-")} · ${escapeHtml(order.customer?.contact || "-")}</p>
+          <p><strong>实付金额</strong> ${formatCurrency(order.totals?.total || 0)}</p>
+          <p><strong>物流</strong> ${escapeHtml(order.fulfillment?.carrier || "待处理")} · ${escapeHtml(order.fulfillment?.trackingNumber || "暂无运单号")}</p>
+        </section>
+        <section class="admin-operation-section">
+          <h3>订单商品</h3>
+          <div class="admin-operation-list">
+            ${(order.items || []).map((item) => `
+              <p><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.size)} · ×${item.quantity}</p>
+            `).join("")}
+          </div>
+        </section>
+        <section class="admin-operation-section" data-admin-order-refunds>
+          <h3>退款记录</h3>
+          ${(detail.refunds || []).length ? (detail.refunds || []).map((refund) => `
+            <p>${escapeHtml(refund.status)} · ${formatCurrency(refund.amount || 0)} · ${escapeHtml(refund.reason)}</p>
+          `).join("") : "<p>暂无退款记录</p>"}
+        </section>
+        ${createAdminShipmentForm(order)}
+        ${createAdminCancelForm(order)}
+        ${createAdminRefundForm(detail)}
+        <section class="admin-operation-section">
+          <h3>操作记录</h3>
+          ${(detail.adminActions || []).length ? (detail.adminActions || []).map((action) => `
+            <p>${escapeHtml(action.action)} · ${escapeHtml(action.beforeStatus)} → ${escapeHtml(action.afterStatus)}</p>
+          `).join("") : "<p>暂无后台操作</p>"}
+        </section>
+      `;
+    }
+
+    async function refreshAdminOrderDrawer(orderId) {
+      const detail = await fetchAdminJson(`/api/admin/orders/${encodeURIComponent(orderId)}`);
+      adminData.orderDetail = detail;
+      renderAdminOrderDrawer(detail);
+    }
+
+    async function openAdminOrderDrawer(orderId, trigger) {
+      adminData.orderDrawerTrigger = trigger;
+      adminOrderDrawerBody.innerHTML = "<p>正在加载订单...</p>";
+      adminOrderDrawer.dataset.open = "true";
+      adminOrderDrawer.setAttribute("aria-hidden", "false");
+      adminOrderBackdrop.hidden = false;
+      document.body.classList.add("is-admin-drawer-open");
+      await refreshAdminOrderDrawer(orderId);
+      adminOrderDrawerTitle.focus();
+    }
+
+    function closeAdminOrderDrawer() {
+      adminOrderDrawer.dataset.open = "false";
+      adminOrderDrawer.setAttribute("aria-hidden", "true");
+      adminOrderBackdrop.hidden = true;
+      document.body.classList.remove("is-admin-drawer-open");
+      adminData.orderDrawerTrigger?.focus();
     }
 
     async function fetchAdminProduct(productId) {
@@ -2426,6 +2699,7 @@
               <span>${escapeHtml(order.refundStatus || "none")}</span>
               <span>${formatCurrency(order.total)}</span>
               <span>
+                <button class="order-button order-button--primary" type="button" data-admin-order-open>处理订单</button>
                 ${getAdminOrderActions(order.status).map((status) => `
                   <button class="order-button order-button--secondary" type="button" data-admin-order-action="${status}">${escapeHtml(status)}</button>
                 `).join("")}
