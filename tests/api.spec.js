@@ -1657,6 +1657,51 @@ test("rejects non-admin users from admin summary", async ({ request }) => {
   expect(payload.error.code).toBe("ADMIN_FORBIDDEN");
 });
 
+test("rejects non-admin users from admin review management", async ({ request }) => {
+  const cookie = await registerApiUser(request, { email: "review-buyer@example.com" });
+  const response = await request.get("/api/admin/reviews", { headers: { cookie } });
+  expect(response.status()).toBe(403);
+  expect((await response.json()).error.code).toBe("ADMIN_FORBIDDEN");
+});
+
+test("moderates and replies to reviews through admin APIs", async ({ request }) => {
+  const created = await request.post("/api/products/sock-01/reviews", {
+    data: { author: "API Guest", rating: 3, body: "等待后台审核的接口评论。", locale: "zh-CN" }
+  });
+  const review = (await created.json()).review;
+  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const list = await request.get("/api/admin/reviews?status=pending&q=接口评论", { headers: { cookie } });
+  expect(list.ok()).toBe(true);
+  expect((await list.json()).reviews.map((item) => item.id)).toContain(review.id);
+
+  const moderated = await request.post("/api/admin/reviews/actions/moderate", {
+    headers: { cookie },
+    data: {
+      operationId: "op-review-publish-api",
+      action: "publish",
+      reviewIds: [review.id],
+      reason: "content_verified",
+      note: "接口审核通过"
+    }
+  });
+  expect(moderated.ok()).toBe(true);
+  expect((await moderated.json()).reviews[0].status).toBe("published");
+
+  const replyBody = { operationId: "op-review-reply-api", replyBody: "感谢您的真实反馈。" };
+  const reply = await request.post(`/api/admin/reviews/${review.id}/actions/reply`, {
+    headers: { cookie }, data: replyBody
+  });
+  expect(reply.ok()).toBe(true);
+  expect((await reply.json()).review.reply.body).toBe(replyBody.replyBody);
+
+  const mismatch = await request.post(`/api/admin/reviews/${review.id}/actions/reply`, {
+    headers: { cookie },
+    data: { operationId: replyBody.operationId, replyBody: "不同的重放内容" }
+  });
+  expect(mismatch.status()).toBe(409);
+  expect((await mismatch.json()).error.code).toBe("ADMIN_OPERATION_DUPLICATE_MISMATCH");
+});
+
 test("returns admin dashboard summary for demo admins", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "admin@socks.test" });
   await request.post("/api/cart/items", {

@@ -27,13 +27,21 @@ const { createRouter } = require("./lib/http/router");
 const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
 const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
+const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createProductReview,
+  findAdminReviewById,
+  listAdminProductReviews,
   listProductReviews,
   markProductReviewHelpful,
   summarizeReviews
 } = require("./lib/repositories/product-reviews");
+const {
+  moderateReviewBatch,
+  upsertMerchantReply,
+  withdrawMerchantReply
+} = require("./lib/repositories/admin-review-actions");
 const {
   createProductQuestion,
   listProductQuestions,
@@ -1311,6 +1319,17 @@ registerProductRoutes(router, {
 });
 registerMarketingRoutes(router, {
   getMarketingPayload
+});
+registerAdminReviewRoutes(router, {
+  findAdminReviewById,
+  handleRequestBodyError,
+  listAdminProductReviews,
+  moderateReviewBatch,
+  readRequestBody,
+  requireAdmin,
+  upsertMerchantReply,
+  withdrawMerchantReply,
+  withDatabase
 });
 
 const server = http.createServer(async (request, response) => {
