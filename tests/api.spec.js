@@ -471,6 +471,142 @@ test("rolls back writes when an admin action returns a validation error", async 
   db.close();
 });
 
+test("moderates review batches atomically and replays the same operation", () => {
+  const { moderateReviewBatch } = require("../lib/repositories/admin-review-actions");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare("UPDATE product_reviews SET status = 'pending' WHERE id IN (?, ?)")
+    .run("seed-review-sock-02-01", "seed-review-sock-02-02");
+  const body = {
+    operationId: "op-review-batch-001",
+    action: "publish",
+    reviewIds: ["seed-review-sock-02-01", "seed-review-sock-02-02"],
+    reason: "content_verified",
+    note: "人工审核通过"
+  };
+  const first = moderateReviewBatch(db, { admin: { id: null }, body });
+  const replay = moderateReviewBatch(db, { admin: { id: null }, body });
+  const event = db.prepare(`
+    SELECT before_status AS beforeStatus, after_status AS afterStatus
+    FROM admin_action_events WHERE operation_id = ?
+  `).get(body.operationId);
+  expect(first.reviews.every((review) => review.status === "published")).toBe(true);
+  expect(replay.replayed).toBe(true);
+  expect(event).toEqual({ beforeStatus: "pending", afterStatus: "published" });
+  expect(db.prepare("SELECT COUNT(*) AS count FROM admin_action_events WHERE operation_id = ?").get(body.operationId).count).toBe(1);
+  db.close();
+});
+
+test("rolls back an invalid mixed review moderation batch", () => {
+  const { moderateReviewBatch } = require("../lib/repositories/admin-review-actions");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare("UPDATE product_reviews SET status = 'pending' WHERE id = ?").run("seed-review-sock-02-01");
+  db.prepare("UPDATE product_reviews SET status = 'rejected' WHERE id = ?").run("seed-review-sock-02-02");
+  const result = moderateReviewBatch(db, {
+    admin: { id: null },
+    body: {
+      operationId: "op-review-batch-conflict",
+      action: "publish",
+      reviewIds: ["seed-review-sock-02-01", "seed-review-sock-02-02"],
+      reason: "content_verified",
+      note: "不应产生部分更新"
+    }
+  });
+  expect(result.validationError).toMatchObject({ statusCode: 409, code: "ADMIN_REVIEW_BATCH_CONFLICT" });
+  expect(db.prepare("SELECT status FROM product_reviews WHERE id = ?").get("seed-review-sock-02-01"))
+    .toEqual({ status: "pending" });
+  expect(db.prepare("SELECT COUNT(*) AS count FROM admin_action_events WHERE operation_id = ?").get("op-review-batch-conflict").count)
+    .toBe(0);
+  db.close();
+});
+
+for (const { action, from, to } of [
+  { action: "reject", from: "pending", to: "rejected" },
+  { action: "hide", from: "published", to: "hidden" },
+  { action: "restore", from: "hidden", to: "published" }
+]) {
+  test(`moves reviews through the ${action} moderation transition`, () => {
+    const { moderateReviewBatch } = require("../lib/repositories/admin-review-actions");
+    const db = createDatabase(testDbFile);
+    initializeDatabase(db, {
+      productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+    });
+    const reviewId = "seed-review-sock-02-01";
+    db.prepare("UPDATE product_reviews SET status = ? WHERE id = ?").run(from, reviewId);
+    const result = moderateReviewBatch(db, {
+      admin: { id: null },
+      body: {
+        operationId: `op-review-${action}-transition`,
+        action,
+        reviewIds: [reviewId],
+        reason: `test_${action}`,
+        note: "状态流测试"
+      }
+    });
+    expect(result.reviews[0].status).toBe(to);
+    db.close();
+  });
+}
+
+test("upserts and withdraws merchant replies with idempotent audit events", () => {
+  const { findAdminReviewById, listProductReviews } = require("../lib/repositories/product-reviews");
+  const { upsertMerchantReply, withdrawMerchantReply } = require("../lib/repositories/admin-review-actions");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const review = findAdminReviewById(db, "seed-review-sock-02-01");
+  const body = { operationId: "op-review-reply-001", replyBody: "感谢反馈，我们会继续优化。" };
+  const created = upsertMerchantReply(db, { admin: { id: null }, review, body });
+  const replay = upsertMerchantReply(db, { admin: { id: null }, review, body });
+  expect(created.review.reply.body).toBe(body.replyBody);
+  expect(replay.replayed).toBe(true);
+  expect(listProductReviews(db, "sock-02").find((item) => item.id === review.id).reply.body)
+    .toBe(body.replyBody);
+
+  const withdrawn = withdrawMerchantReply(db, {
+    admin: { id: null },
+    review: created.review,
+    body: { operationId: "op-review-reply-withdraw-001", reason: "reply_retracted" }
+  });
+  expect(withdrawn.review.reply.withdrawnAt).toEqual(expect.any(String));
+  expect(listProductReviews(db, "sock-02").find((item) => item.id === review.id).reply).toBeNull();
+  expect(db.prepare("SELECT COUNT(*) AS count FROM product_review_replies WHERE review_id = ?").get(review.id).count).toBe(1);
+  db.close();
+});
+
+test("rejects merchant replies for hidden reviews and empty bodies", () => {
+  const { findAdminReviewById } = require("../lib/repositories/product-reviews");
+  const { upsertMerchantReply } = require("../lib/repositories/admin-review-actions");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const reviewId = "seed-review-sock-02-01";
+  db.prepare("UPDATE product_reviews SET status = 'hidden' WHERE id = ?").run(reviewId);
+  const hidden = upsertMerchantReply(db, {
+    admin: { id: null },
+    review: findAdminReviewById(db, reviewId),
+    body: { operationId: "op-hidden-review-reply", replyBody: "不应写入" }
+  });
+  expect(hidden.validationError).toMatchObject({ statusCode: 409, code: "ADMIN_REVIEW_REPLY_NOT_ALLOWED" });
+
+  db.prepare("UPDATE product_reviews SET status = 'published' WHERE id = ?").run(reviewId);
+  const empty = upsertMerchantReply(db, {
+    admin: { id: null },
+    review: findAdminReviewById(db, reviewId),
+    body: { operationId: "op-empty-review-reply", replyBody: "   " }
+  });
+  expect(empty.validationError).toMatchObject({ statusCode: 400, code: "ADMIN_REVIEW_REPLY_INVALID" });
+  expect(db.prepare("SELECT COUNT(*) AS count FROM product_review_replies WHERE review_id = ?").get(reviewId).count).toBe(0);
+  db.close();
+});
+
 test("calculates remaining refundable quantity and cents per order item", async () => {
   const { getRefundableOrderSummary } = require("../lib/repositories/refunds");
   const db = createDatabase(testDbFile);
