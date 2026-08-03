@@ -9,7 +9,9 @@ module.exports = {
       PORT: "4173",
       LOG_LEVEL: "warn",
       REQUEST_BODY_LIMIT_BYTES: "1048576",
-      SECURITY_HEADERS_ENABLED: "true"
+      SECURITY_HEADERS_ENABLED: "true",
+      BOOTSTRAP_ADMIN_EMAIL: "admin@socks.test",
+      BOOTSTRAP_ADMIN_PASSWORD: "demo1234"
     },
     reuseExistingServer: false
   },

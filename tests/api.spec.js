@@ -852,6 +852,54 @@ test("requires authenticated users and exact permissions", async () => {
   }, {})).resolves.toMatchObject({ id: "warehouse" });
 });
 
+test("bootstraps administrators safely by environment", () => {
+  const { createAuthService } = require("../lib/services/auth-service");
+  const { createUser } = require("../lib/repositories/users");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const development = createAuthService({ nodeEnv: "development" });
+  const created = development.bootstrapAdmin(db);
+  expect(created.user).toMatchObject({ email: "admin@socks.test", roles: ["super_admin"] });
+  expect(development.bootstrapAdmin(db).replayed).toBe(true);
+
+  const existing = createAuthService({
+    nodeEnv: "production",
+    bootstrapAdminEmail: "ignored@example.com",
+    bootstrapAdminPassword: "ignored-password"
+  }).bootstrapAdmin(db);
+  expect(existing).toMatchObject({ replayed: true });
+  expect(existing.user.email).toBe("admin@socks.test");
+
+  db.prepare("DELETE FROM users").run();
+  const productionMissing = createAuthService({
+    nodeEnv: "production",
+    bootstrapAdminEmail: "",
+    bootstrapAdminPassword: ""
+  });
+  expect(() => productionMissing.bootstrapAdmin(db)).toThrow(
+    "BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required"
+  );
+
+  createUser(db, {
+    id: "occupied-customer",
+    name: "Occupied",
+    email: "owner@example.com",
+    passwordHash: "hash",
+    passwordSalt: "salt"
+  });
+  const productionOccupied = createAuthService({
+    nodeEnv: "production",
+    bootstrapAdminEmail: "owner@example.com",
+    bootstrapAdminPassword: "secure-password"
+  });
+  expect(() => productionOccupied.bootstrapAdmin(db)).toThrow(
+    "BOOTSTRAP_ADMIN_EMAIL is already registered without the super_admin role"
+  );
+  db.close();
+});
+
 test("records allowlisted analytics events once per visitor day", () => {
   const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
   const db = createDatabase(testDbFile);
@@ -1231,7 +1279,7 @@ test("classifies SKU inventory alerts by stock and threshold", () => {
 test("returns admin analytics for fixed ranges only", async ({ request }) => {
   const anonymous = await request.get("/api/admin/analytics?range=30d");
   expect(anonymous.status()).toBe(401);
-  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const adminCookie = await loginApiAdmin(request);
   const response = await request.get("/api/admin/analytics?range=30d", {
     headers: { cookie: adminCookie }
   });
@@ -1639,7 +1687,7 @@ test("lets customers track and reply to their support tickets", async ({ request
 test("hides internal notes and returns the same not-found error to non-owners", async ({ request }) => {
   const ownerCookie = await registerApiUser(request, { email: "ticket-owner@example.com" });
   const outsiderCookie = await registerApiUser(request, { email: "ticket-outsider@example.com" });
-  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const adminCookie = await loginApiAdmin(request);
   const created = await request.post("/api/support/contact", {
     headers: { cookie: ownerCookie },
     data: {
@@ -1708,7 +1756,7 @@ test("rejects ordinary users from admin support routes", async ({ request }) => 
   const cookie = await registerApiUser(request, { email: "support-buyer@example.com" });
   const response = await request.get("/api/admin/support/tickets", { headers: { cookie } });
   expect(response.status()).toBe(403);
-  expect((await response.json()).error.code).toBe("ADMIN_FORBIDDEN");
+  expect((await response.json()).error.code).toBe("PERMISSION_DENIED");
 });
 
 test("includes operational support KPIs in the admin summary", () => {
@@ -2725,12 +2773,20 @@ async function registerApiUser(request, { name = "Admin User", email, password =
   return response.headers()["set-cookie"];
 }
 
+async function loginApiAdmin(request) {
+  const response = await request.post("/api/auth/login", {
+    data: { email: "admin@socks.test", password: "demo1234" }
+  });
+  expect(response.ok()).toBe(true);
+  return response.headers()["set-cookie"];
+}
+
 test("requires an admin session for admin summary", async ({ request }) => {
   const response = await request.get("/api/admin/summary");
 
   expect(response.status()).toBe(401);
   const payload = await response.json();
-  expect(payload.error.code).toBe("ADMIN_AUTH_REQUIRED");
+  expect(payload.error.code).toBe("AUTH_REQUIRED");
 });
 
 test("rejects non-admin users from admin summary", async ({ request }) => {
@@ -2742,14 +2798,14 @@ test("rejects non-admin users from admin summary", async ({ request }) => {
 
   expect(response.status()).toBe(403);
   const payload = await response.json();
-  expect(payload.error.code).toBe("ADMIN_FORBIDDEN");
+  expect(payload.error.code).toBe("PERMISSION_DENIED");
 });
 
 test("rejects non-admin users from admin review management", async ({ request }) => {
   const cookie = await registerApiUser(request, { email: "review-buyer@example.com" });
   const response = await request.get("/api/admin/reviews", { headers: { cookie } });
   expect(response.status()).toBe(403);
-  expect((await response.json()).error.code).toBe("ADMIN_FORBIDDEN");
+  expect((await response.json()).error.code).toBe("PERMISSION_DENIED");
 });
 
 test("moderates and replies to reviews through admin APIs", async ({ request }) => {
@@ -2757,7 +2813,7 @@ test("moderates and replies to reviews through admin APIs", async ({ request }) 
     data: { author: "API Guest", rating: 3, body: "等待后台审核的接口评论。", locale: "zh-CN" }
   });
   const review = (await created.json()).review;
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const list = await request.get("/api/admin/reviews?status=pending&q=接口评论", { headers: { cookie } });
   expect(list.ok()).toBe(true);
   expect((await list.json()).reviews.map((item) => item.id)).toContain(review.id);
@@ -2791,7 +2847,7 @@ test("moderates and replies to reviews through admin APIs", async ({ request }) 
 });
 
 test("returns admin dashboard summary for demo admins", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -2820,7 +2876,7 @@ test("returns admin dashboard summary for demo admins", async ({ request }) => {
 });
 
 test("returns admin product summaries for demo admins", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const response = await request.get("/api/admin/products", {
     headers: { cookie }
@@ -2840,7 +2896,7 @@ test("returns admin product summaries for demo admins", async ({ request }) => {
 });
 
 test("returns full admin product details for demo admins", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const response = await request.get("/api/admin/products/sock-01", {
     headers: { cookie }
@@ -2863,7 +2919,7 @@ test("returns full admin product details for demo admins", async ({ request }) =
 });
 
 test("creates an admin product and exposes it in storefront products", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const product = createAdminProductFixture("sock-admin-new");
 
   const response = await request.post("/api/admin/products", {
@@ -2890,7 +2946,7 @@ test("creates an admin product and exposes it in storefront products", async ({ 
 });
 
 test("updates admin product details and storefront reads the saved payload", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const detailResponse = await request.get("/api/admin/products/sock-01", { headers: { cookie } });
   const product = (await detailResponse.json()).product;
 
@@ -2931,11 +2987,11 @@ test("rejects non-admin access to admin product write APIs", async ({ request })
 
   expect(response.status()).toBe(403);
   const payload = await response.json();
-  expect(payload.error.code).toBe("ADMIN_FORBIDDEN");
+  expect(payload.error.code).toBe("PERMISSION_DENIED");
 });
 
 test("rejects invalid admin product payloads", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const product = createAdminProductFixture("INVALID ID");
 
   const response = await request.post("/api/admin/products", {
@@ -2949,7 +3005,7 @@ test("rejects invalid admin product payloads", async ({ request }) => {
 });
 
 test("uploads a product image to local public uploads for admins", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const imageBuffer = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#eeeeee"/></svg>`);
 
   const response = await request.post("/api/admin/products/sock-01/images", {
@@ -2972,7 +3028,7 @@ test("uploads a product image to local public uploads for admins", async ({ requ
 });
 
 test("rejects invalid admin product image uploads", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const response = await request.post("/api/admin/products/sock-01/images", {
     headers: { cookie },
@@ -2991,7 +3047,7 @@ test("rejects invalid admin product image uploads", async ({ request }) => {
 });
 
 test("returns filtered admin inventory rows", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const response = await request.get("/api/admin/inventory?stock=low-stock&q=sock-04", {
     headers: { cookie }
@@ -3007,7 +3063,7 @@ test("returns filtered admin inventory rows", async ({ request }) => {
 });
 
 test("updates SKU inventory from admin API and reflects it in products", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const response = await request.patch("/api/admin/inventory/sock-01-39", {
     headers: { cookie },
@@ -3034,7 +3090,7 @@ test("updates SKU inventory from admin API and reflects it in products", async (
 });
 
 test("lists admin orders and advances an order status", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3062,7 +3118,7 @@ test("lists admin orders and advances an order status", async ({ request }) => {
 });
 
 test("ships a processing order with an admin supplied carrier and tracking number", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3103,7 +3159,7 @@ test("ships a processing order with an admin supplied carrier and tracking numbe
 });
 
 test("cancels a paid unshipped order with one inventory restock", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3159,7 +3215,7 @@ test("cancels a paid unshipped order with one inventory restock", async ({ reque
 });
 
 test("creates itemized partial refunds and rejects cumulative over-refunds", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 2 }
@@ -3248,7 +3304,7 @@ test("reviews return refunds and restocks inventory once on completion", async (
     }
   });
   const returnRequest = (await createReturnResponse.json()).returnRequest;
-  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const adminCookie = await loginApiAdmin(request);
 
   const reviewing = await request.post(`/api/admin/returns/${returnRequest.id}/actions/review`, {
     headers: { cookie: adminCookie },
@@ -3313,7 +3369,7 @@ test("reviews return refunds and restocks inventory once on completion", async (
 });
 
 test("returns admin order operation detail with refunds refundable items and audit events", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3381,7 +3437,7 @@ test("lists and filters return requests for demo admins", async ({ request }) =>
     }
   });
   const created = (await returnResponse.json()).returnRequest;
-  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const adminCookie = await loginApiAdmin(request);
 
   const response = await request.get(`/api/admin/returns?status=submitted&q=${encodeURIComponent(order.id)}`, {
     headers: { cookie: adminCookie }
@@ -3400,7 +3456,7 @@ test("lists and filters return requests for demo admins", async ({ request }) =>
 });
 
 test("keeps an order active after a partial refund succeeds", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3447,9 +3503,9 @@ test("protects admin order actions and rejects mismatched idempotency replays", 
     data: { operationId: "op-forbidden", reason: "customer_request", locale: "zh-CN" }
   });
   expect(forbidden.status()).toBe(403);
-  expect((await forbidden.json()).error.code).toBe("ADMIN_FORBIDDEN");
+  expect((await forbidden.json()).error.code).toBe("PERMISSION_DENIED");
 
-  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const adminCookie = await loginApiAdmin(request);
   await request.post("/api/cart/items", {
     headers: { cookie: adminCookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
@@ -3480,7 +3536,7 @@ test("protects admin order actions and rejects mismatched idempotency replays", 
 });
 
 test("returns and toggles admin marketing resources", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
 
   const listResponse = await request.get("/api/admin/marketing", {
     headers: { cookie }
@@ -3519,7 +3575,7 @@ test("returns configured payment methods filtered for the order total", async ({
 });
 
 test("disables a payment method from admin API", async ({ request }) => {
-  const cookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const cookie = await loginApiAdmin(request);
   const patchResponse = await request.patch("/api/admin/payment-methods/paypal", {
     headers: { cookie },
     data: { status: "inactive", locale: "en-US" }

@@ -14,14 +14,10 @@ const { JsonBodyError, readJsonBody } = require("./lib/http/request-body");
 const {
   getCookieValue
 } = require("./lib/http/cookies");
-const {
-  createPasswordSalt,
-  hashPassword,
-  verifyPassword
-} = require("./lib/auth/passwords");
 const { PERMISSIONS } = require("./lib/auth/permissions");
 const { createAuthorization } = require("./lib/auth/authorization");
 const { createSessionService } = require("./lib/services/session-service");
+const { createAuthService, createPublicUser } = require("./lib/services/auth-service");
 const {
   resolveStaticFile,
   sendStaticFile
@@ -69,10 +65,7 @@ const {
   saveProduct
 } = require("./lib/repositories/saved-products");
 const {
-  findUserByEmail,
   findUserById,
-  countUsers,
-  createUser,
   createSession,
   findSession,
   deleteSession,
@@ -286,12 +279,14 @@ function withDatabase(callback) {
   });
 
   try {
+    authService.bootstrapAdmin(db);
     return callback(db);
   } finally {
     db.close();
   }
 }
 
+const authService = createAuthService(config);
 const sessionService = createSessionService({
   withDatabase,
   sessionCookieName,
@@ -899,35 +894,6 @@ function createTimelineEntry(status, locale = "zh-CN") {
     label: orderStatusLabels[status][locale] || orderStatusLabels[status]["zh-CN"],
     at: new Date().toISOString()
   };
-}
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function createPublicUser(user) {
-  if (!user) {
-    return null;
-  }
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    addresses: Array.isArray(user.addresses) ? user.addresses : []
-  };
-}
-
-function buildUserId(users) {
-  return `user-${String(users.length + 1).padStart(4, "0")}`;
-}
-
-function validateAuthPayload(body, mode) {
-  const missingFields = [];
-  if (mode === "register" && !String(body.name || "").trim()) missingFields.push("name");
-  if (!normalizeEmail(body.email)) missingFields.push("email");
-  if (!String(body.password || "").trim()) missingFields.push("password");
-  return missingFields;
 }
 
 function normalizeCartPayload(cart) {
@@ -1882,36 +1848,18 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
     try {
       const body = await readRequestBody(request);
-      const missingFields = validateAuthPayload(body, "register");
-      if (missingFields.length) {
-        sendJson(response, 400, {
-          ok: false,
-          error: {
-            code: "AUTH_VALIDATION_FAILED",
-            message: "Registration information is incomplete.",
-            fields: missingFields,
-            details: { fields: missingFields }
-          }
-        });
+      const result = withDatabase((db) => authService.registerUser(db, body));
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message,
+          result.validationError.details
+        );
         return;
       }
-
-      const email = normalizeEmail(body.email);
-      if (withDatabase((db) => findUserByEmail(db, email))) {
-        sendError(response, 409, "EMAIL_ALREADY_REGISTERED", "Email is already registered.");
-        return;
-      }
-
-      const passwordSalt = createPasswordSalt();
-      const user = withDatabase((db) => createUser(db, {
-        id: buildUserId({ length: countUsers(db) }),
-        name: String(body.name).trim(),
-        email,
-        passwordHash: hashPassword(String(body.password), passwordSalt),
-        passwordSalt,
-        createdAt: new Date().toISOString(),
-        addresses: []
-      }));
+      const { user } = result;
 
       const previousSessionId = getCookieValue(request, sessionCookieName);
       const session = await createUserSession(user.id);
@@ -1938,18 +1886,18 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
     try {
       const body = await readRequestBody(request);
-      const missingFields = validateAuthPayload(body, "login");
-      if (missingFields.length) {
-        sendError(response, 400, "AUTH_VALIDATION_FAILED", "Login information is incomplete.");
+      const result = withDatabase((db) => authService.authenticateUser(db, body));
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message,
+          result.validationError.details
+        );
         return;
       }
-
-      const email = normalizeEmail(body.email);
-      const user = withDatabase((db) => findUserByEmail(db, email));
-      if (!user || !verifyPassword(String(body.password), user)) {
-        sendError(response, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
-        return;
-      }
+      const { user } = result;
 
       const previousSessionId = getCookieValue(request, sessionCookieName);
       const session = await createUserSession(user.id);
@@ -3388,6 +3336,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 validateDataDir();
+withDatabase(() => null);
 
 server.listen(port, host, () => {
   logger.info("server.listening", { url: `http://${host}:${port}` });

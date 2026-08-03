@@ -84,11 +84,11 @@ async function registerFromUi(page, user = {}) {
 }
 
 async function registerAdminFromUi(page) {
-  await registerFromUi(page, {
-    name: "Admin User",
-    email: "admin@socks.test",
-    password: "demo1234"
-  });
+  await page.goto("/socks-product-list.html?view=auth&mode=login");
+  await page.locator('[data-auth-field="email"]').fill("admin@socks.test");
+  await page.locator('[data-auth-field="password"]').fill("demo1234");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-user-name]")).toBeVisible();
 }
 
 function createAnalyticsFixture(range = "30d", days = 30, overrides = {}) {
