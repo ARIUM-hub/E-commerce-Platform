@@ -125,6 +125,57 @@ test("requires complete production security config and exposes safe non-producti
   });
 });
 
+test("signed CSRF tokens reject tampering expiry and double-submit mismatches", () => {
+  const { createCsrfService } = require("../lib/security/csrf");
+  let currentTime = new Date("2026-08-03T12:00:00.000Z");
+  const csrfService = createCsrfService({
+    secret: "csrf-test-secret",
+    ttlMs: 60_000,
+    now: () => currentTime,
+    randomBytes: () => Buffer.from("fixed-csrf-nonce"),
+    isProduction: false
+  });
+  const issued = csrfService.issueToken();
+
+  expect(issued.token).not.toContain("csrf-test-secret");
+  expect(csrfService.verifyToken({
+    cookieToken: issued.token,
+    headerToken: issued.token
+  })).toBe(true);
+  const parts = issued.token.split(".");
+  expect(csrfService.verifyToken({
+    cookieToken: issued.token,
+    headerToken: [`x${parts[0].slice(1)}`, parts[1], parts[2]].join(".")
+  })).toBe(false);
+  expect(csrfService.verifyToken({
+    cookieToken: issued.token,
+    headerToken: [parts[0], parts[1], `${parts[2].slice(0, -1)}x`].join(".")
+  })).toBe(false);
+  expect(csrfService.verifyToken({
+    cookieToken: issued.token,
+    headerToken: `${issued.token}x`
+  })).toBe(false);
+
+  currentTime = new Date(currentTime.getTime() + 60_001);
+  expect(csrfService.verifyToken({
+    cookieToken: issued.token,
+    headerToken: issued.token
+  })).toBe(false);
+  expect(csrfService.createCsrfCookie(issued.token)).toContain("SameSite=Strict");
+  expect(csrfService.createCsrfCookie(issued.token)).not.toContain("HttpOnly");
+});
+
+test("GET security/csrf issues a signed double-submit cookie", async ({ request }) => {
+  const response = await request.get("/api/security/csrf");
+  expect(response.status()).toBe(200);
+  const payload = await response.json();
+  expect(payload).toMatchObject({ ok: true });
+  expect(payload.csrfToken).toMatch(/^[^.]+\.\d+\.[a-f0-9]{64}$/);
+  expect(response.headers()["set-cookie"]).toContain(`socks_csrf=${payload.csrfToken}`);
+  expect(response.headers()["set-cookie"]).toContain("SameSite=Strict");
+  expect(response.headers()["set-cookie"]).not.toContain("HttpOnly");
+});
+
 test("hashes normalized security identifiers and trusts forwarded IPs only when configured", () => {
   const {
     hashSecurityIdentifier,

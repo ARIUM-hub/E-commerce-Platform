@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { createLogger } = require("./lib/logger");
+const { createCsrfService } = require("./lib/security/csrf");
 const {
   sendError: sendHttpError,
   sendJson: sendHttpJson,
@@ -39,6 +40,7 @@ const { registerAdminUserRoutes } = require("./lib/routes/admin-user-routes");
 const { registerAuthRoutes } = require("./lib/routes/auth-routes");
 const { registerTrustRoutes } = require("./lib/routes/trust-routes");
 const { registerTestRoutes } = require("./lib/routes/test-routes");
+const { registerSecurityRoutes } = require("./lib/routes/security-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createAnalyticsEventLimiter,
@@ -190,6 +192,10 @@ const { createCheckoutTotals } = require("./lib/checkout-totals");
 
 const config = createConfig(process.env);
 const logger = createLogger({ level: config.logLevel });
+const csrfService = createCsrfService({
+  secret: config.csrfSecret,
+  isProduction: config.nodeEnv === "production"
+});
 const host = config.host;
 const port = config.port;
 const rootDir = config.rootDir;
@@ -1219,6 +1225,10 @@ function parseAdminPaymentMethodPath(pathname) {
 const router = createRouter();
 const supportLookupLimiter = createSupportLookupLimiter();
 registerHealthRoutes(router);
+registerSecurityRoutes(router, {
+  csrfService,
+  sendJsonWithHeaders
+});
 registerProductRoutes(router, {
   createProductQuestion,
   createProductReview,
