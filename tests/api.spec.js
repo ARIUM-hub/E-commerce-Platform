@@ -823,6 +823,35 @@ test("assigns roles atomically audits changes and protects the last super admin"
   db.close();
 });
 
+test("requires authenticated users and exact permissions", async () => {
+  const responses = [];
+  const { createAuthorization } = require("../lib/auth/authorization");
+  const authorization = createAuthorization({
+    getSessionContext: async (request) => request.context,
+    sendError: (_response, statusCode, code, message, details) => {
+      responses.push({ statusCode, code, message, details });
+    }
+  });
+
+  expect(await authorization.requirePermission(
+    "orders.ship",
+    { context: { user: null } },
+    {}
+  )).toBeNull();
+  expect(responses.at(-1).code).toBe("AUTH_REQUIRED");
+  expect(await authorization.requirePermission("orders.ship", {
+    context: { user: { id: "customer", roles: ["customer"] } }
+  }, {})).toBeNull();
+  expect(responses.at(-1)).toMatchObject({
+    statusCode: 403,
+    code: "PERMISSION_DENIED",
+    details: { requiredPermission: "orders.ship" }
+  });
+  await expect(authorization.requirePermission("orders.ship", {
+    context: { user: { id: "warehouse", roles: ["warehouse"] } }
+  }, {})).resolves.toMatchObject({ id: "warehouse" });
+});
+
 test("records allowlisted analytics events once per visitor day", () => {
   const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
   const db = createDatabase(testDbFile);

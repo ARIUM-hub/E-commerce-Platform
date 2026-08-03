@@ -12,9 +12,16 @@ const {
 } = require("./lib/http/responses");
 const { JsonBodyError, readJsonBody } = require("./lib/http/request-body");
 const {
-  createCookie,
   getCookieValue
 } = require("./lib/http/cookies");
+const {
+  createPasswordSalt,
+  hashPassword,
+  verifyPassword
+} = require("./lib/auth/passwords");
+const { PERMISSIONS } = require("./lib/auth/permissions");
+const { createAuthorization } = require("./lib/auth/authorization");
+const { createSessionService } = require("./lib/services/session-service");
 const {
   resolveStaticFile,
   sendStaticFile
@@ -284,6 +291,22 @@ function withDatabase(callback) {
     db.close();
   }
 }
+
+const sessionService = createSessionService({
+  withDatabase,
+  sessionCookieName,
+  sessionMaxAgeSeconds
+});
+const {
+  getSessionContext,
+  createUserSession,
+  removeSession,
+  createSessionId,
+  createSessionCookie,
+  createExpiredSessionCookie
+} = sessionService;
+const authorization = createAuthorization({ getSessionContext, sendError });
+const { requireUser } = authorization;
 
 async function readRequestBody(request) {
   return readJsonBody(request, { limitBytes: config.requestBodyLimitBytes });
@@ -899,79 +922,6 @@ function buildUserId(users) {
   return `user-${String(users.length + 1).padStart(4, "0")}`;
 }
 
-function createPasswordSalt() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-function hashPassword(password, salt) {
-  const hash = crypto.createHash("sha256");
-  hash.update(`${salt}:${password}`);
-  return `sha256:${hash.digest("hex")}`;
-}
-
-function verifyPassword(password, user) {
-  return hashPassword(password, user.passwordSalt) === user.passwordHash;
-}
-
-function createSessionId() {
-  return crypto.randomBytes(24).toString("hex");
-}
-
-function createSessionCookie(sessionId) {
-  return createCookie(sessionCookieName, sessionId, {
-    httpOnly: true,
-    sameSite: "Lax",
-    path: "/",
-    maxAge: sessionMaxAgeSeconds
-  });
-}
-
-function createExpiredSessionCookie() {
-  return createCookie(sessionCookieName, "", {
-    httpOnly: true,
-    sameSite: "Lax",
-    path: "/",
-    maxAge: 0
-  });
-}
-
-async function getSessionContext(request) {
-  const sessionId = getCookieValue(request, sessionCookieName);
-  if (!sessionId) {
-    return { session: null, user: null };
-  }
-
-  const { session, user } = withDatabase((db) => {
-    const foundSession = findSession(db, sessionId);
-    const now = Date.now();
-    const isActiveSession = foundSession && (!foundSession.expiresAt || new Date(foundSession.expiresAt).getTime() > now);
-    return {
-      session: isActiveSession ? foundSession : null,
-      user: isActiveSession && foundSession.userId ? findUserById(db, foundSession.userId) : null
-    };
-  });
-
-  return { session, user };
-}
-
-async function createUserSession(userId) {
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + sessionMaxAgeSeconds * 1000);
-  const session = {
-    id: createSessionId(),
-    userId,
-    createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString()
-  };
-
-  withDatabase((db) => createSession(db, session));
-  return session;
-}
-
-async function removeSession(sessionId) {
-  withDatabase((db) => deleteSession(db, sessionId));
-}
-
 function validateAuthPayload(body, mode) {
   const missingFields = [];
   if (mode === "register" && !String(body.name || "").trim()) missingFields.push("name");
@@ -1151,33 +1101,8 @@ function normalizeAddressPayload(body, existingAddress = {}) {
   };
 }
 
-async function requireUser(request, response, errorOptions = {}) {
-  const { user } = await getSessionContext(request);
-  if (!user) {
-    sendError(
-      response,
-      401,
-      errorOptions.code || "AUTH_REQUIRED",
-      errorOptions.message || "Authentication is required."
-    );
-    return null;
-  }
-  return user;
-}
-
 async function requireAdmin(request, response) {
-  const user = await requireUser(request, response, {
-    code: "ADMIN_AUTH_REQUIRED",
-    message: "Admin authentication is required."
-  });
-  if (!user) return null;
-
-  if (!DEMO_ADMIN_EMAILS.has(String(user.email || "").toLowerCase())) {
-    sendError(response, 403, "ADMIN_FORBIDDEN", "Admin access is required.");
-    return null;
-  }
-
-  return user;
+  return authorization.requirePermission(PERMISSIONS.ANALYTICS_READ, request, response);
 }
 
 async function updateUser(userId, updater) {
