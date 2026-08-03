@@ -1041,6 +1041,96 @@ test("security audit redacts sensitive metadata paginates and cleans up in bound
   db.close();
 });
 
+test("mail outbox dispatches one message at a time and bounds delivery retries", async () => {
+  const { createMailerService } = require("../lib/services/mailer-service");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const withDatabase = (callback) => callback(db);
+  let currentTime = new Date("2026-08-03T12:00:00.000Z");
+  const sentMessages = [];
+  const transporter = {
+    sendMail: async (message) => {
+      sentMessages.push(message);
+      return { messageId: `message-${sentMessages.length}` };
+    }
+  };
+  const smtp = {
+    host: "smtp.example.com",
+    port: 587,
+    secure: false,
+    user: "mailer",
+    password: "mailer-password",
+    from: "shop@example.com"
+  };
+  const developmentMailer = createMailerService({
+    config: { nodeEnv: "development", smtp },
+    withDatabase,
+    transporter,
+    now: () => currentTime
+  });
+
+  const verification = developmentMailer.enqueueVerificationEmail({
+    recipient: "buyer@example.com",
+    token: "verification-token",
+    locale: "en"
+  });
+  developmentMailer.enqueuePasswordResetEmail({
+    recipient: "buyer@example.com",
+    token: "reset-token",
+    locale: "en"
+  });
+  expect(verification).toMatchObject({
+    recipient: "buyer@example.com",
+    templateId: "email_verification",
+    status: "queued",
+    attemptCount: 0
+  });
+  expect(sentMessages).toHaveLength(0);
+
+  const productionMailer = createMailerService({
+    config: { nodeEnv: "production", smtp },
+    withDatabase,
+    transporter,
+    now: () => currentTime
+  });
+  expect(await productionMailer.dispatchNext()).toMatchObject({ status: "sent", attemptCount: 1 });
+  expect(sentMessages).toHaveLength(1);
+  expect(db.prepare("SELECT COUNT(*) AS count FROM email_outbox WHERE status = 'queued'").get().count)
+    .toBe(1);
+  expect(await productionMailer.dispatchNext()).toMatchObject({ status: "sent", attemptCount: 1 });
+  expect(sentMessages).toHaveLength(2);
+
+  let failedAttempts = 0;
+  const failingMailer = createMailerService({
+    config: { nodeEnv: "production", smtp },
+    withDatabase,
+    transporter: {
+      sendMail: async () => {
+        failedAttempts += 1;
+        throw new Error("SMTP credentials were rejected");
+      }
+    },
+    now: () => currentTime
+  });
+  failingMailer.enqueuePasswordResetEmail({
+    recipient: "retry@example.com",
+    token: "retry-token",
+    locale: "en"
+  });
+
+  expect(await failingMailer.dispatchNext()).toMatchObject({ status: "deferred", attemptCount: 1 });
+  currentTime = new Date(currentTime.getTime() + 60_000);
+  expect(await failingMailer.dispatchNext()).toMatchObject({ status: "deferred", attemptCount: 2 });
+  currentTime = new Date(currentTime.getTime() + 120_000);
+  expect(await failingMailer.dispatchNext()).toMatchObject({ status: "failed", attemptCount: 3 });
+  expect(failedAttempts).toBe(3);
+  expect(db.prepare("SELECT last_error FROM email_outbox WHERE recipient = ?")
+    .get("retry@example.com").last_error).not.toContain("credentials");
+  db.close();
+});
+
 test("maps fixed RBAC roles to least-privilege permissions", () => {
   const { PERMISSIONS, getPermissionsForRoles, hasPermission } = require("../lib/auth/permissions");
   const superPermissions = getPermissionsForRoles(["super_admin"]);
