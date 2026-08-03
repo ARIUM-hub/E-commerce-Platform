@@ -701,6 +701,24 @@ test("initializes campaign version storage and imports runtime marketing data", 
   db.close();
 });
 
+test("initializes analytics event storage and indexes idempotently", () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const columns = db.prepare("PRAGMA table_info(analytics_events)").all().map((column) => column.name);
+  const indexes = db.prepare("PRAGMA index_list(analytics_events)").all().map((index) => index.name);
+  expect(columns).toEqual(expect.arrayContaining([
+    "id", "event_type", "visitor_id", "session_id", "user_id", "product_id",
+    "order_id", "occurred_at", "bucket_date", "dedupe_key", "metadata"
+  ]));
+  expect(indexes).toEqual(expect.arrayContaining([
+    "idx_analytics_event_time", "idx_analytics_visitor_funnel", "idx_analytics_product_event"
+  ]));
+  expect(db.prepare("SELECT id FROM schema_migrations WHERE id = ?").get("0012_analytics_events"))
+    .toEqual({ id: "0012_analytics_events" });
+  db.close();
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);
