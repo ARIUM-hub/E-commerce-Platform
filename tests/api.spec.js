@@ -758,6 +758,23 @@ test("initializes RBAC roles assignments and audit storage idempotently", () => 
   db.close();
 });
 
+test("maps fixed RBAC roles to least-privilege permissions", () => {
+  const { PERMISSIONS, getPermissionsForRoles, hasPermission } = require("../lib/auth/permissions");
+  const superPermissions = getPermissionsForRoles(["super_admin"]);
+
+  expect(superPermissions).toEqual(expect.arrayContaining(Object.values(PERMISSIONS)));
+  expect(hasPermission(["operator"], PERMISSIONS.ORDERS_REFUND)).toBe(true);
+  expect(hasPermission(["operator"], PERMISSIONS.USERS_ROLES_MANAGE)).toBe(false);
+  expect(hasPermission(["customer_service"], PERMISSIONS.SUPPORT_REPLY)).toBe(true);
+  expect(hasPermission(["customer_service"], PERMISSIONS.INVENTORY_WRITE)).toBe(false);
+  expect(hasPermission(["warehouse"], PERMISSIONS.ORDERS_SHIP)).toBe(true);
+  expect(hasPermission(["warehouse"], PERMISSIONS.RETURNS_RECEIVE)).toBe(true);
+  expect(hasPermission(["warehouse"], PERMISSIONS.RETURNS_REVIEW)).toBe(false);
+  expect(getPermissionsForRoles(["customer"])).toEqual([]);
+  expect(hasPermission(["unknown"], PERMISSIONS.ANALYTICS_READ)).toBe(false);
+  expect(hasPermission(["super_admin"], "unknown.permission")).toBe(false);
+});
+
 test("records allowlisted analytics events once per visitor day", () => {
   const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
   const db = createDatabase(testDbFile);
