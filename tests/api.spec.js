@@ -751,6 +751,26 @@ test("creates isolated analytics limiter windows", () => {
   expect(limiter.consume("session-a").allowed).toBe(true);
 });
 
+test("accepts storefront analytics without trusting client identity or time", async ({ request }) => {
+  const response = await request.post("/api/analytics/events", {
+    data: {
+      eventType: "product_view",
+      productId: "sock-01",
+      userId: "spoofed-user",
+      sessionId: "spoofed-session",
+      occurredAt: "2020-01-01T00:00:00.000Z"
+    }
+  });
+  expect(response.status()).toBe(201);
+  const payload = await response.json();
+  expect(payload.event).not.toHaveProperty("userId");
+  expect(payload.event.occurredAt).not.toBe("2020-01-01T00:00:00.000Z");
+  expect(response.headers()["set-cookie"]).toContain("socks_session=");
+  const invalid = await request.post("/api/analytics/events", { data: { eventType: "payment_success" } });
+  expect(invalid.status()).toBe(400);
+  expect((await invalid.json()).error.code).toBe("ANALYTICS_EVENT_INVALID");
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);

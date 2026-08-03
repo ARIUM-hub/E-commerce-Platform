@@ -6374,6 +6374,8 @@
       }
 
       bindDetailInteractions(product);
+      sendAnalyticsEvent("storefront_visit");
+      sendAnalyticsEvent("product_view", product.id);
     }
 
     function createCartItemMarkup(item) {
@@ -6772,6 +6774,15 @@
       });
     }
 
+    function sendAnalyticsEvent(eventType, productId = "") {
+      fetch("/api/analytics/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventType, productId }),
+        keepalive: true
+      }).catch(() => {});
+    }
+
     async function fetchRecentlyViewed() {
       const response = await fetch(`/api/recommendations?scenario=recently-viewed&locale=${encodeURIComponent(activeLocale)}`);
       if (!response.ok) {
@@ -6807,6 +6818,7 @@
         clearStoredOrderConfirmationSnapshot();
         setCartStateFromPayload(payload);
         renderCartState();
+        sendAnalyticsEvent("cart_add", productId);
         return payload;
       } finally {
         setCartMutationPending(false);
@@ -7155,6 +7167,7 @@
       visibleProducts = firstPageProducts;
       syncProductCatalog(allProducts);
       renderProductGridItems(visibleProducts);
+      sendAnalyticsEvent("storefront_visit");
     }
 
     siteSearchForm.addEventListener("submit", (event) => {
@@ -7744,6 +7757,9 @@
           await fetchAddresses();
         }
         renderCheckoutPage();
+        if (cartState.items.length > 0) {
+          sendAnalyticsEvent("checkout_start");
+        }
         return;
       }
 

@@ -126,6 +126,30 @@ test("renders the socks category page shell", async ({ page }) => {
   await expect(page.locator("[data-product-card]").first()).toBeVisible();
 });
 
+test("records storefront detail cart and checkout analytics after successful actions", async ({ page }) => {
+  const events = [];
+  await page.route("**/api/analytics/events", async (route) => {
+    events.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, recorded: true })
+    });
+  });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card][data-product-id='sock-01']")
+    .locator("[data-product-detail-link]").click();
+  await page.locator("[data-detail-size='39']").click();
+  await page.locator("[data-detail-cart-button]").click();
+  await page.goto("/socks-product-list.html?view=checkout");
+  await expect.poll(() => events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+    "storefront_visit",
+    "product_view",
+    "cart_add",
+    "checkout_start"
+  ]));
+});
+
 test("boots the storefront from the external script bundle", async ({ page }) => {
   const scriptResponse = page.waitForResponse((response) => {
     return response.url().includes("/public/js/storefront-app.js") && response.status() === 200;

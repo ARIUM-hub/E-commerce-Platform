@@ -27,10 +27,15 @@ const { createRouter } = require("./lib/http/router");
 const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
 const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
+const { registerAnalyticsRoutes } = require("./lib/routes/analytics-routes");
 const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
 const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
 const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
+const {
+  createAnalyticsEventLimiter,
+  recordAnalyticsEvent
+} = require("./lib/repositories/analytics-events");
 const {
   createProductReview,
   findAdminReviewById,
@@ -981,7 +986,7 @@ function normalizeCartPayload(cart) {
 }
 
 async function readActiveCart(request, options = {}) {
-  const { user } = await getSessionContext(request);
+  const { session, user } = await getSessionContext(request);
   if (!user) {
     let sessionId = getCookieValue(request, sessionCookieName);
     let setCookieHeader = null;
@@ -1014,6 +1019,7 @@ async function readActiveCart(request, options = {}) {
     return {
       user: null,
       sessionId,
+      visitorId: sessionId,
       setCookieHeader,
       ...withDatabase((db) => {
         const databaseCart = sessionId ? getCart(db, { sessionId }) : { items: [] };
@@ -1029,6 +1035,7 @@ async function readActiveCart(request, options = {}) {
   return {
     user,
     sessionId: null,
+    visitorId: session?.id || null,
     setCookieHeader: null,
     cartId: userDatabaseCart.id || null,
     cart: normalizeCartPayload(userDatabaseCart)
@@ -1333,6 +1340,14 @@ registerProductRoutes(router, {
 });
 registerMarketingRoutes(router, {
   getMarketingPayload
+});
+registerAnalyticsRoutes(router, {
+  createAnalyticsEventLimiter,
+  handleRequestBodyError,
+  readActiveCart,
+  readRequestBody,
+  recordAnalyticsEvent,
+  withDatabase
 });
 registerAdminReviewRoutes(router, {
   findAdminReviewById,
