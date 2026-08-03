@@ -719,6 +719,38 @@ test("initializes analytics event storage and indexes idempotently", () => {
   db.close();
 });
 
+test("records allowlisted analytics events once per visitor day", () => {
+  const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  const now = new Date("2026-08-03T02:00:00.000Z");
+  const context = { visitorId: "session-a", sessionId: null, userId: null, now };
+  const first = recordAnalyticsEvent(db, { eventType: "storefront_visit" }, context);
+  const replay = recordAnalyticsEvent(db, { eventType: "storefront_visit" }, context);
+  const product = recordAnalyticsEvent(db, { eventType: "product_view", productId: "sock-01" }, context);
+  const invalid = recordAnalyticsEvent(db, {
+    eventType: "payment_success", userId: "spoofed", occurredAt: "2020-01-01T00:00:00.000Z"
+  }, context);
+  expect(first).toMatchObject({ recorded: true, event: { bucketDate: "2026-08-03" } });
+  expect(replay).toMatchObject({ recorded: false });
+  expect(product.recorded).toBe(true);
+  expect(invalid.validationError.code).toBe("ANALYTICS_EVENT_INVALID");
+  expect(db.prepare("SELECT COUNT(*) AS count FROM analytics_events").get().count).toBe(2);
+  db.close();
+});
+
+test("creates isolated analytics limiter windows", () => {
+  const { createAnalyticsEventLimiter } = require("../lib/repositories/analytics-events");
+  let now = 1000;
+  const limiter = createAnalyticsEventLimiter({ limit: 2, windowMs: 60000, now: () => now });
+  expect(limiter.consume("session-a")).toEqual({ allowed: true, retryAfterMs: 0 });
+  expect(limiter.consume("session-a")).toEqual({ allowed: true, retryAfterMs: 0 });
+  expect(limiter.consume("session-a").allowed).toBe(false);
+  expect(limiter.consume("session-b").allowed).toBe(true);
+  now += 60001;
+  expect(limiter.consume("session-a").allowed).toBe(true);
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);
