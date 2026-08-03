@@ -246,6 +246,93 @@ test("request security gateway enforces browser CSRF and bounded API rate limits
   expect(strictLimiter.consume("ip-hash").allowed).toBe(true);
 });
 
+test("persistent authentication rate limits survive service recreation and clear successful accounts", () => {
+  const { createPersistentRateLimiter } = require("../lib/security/rate-limit-service");
+  const { hashSecurityIdentifier } = require("../lib/security/security-identifiers");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const withDatabase = (callback) => callback(db);
+  let currentTime = new Date("2026-08-03T12:00:00.000Z");
+  const createLimiter = () => createPersistentRateLimiter({
+    withDatabase,
+    hashIdentifier: (value, type) => hashSecurityIdentifier(value, "limit-secret", type),
+    now: () => currentTime
+  });
+  const policy = {
+    windowMs: 15 * 60_000,
+    blockMs: 15 * 60_000,
+    limits: { account: 5, ip: 20 }
+  };
+  const account = [{ type: "account", value: "buyer@example.com" }];
+  const ip = [{ type: "ip", value: "203.0.113.8" }];
+  let limiter = createLimiter();
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    expect(limiter.recordFailure("login", account, policy).allowed).toBe(true);
+  }
+  limiter.recordSuccess("login", account);
+  expect(db.prepare("SELECT COUNT(*) AS count FROM security_rate_limit_buckets").get().count).toBe(0);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    limiter.recordFailure("login", account, policy);
+  }
+  expect(limiter.check("login", account, policy)).toMatchObject({
+    allowed: false,
+    retryAfterSeconds: 900
+  });
+  limiter = createLimiter();
+  expect(limiter.check("login", account, policy).allowed).toBe(false);
+
+  currentTime = new Date(currentTime.getTime() + 15 * 60_000);
+  expect(limiter.check("login", account, policy).allowed).toBe(true);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    limiter.recordFailure("login", ip, policy);
+  }
+  expect(limiter.check("login", ip, policy).allowed).toBe(false);
+  const storedKeys = db.prepare("SELECT key_hash FROM security_rate_limit_buckets").all();
+  expect(storedKeys.every((row) => /^[a-f0-9]{64}$/.test(row.key_hash))).toBe(true);
+  expect(JSON.stringify(storedKeys)).not.toContain("203.0.113.8");
+  db.close();
+});
+
+test("persistent authentication rate limits reject the sixth failed account login", async ({ request }) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await request.post("/api/auth/login", {
+      data: { email: "admin@socks.test", password: "wrong-password" }
+    });
+    expect(response.status()).toBe(401);
+  }
+  const blocked = await request.post("/api/auth/login", {
+    data: { email: "admin@socks.test", password: "demo1234" }
+  });
+  expect(blocked.status()).toBe(429);
+  expect(blocked.headers()["retry-after"]).toBeTruthy();
+  expect((await blocked.json()).error.code).toBe("RATE_LIMITED");
+});
+
+test("persistent authentication rate limits bound registration attempts by IP", async ({ request }) => {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const response = await request.post("/api/auth/register", {
+      data: {
+        name: `Rate Limit Buyer ${attempt}`,
+        email: `rate-limit-${attempt}@example.com`,
+        password: "demo1234"
+      }
+    });
+    expect(response.status()).toBe(201);
+  }
+  const blocked = await request.post("/api/auth/register", {
+    data: {
+      name: "Blocked Buyer",
+      email: "rate-limit-blocked@example.com",
+      password: "demo1234"
+    }
+  });
+  expect(blocked.status()).toBe(429);
+  expect((await blocked.json()).error.code).toBe("RATE_LIMITED");
+});
+
 test("hashes normalized security identifiers and trusts forwarded IPs only when configured", () => {
   const {
     hashSecurityIdentifier,

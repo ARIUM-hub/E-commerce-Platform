@@ -6,8 +6,12 @@ const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { createLogger } = require("./lib/logger");
 const { createCsrfService } = require("./lib/security/csrf");
-const { createMemoryRateLimiter } = require("./lib/security/rate-limit-service");
+const {
+  createMemoryRateLimiter,
+  createPersistentRateLimiter
+} = require("./lib/security/rate-limit-service");
 const { createRequestSecurity } = require("./lib/security/request-security");
+const { hashSecurityIdentifier } = require("./lib/security/security-identifiers");
 const { createApiError } = require("./lib/api-errors");
 const {
   sendError: sendHttpError,
@@ -316,6 +320,14 @@ function withDatabase(callback) {
   }
 }
 
+const persistentRateLimiter = createPersistentRateLimiter({
+  withDatabase,
+  hashIdentifier: (value, type) => hashSecurityIdentifier(
+    value,
+    config.securityHashSecret,
+    `persistent-rate-limit-${type}`
+  )
+});
 const authService = createAuthService(config);
 const sessionService = createSessionService({
   withDatabase,
@@ -1330,10 +1342,12 @@ registerAuthRoutes(router, {
   getCartPayload,
   handleRequestBodyError,
   mergeAnonymousCartIntoUserCart,
+  persistentRateLimiter,
   readRequestBody,
   sendJsonWithHeaders,
   sessionCookieName,
   sessionService,
+  trustProxy: config.trustProxy,
   withDatabase
 });
 registerTrustRoutes(router, {
