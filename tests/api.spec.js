@@ -2781,6 +2781,87 @@ async function loginApiAdmin(request) {
   return response.headers()["set-cookie"];
 }
 
+test("lets only super admins manage roles and invalidates target sessions", async ({ request }) => {
+  const rootCookie = await loginApiAdmin(request);
+  const staffCookie = await registerApiUser(request, { email: "staff@example.com" });
+  const session = await request.get("/api/session", { headers: { cookie: staffCookie } });
+  const staff = (await session.json()).user;
+
+  const forbidden = await request.patch(`/api/admin/users/${staff.id}/role`, {
+    headers: { cookie: staffCookie },
+    data: { role: "warehouse", reason: "越权尝试" }
+  });
+  expect(forbidden.status()).toBe(403);
+  expect((await forbidden.json()).error.code).toBe("PERMISSION_DENIED");
+
+  const invalidRole = await request.patch(`/api/admin/users/${staff.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role: "unknown", reason: "非法角色" }
+  });
+  expect(invalidRole.status()).toBe(400);
+  expect((await invalidRole.json()).error.code).toBe("ROLE_INVALID");
+
+  const missingReason = await request.patch(`/api/admin/users/${staff.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role: "warehouse", reason: "" }
+  });
+  expect(missingReason.status()).toBe(400);
+  expect((await missingReason.json()).error.code).toBe("ROLE_REASON_REQUIRED");
+
+  const changed = await request.patch(`/api/admin/users/${staff.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role: "warehouse", reason: "负责仓库履约" }
+  });
+  expect(changed.ok()).toBe(true);
+  const changedPayload = await changed.json();
+  expect(changedPayload.user.roles).toEqual(["warehouse"]);
+  expect(changedPayload.user.passwordHash).toBeUndefined();
+  expect(changedPayload.user.passwordSalt).toBeUndefined();
+  await expect(request.get("/api/session", { headers: { cookie: staffCookie } }).then((response) => response.json()))
+    .resolves.toMatchObject({ authenticated: false });
+
+  const replayed = await request.patch(`/api/admin/users/${staff.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role: "warehouse", reason: "重复请求" }
+  });
+  expect(replayed.ok()).toBe(true);
+  expect((await replayed.json()).replayed).toBe(true);
+
+  const audit = await request.get(`/api/admin/role-assignment-events?userId=${staff.id}`, {
+    headers: { cookie: rootCookie }
+  });
+  const auditPayload = await audit.json();
+  expect(auditPayload.items).toHaveLength(1);
+  expect(auditPayload.items[0]).toMatchObject({
+    targetUserId: staff.id,
+    previousRoleId: "customer",
+    nextRoleId: "warehouse",
+    reason: "负责仓库履约"
+  });
+
+  const users = await request.get("/api/admin/users?q=staff&role=warehouse", {
+    headers: { cookie: rootCookie }
+  });
+  expect((await users.json()).items[0]).toMatchObject({
+    id: staff.id,
+    email: "staff@example.com",
+    roles: ["warehouse"]
+  });
+});
+
+test("protects the last super admin from role reassignment", async ({ request }) => {
+  const rootCookie = await loginApiAdmin(request);
+  const session = await request.get("/api/session", { headers: { cookie: rootCookie } });
+  const root = (await session.json()).user;
+  const response = await request.patch(`/api/admin/users/${root.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role: "customer", reason: "测试最后管理员保护" }
+  });
+
+  expect(response.status()).toBe(409);
+  expect((await response.json()).error.code).toBe("LAST_SUPER_ADMIN_REQUIRED");
+});
+
 test("requires an admin session for admin summary", async ({ request }) => {
   const response = await request.get("/api/admin/summary");
 

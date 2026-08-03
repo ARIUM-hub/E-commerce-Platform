@@ -35,6 +35,7 @@ const { registerAdminAnalyticsRoutes } = require("./lib/routes/admin-analytics-r
 const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
 const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
 const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
+const { registerAdminUserRoutes } = require("./lib/routes/admin-user-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createAnalyticsEventLimiter,
@@ -66,11 +67,16 @@ const {
 } = require("./lib/repositories/saved-products");
 const {
   findUserById,
+  listAdminUsers,
   createSession,
   findSession,
   deleteSession,
   replaceAddresses
 } = require("./lib/repositories/users");
+const {
+  assignUserRole,
+  listRoleAssignmentEvents
+} = require("./lib/repositories/roles");
 const {
   ensureCart,
   getCart,
@@ -1280,6 +1286,17 @@ registerAdminSupportRoutes(router, {
   readRequestBody,
   requireAdmin,
   updateSupportTicket,
+  withDatabase
+});
+registerAdminUserRoutes(router, {
+  assignUserRole,
+  createPublicUser,
+  findUserById,
+  handleRequestBodyError,
+  listAdminUsers,
+  listRoleAssignmentEvents,
+  readRequestBody,
+  requirePermission: authorization.requirePermission,
   withDatabase
 });
 
