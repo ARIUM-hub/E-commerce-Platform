@@ -775,6 +775,54 @@ test("maps fixed RBAC roles to least-privilege permissions", () => {
   expect(hasPermission(["super_admin"], "unknown.permission")).toBe(false);
 });
 
+test("assigns roles atomically audits changes and protects the last super admin", () => {
+  const { createSession, createUser, findUserById } = require("../lib/repositories/users");
+  const { assignUserRole, listRoleAssignmentEvents } = require("../lib/repositories/roles");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const base = { passwordHash: "hash", passwordSalt: "salt", addresses: [] };
+  const root = createUser(db, {
+    ...base,
+    id: "root",
+    name: "Root",
+    email: "root@example.com"
+  }, { roleId: "super_admin" });
+  const staff = createUser(db, {
+    ...base,
+    id: "staff",
+    name: "Staff",
+    email: "staff@example.com"
+  });
+  createSession(db, {
+    id: "staff-session",
+    userId: staff.id,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    expiresAt: "2026-08-17T00:00:00.000Z"
+  });
+
+  const assigned = assignUserRole(db, {
+    actorUserId: root.id,
+    targetUserId: staff.id,
+    roleId: "warehouse",
+    reason: "负责仓库履约"
+  });
+  expect(assigned.assignment).toMatchObject({ targetUserId: staff.id, roleId: "warehouse" });
+  expect(findUserById(db, staff.id).roles).toEqual(["warehouse"]);
+  expect(listRoleAssignmentEvents(db, { userId: staff.id }).items).toHaveLength(1);
+  expect(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?").get(staff.id).count).toBe(0);
+
+  const blocked = assignUserRole(db, {
+    actorUserId: root.id,
+    targetUserId: root.id,
+    roleId: "customer",
+    reason: "测试最后管理员保护"
+  });
+  expect(blocked.validationError.code).toBe("LAST_SUPER_ADMIN_REQUIRED");
+  db.close();
+});
+
 test("records allowlisted analytics events once per visitor day", () => {
   const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
   const db = createDatabase(testDbFile);
