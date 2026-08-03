@@ -26,6 +26,16 @@
     });
   }
 
+  function formatAnalyticsCurrency(value) {
+    const numericValue = Number(value) || 0;
+    const rawValue = String(numericValue);
+    const formattedValue = formatNumber(numericValue, Number.isInteger(numericValue) ? 0 : 2);
+    const currencyValue = String(state.formatCurrency(numericValue));
+    return currencyValue.includes(rawValue)
+      ? currencyValue.replace(rawValue, formattedValue)
+      : currencyValue;
+  }
+
   function formatComparison(value, unit = "%") {
     if (value === null || value === undefined) {
       return '<span class="analytics-comparison">上期无数据</span>';
@@ -40,7 +50,7 @@
       {
         key: "net-sales",
         label: "净销售额",
-        value: state.formatCurrency(summary.netSales),
+        value: formatAnalyticsCurrency(summary.netSales),
         comparison: formatComparison(summary.netSalesComparison)
       },
       {
@@ -95,16 +105,16 @@
       row
     }));
     const summary = rows.length
-      ? `本期 ${rows.length} 个时间桶，净销售额 ${state.formatCurrency(values.reduce((sum, value) => sum + value, 0))}`
+      ? `本期 ${rows.length} 个时间桶，净销售额 ${formatAnalyticsCurrency(values.reduce((sum, value) => sum + value, 0))}`
       : "当前周期暂无成交";
 
     return `<section class="analytics-panel analytics-panel--chart" data-analytics-sales-chart aria-label="净销售额趋势：${state.escapeHtml(summary)}">
-      <div class="analytics-panel__heading"><div><span>销售趋势</span><h3>净销售额</h3></div><strong>${state.formatCurrency(values.reduce((sum, value) => sum + value, 0))}</strong></div>
+      <div class="analytics-panel__heading"><div><span>销售趋势</span><h3>净销售额</h3></div><strong>${formatAnalyticsCurrency(values.reduce((sum, value) => sum + value, 0))}</strong></div>
       <span class="visually-hidden" data-analytics-chart-summary>${state.escapeHtml(summary)}</span>
       <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img">
         <line class="analytics-chart__axis" x1="42" y1="204" x2="598" y2="204"></line>
         ${rows.length ? `<polyline class="analytics-chart__line" points="${points.map(({ x, y }) => `${x},${y}`).join(" ")}"></polyline>
-          ${points.map(({ x, y, row }) => `<circle class="analytics-chart__point" cx="${x}" cy="${y}" r="4" tabindex="0" aria-label="${state.escapeHtml(row.label)}，净销售额 ${state.formatCurrency(row.netSales)}，${formatNumber(row.paidOrderCount)} 个支付订单"></circle>`).join("")}`
+          ${points.map(({ x, y, row }) => `<circle class="analytics-chart__point" cx="${x}" cy="${y}" r="4" tabindex="0" aria-label="${state.escapeHtml(row.label)}，净销售额 ${formatAnalyticsCurrency(row.netSales)}，${formatNumber(row.paidOrderCount)} 个支付订单"></circle>`).join("")}`
           : '<text class="analytics-chart__empty" x="320" y="126" text-anchor="middle">当前周期暂无成交</text>'}
       </svg>
     </section>`;
@@ -141,7 +151,7 @@
           <img src="${state.escapeHtml(product.image || "")}" alt="" width="48" height="48" loading="lazy">
           <div><strong>${state.escapeHtml(product.title)}</strong><small>${state.escapeHtml(product.productId)}</small></div>
           <span><small>售出</small>${formatNumber(product.unitsSold)} 件</span>
-          <span><small>销售额</small>${state.formatCurrency(product.sales)}</span>
+          <span><small>销售额</small>${formatAnalyticsCurrency(product.sales)}</span>
           <span><small>退款</small>${formatNumber(product.refundedUnits)} 件</span>
         </article>
       `).join("") : '<p class="analytics-empty">当前周期暂无热销商品。</p>'}</div>
@@ -177,15 +187,28 @@
         <div class="analytics-table">${queue.map((item) => `<article class="analytics-table__row analytics-table__row--compact" data-admin-work-queue><span>${state.escapeHtml(item.label)}</span><strong>${formatNumber(item.count)}</strong></article>`).join("") || '<p class="analytics-empty">暂无待处理工作。</p>'}</div>
       </div>
       <div class="analytics-panel"><div class="analytics-panel__heading"><div><span>交易动态</span><h3>最近订单</h3></div></div>
-        <div class="analytics-table">${orders.map((order) => `<article class="analytics-table__row analytics-table__row--compact" data-admin-recent-order><span>${state.escapeHtml(order.id)}</span><span>${state.escapeHtml(order.status)}</span><strong>${state.formatCurrency(order.total)}</strong></article>`).join("") || '<p class="analytics-empty">暂无最近订单。</p>'}</div>
+        <div class="analytics-table">${orders.map((order) => `<article class="analytics-table__row analytics-table__row--compact" data-admin-recent-order><span>${state.escapeHtml(order.id)}</span><span>${state.escapeHtml(order.status)}</span><strong>${formatAnalyticsCurrency(order.total)}</strong></article>`).join("") || '<p class="analytics-empty">暂无最近订单。</p>'}</div>
       </div>
     </section>`;
   }
 
-  function createRangeMarkup() {
+  function createRangeMarkup({ loading = false } = {}) {
     return `<div class="analytics-ranges" aria-label="数据时间范围">${RANGE_OPTIONS.map((option) => `
-      <button type="button" data-analytics-range="${option.value}" aria-pressed="${state.range === option.value}">${option.label}</button>
+      <button type="button" data-analytics-range="${option.value}" aria-pressed="${state.range === option.value}"${loading && state.range === option.value ? " disabled" : ""}>${option.label}</button>
     `).join("")}</div>`;
+  }
+
+  function createDataNotice(analytics) {
+    const summary = analytics.summary || {};
+    const hasVisitors = Number(summary.uniqueVisitors) > 0;
+    const hasCommerce = Number(summary.netSales) > 0 || Number(summary.paidOrderCount) > 0;
+    if (!hasVisitors && !hasCommerce) {
+      return '<aside class="analytics-notice analytics-notice--empty" data-analytics-empty role="status"><strong>当前周期暂无成交/访问</strong><span>指标保持为零，产生访问或支付后会自动更新。</span></aside>';
+    }
+    if (!hasVisitors && hasCommerce) {
+      return '<aside class="analytics-notice analytics-notice--partial" data-analytics-partial role="status"><strong>访问采集尚无数据</strong><span>成交与订单来自交易事实，转化率将在访问数据到达后计算。</span></aside>';
+    }
+    return "";
   }
 
   function createDashboardMarkup(analytics, operations) {
@@ -194,6 +217,7 @@
         <div><p>经营总览</p><h2 data-analytics-period-label>近 ${state.escapeHtml(analytics.period.range.replace("d", ""))} 天</h2><span>数据更新于 ${new Date().toLocaleString("zh-CN", { hour12: false })}</span></div>
         ${createRangeMarkup()}
       </header>
+      ${createDataNotice(analytics)}
       ${createKpiMarkup(analytics.summary)}
       <div class="analytics-chart-grid">${createSalesChartMarkup(analytics.trend)}${createFunnelMarkup(analytics.funnel)}</div>
       <div class="analytics-table-grid">${createTopProductsMarkup(analytics.topProducts)}${createInventoryMarkup(analytics.inventoryAlerts)}</div>
@@ -202,10 +226,38 @@
   }
 
   function createLoadingMarkup() {
-    return `<div class="analytics-dashboard"><header class="analytics-dashboard__header"><div><p>经营总览</p><h2>正在载入经营数据</h2></div>${createRangeMarkup()}</header><div class="analytics-skeleton" aria-label="正在加载经营数据"></div></div>`;
+    return `<div class="analytics-dashboard" data-analytics-loading aria-busy="true"><header class="analytics-dashboard__header"><div><p>经营总览</p><h2>正在载入经营数据</h2></div>${createRangeMarkup({ loading: true })}</header><div class="analytics-skeleton" aria-label="正在加载经营数据"></div></div>`;
+  }
+
+  function createErrorMarkup() {
+    return `<div class="analytics-error" data-analytics-error role="alert">
+      ${createRangeMarkup()}
+      <div><strong>经营数据加载失败</strong><p>请检查网络连接后重试，已选择的时间范围不会改变。</p></div>
+      <button type="button" data-analytics-retry>重新加载</button>
+    </div>`;
+  }
+
+  function showRetainedLoadingState() {
+    const dashboard = state.panel.querySelector(".analytics-dashboard");
+    if (!dashboard || !state.analytics) {
+      state.panel.innerHTML = createLoadingMarkup();
+      return;
+    }
+    dashboard.setAttribute("data-analytics-loading", "");
+    dashboard.setAttribute("aria-busy", "true");
+    dashboard.querySelectorAll("[data-analytics-range]").forEach((button) => {
+      const selected = button.dataset.analyticsRange === state.range;
+      button.setAttribute("aria-pressed", String(selected));
+      button.disabled = selected;
+    });
   }
 
   function handlePanelClick(event) {
+    const retryButton = event.target.closest("[data-analytics-retry]");
+    if (retryButton) {
+      render();
+      return;
+    }
     const rangeButton = event.target.closest("[data-analytics-range]");
     if (rangeButton && rangeButton.dataset.analyticsRange !== state.range) {
       state.range = rangeButton.dataset.analyticsRange;
@@ -221,7 +273,7 @@
     const requestId = ++state.requestId;
     state.controller?.abort();
     state.controller = new AbortController();
-    state.panel.innerHTML = createLoadingMarkup();
+    showRetainedLoadingState();
     try {
       const [analytics, operations] = await Promise.all([
         state.request(`/api/admin/analytics?range=${state.range}`, { signal: state.controller.signal }),
@@ -233,7 +285,7 @@
       state.panel.innerHTML = createDashboardMarkup(analytics, operations);
     } catch (error) {
       if (error?.name === "AbortError" || requestId !== state.requestId) return;
-      state.panel.innerHTML = `<div class="analytics-error" role="alert">${createRangeMarkup()}<p>经营数据加载失败，请稍后重试。</p></div>`;
+      state.panel.innerHTML = createErrorMarkup();
     }
   }
 

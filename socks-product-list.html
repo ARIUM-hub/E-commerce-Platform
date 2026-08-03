@@ -1730,6 +1730,19 @@
       min-width: 0;
     }
 
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      white-space: nowrap;
+    }
+
     .analytics-dashboard__header,
     .analytics-panel__heading {
       display: flex;
@@ -2106,6 +2119,79 @@
       padding: 20px;
       color: #a3261a;
       font-weight: 800;
+    }
+
+    .analytics-error div {
+      display: grid;
+      gap: 5px;
+    }
+
+    .analytics-error p {
+      margin: 0;
+      color: #6f2821;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    [data-analytics-retry] {
+      min-height: 44px;
+      border: 1px solid #a3261a;
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 9px 14px;
+      color: #a3261a;
+      font: inherit;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    [data-analytics-retry]:hover,
+    [data-analytics-retry]:focus-visible {
+      background: #a3261a;
+      color: #ffffff;
+      outline: none;
+    }
+
+    .analytics-notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .analytics-notice span {
+      color: var(--text-subtle);
+    }
+
+    .analytics-notice--empty {
+      background: #f4f4f4;
+    }
+
+    .analytics-notice--partial {
+      border-color: #e2b47e;
+      background: #fff7ed;
+      color: #8a3c00;
+    }
+
+    .analytics-dashboard[data-analytics-loading] {
+      cursor: progress;
+    }
+
+    .analytics-dashboard[data-analytics-loading]>.analytics-kpis,
+    .analytics-dashboard[data-analytics-loading]>.analytics-chart-grid,
+    .analytics-dashboard[data-analytics-loading]>.analytics-table-grid,
+    .analytics-dashboard[data-analytics-loading]>.analytics-operations {
+      opacity: 0.58;
+    }
+
+    .analytics-ranges button:disabled {
+      cursor: progress;
+      opacity: 0.72;
     }
 
     @keyframes analytics-shimmer {
@@ -4543,6 +4629,16 @@
     }
 
     @media (max-width: 960px) {
+      .analytics-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .analytics-chart-grid,
+      .analytics-table-grid,
+      .analytics-operations {
+        grid-template-columns: 1fr;
+      }
+
       .advanced-filters__body {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -4559,6 +4655,67 @@
     @media (max-width: 640px) {
       body {
         padding-inline: 14px;
+      }
+
+      .analytics-dashboard__header,
+      .analytics-panel__heading,
+      .analytics-notice {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .analytics-ranges {
+        width: 100%;
+      }
+
+      .analytics-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .analytics-kpi,
+      .analytics-panel {
+        padding: 14px;
+      }
+
+      .analytics-kpi {
+        min-height: 138px;
+      }
+
+      .analytics-panel--chart svg {
+        min-height: 180px;
+      }
+
+      .analytics-table__row,
+      .analytics-table__row--inventory,
+      .analytics-table__row--compact {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .analytics-table__row:first-child {
+        border-top: 1px solid var(--line);
+      }
+
+      .analytics-table__row img {
+        width: 64px;
+        height: 64px;
+      }
+
+      .analytics-table__row>span:not(.analytics-table__rank) {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+
+      .analytics-table__rank {
+        display: none;
+      }
+
+      [data-analytics-inventory-link] {
+        width: 100%;
       }
 
       .toolbar {
@@ -4802,6 +4959,17 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .analytics-skeleton {
+        animation: none;
+      }
+
+      .analytics-dashboard[data-analytics-loading]>.analytics-kpis,
+      .analytics-dashboard[data-analytics-loading]>.analytics-chart-grid,
+      .analytics-dashboard[data-analytics-loading]>.analytics-table-grid,
+      .analytics-dashboard[data-analytics-loading]>.analytics-operations {
+        transition: none;
+      }
+
       .admin-operation-drawer {
         transition: none;
       }

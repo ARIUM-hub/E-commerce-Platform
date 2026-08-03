@@ -91,6 +91,72 @@ async function registerAdminFromUi(page) {
   });
 }
 
+function createAnalyticsFixture(range = "30d", days = 30, overrides = {}) {
+  const base = {
+    ok: true,
+    period: {
+      range,
+      start: "2026-07-04T16:00:00.000Z",
+      end: "2026-08-03T16:00:00.000Z",
+      timezone: "Asia/Shanghai",
+      bucket: range === "90d" ? "week" : "day"
+    },
+    summary: {
+      netSales: 1280,
+      netSalesComparison: 12.5,
+      conversionRate: 5,
+      conversionRateDelta: 1.2,
+      uniqueVisitors: 100,
+      paidOrderCount: 5,
+      refundRate: 20,
+      refundRateDelta: -2.5,
+      refundedOrderCount: 1,
+      lowStockSkuCount: 1,
+      outOfStockSkuCount: 1
+    },
+    trend: [
+      { label: `近 ${days} 天`, start: "2026-08-02T16:00:00.000Z", netSales: 1280, paidOrderCount: 5 }
+    ],
+    funnel: {
+      uniqueVisitors: 100,
+      cartAddSessions: 24,
+      checkoutSessions: 10,
+      paidOrderCount: 5
+    },
+    topProducts: [
+      {
+        productId: "sock-01",
+        title: "极简中筒袜",
+        image: "/public/images/sock-01.svg",
+        unitsSold: 8,
+        sales: 312,
+        refundedUnits: 1
+      }
+    ],
+    inventoryAlerts: [
+      {
+        productId: "sock-01",
+        skuId: "sock-01-39",
+        title: "极简中筒袜",
+        size: "39",
+        stockQuantity: 0,
+        lowStockThreshold: 5,
+        severity: "out_of_stock"
+      }
+    ]
+  };
+  return {
+    ...base,
+    ...overrides,
+    period: { ...base.period, ...(overrides.period || {}) },
+    summary: { ...base.summary, ...(overrides.summary || {}) },
+    funnel: { ...base.funnel, ...(overrides.funnel || {}) },
+    trend: overrides.trend === undefined ? base.trend : overrides.trend,
+    topProducts: overrides.topProducts === undefined ? base.topProducts : overrides.topProducts,
+    inventoryAlerts: overrides.inventoryAlerts === undefined ? base.inventoryAlerts : overrides.inventoryAlerts
+  };
+}
+
 test.use({ viewport: { width: 1280, height: 960 } });
 
 test.beforeEach(async ({ request }) => {
@@ -236,6 +302,127 @@ test("switches the analytics range and updates every dashboard section", async (
   await expect(page.locator("[data-analytics-range='7d']")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => requests.some((url) => url.includes("range=7d"))).toBe(true);
   await expect(page.locator("[data-analytics-period-label]")).toContainText("7");
+});
+
+test("keeps analytics charts and inventory accessible on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await registerAdminFromUi(page);
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("30d", 30))
+  }));
+  await page.route("**/api/admin/analytics?range=7d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("7d", 7))
+  }));
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-sales-chart][aria-label]")).toBeVisible();
+  await expect(page.locator("[data-analytics-chart-summary]")).toHaveCount(1);
+  await expect(page.locator("[data-analytics-funnel-summary]")).toHaveCount(1);
+  await expect(page.locator("[data-analytics-chart-summary]")).toHaveCSS("position", "absolute");
+  const chartPoint = page.locator("[data-analytics-sales-chart] circle[tabindex='0']").nth(0);
+  await chartPoint.focus();
+  await expect(chartPoint).toBeFocused();
+  const range = page.locator("[data-analytics-range='7d']");
+  await range.focus();
+  await page.keyboard.press("Enter");
+  await expect(range).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const inventoryCards = page.locator("[data-analytics-inventory-card]");
+  expect(await inventoryCards.count()).toBeGreaterThan(0);
+  await expect(inventoryCards.nth(0)).toBeVisible();
+  await page.locator("[data-analytics-inventory-link][data-sku-id='sock-01-39']").click();
+  await expect(page).toHaveURL(/tab=inventory.*sku=sock-01-39|sku=sock-01-39.*tab=inventory/);
+  await expect(page.locator("[data-sku-id='sock-01-39']")).toBeVisible();
+});
+
+test("preserves analytics range through errors and ignores stale responses", async ({ page }) => {
+  await registerAdminFromUi(page);
+  let resolveSeven;
+  await page.route("**/api/admin/analytics?range=7d", (route) => {
+    resolveSeven = () => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(createAnalyticsFixture("7d", 7))
+    });
+  });
+  await page.route("**/api/admin/analytics?range=90d", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(createAnalyticsFixture("90d", 90))
+    });
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect.poll(() => Boolean(resolveSeven)).toBe(true);
+  await expect(page.locator("[data-analytics-loading]")).toBeVisible();
+  await expect(page.locator("[data-analytics-range='7d']")).toBeDisabled();
+  await page.locator("[data-analytics-range='90d']").click();
+  resolveSeven();
+  await expect(page.locator("[data-analytics-period-label]")).toContainText("90");
+
+  let failThirty = true;
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill(
+    failThirty
+      ? { status: 500, body: "{}" }
+      : {
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(createAnalyticsFixture("30d", 30))
+        }
+  ));
+  await page.locator("[data-analytics-range='30d']").click();
+  await expect(page.locator("[data-analytics-error]")).toBeVisible();
+  await expect(page.locator("[data-analytics-range='30d']")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("[data-analytics-retry]")).toBeVisible();
+  failThirty = false;
+  await page.locator("[data-analytics-retry]").click();
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toContainText("1,280");
+  await expect(page.locator("[data-analytics-error]")).toHaveCount(0);
+});
+
+test("renders honest zero and partial analytics states", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("30d", 30, {
+      summary: {
+        netSales: 0,
+        netSalesComparison: null,
+        conversionRate: 0,
+        conversionRateDelta: 0,
+        uniqueVisitors: 0,
+        paidOrderCount: 0,
+        refundRate: 0,
+        refundRateDelta: 0,
+        refundedOrderCount: 0,
+        lowStockSkuCount: 0,
+        outOfStockSkuCount: 0
+      },
+      funnel: { uniqueVisitors: 0, cartAddSessions: 0, checkoutSessions: 0, paidOrderCount: 0 },
+      trend: [],
+      topProducts: [],
+      inventoryAlerts: []
+    }))
+  }));
+  await page.route("**/api/admin/analytics?range=7d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("7d", 7, {
+      summary: { netSales: 128, uniqueVisitors: 0, paidOrderCount: 2, conversionRate: 0 },
+      funnel: { uniqueVisitors: 0, cartAddSessions: 0, checkoutSessions: 0, paidOrderCount: 2 }
+    }))
+  }));
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-empty]")).toContainText("当前周期暂无成交/访问");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toContainText("128");
+  await expect(page.locator("[data-analytics-kpi='conversion']")).toContainText("0%");
+  await expect(page.locator("[data-analytics-partial]")).toContainText("访问采集尚无数据");
 });
 
 test("moderates and replies from the admin reviews workspace", async ({ page }) => {
