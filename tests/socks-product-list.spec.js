@@ -81,6 +81,8 @@ async function registerFromUi(page, user = {}) {
   await page.locator('[data-auth-field="password"]').fill(password);
   await page.locator("[data-auth-submit]").click();
   await expect(page.locator("[data-auth-user-name]")).toHaveText(name);
+  const verification = await page.request.post("/api/test/verify-email");
+  expect(verification.ok()).toBe(true);
 }
 
 async function registerAdminFromUi(page) {
@@ -89,6 +91,15 @@ async function registerAdminFromUi(page) {
   await page.locator('[data-auth-field="password"]').fill("demo1234");
   await page.locator("[data-auth-submit]").click();
   await expect(page.locator("[data-auth-user-name]")).toBeVisible();
+}
+
+async function loginAdminFromApi(request) {
+  const response = await request.post("/api/auth/login", {
+    data: { email: "admin@socks.test", password: "demo1234" }
+  });
+  expect(response.ok()).toBe(true);
+  const match = /socks_session=([^;]+)/.exec(response.headers()["set-cookie"] || "");
+  return match ? `socks_session=${match[1]}` : "";
 }
 
 function createAnalyticsFixture(range = "30d", days = 30, overrides = {}) {
@@ -956,6 +967,83 @@ test("registers from the auth view and updates the storefront header", async ({ 
   await expect(page.locator("[data-auth-logout]")).toBeVisible();
 });
 
+test("CSRF wrapper supports email verification and resend without exposing tokens", async ({ page, request }) => {
+  await page.goto("/socks-product-list.html?view=auth&mode=register");
+  await page.locator('[data-auth-field="name"]').fill("Secure Buyer");
+  await page.locator('[data-auth-field="email"]').fill("secure-buyer@example.com");
+  await page.locator('[data-auth-field="password"]').fill("demo1234");
+  const registerResponsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/auth/register") && response.request().method() === "POST";
+  });
+  await page.locator("[data-auth-submit]").click();
+  const registerResponse = await registerResponsePromise;
+  expect(registerResponse.status()).toBe(201);
+  expect(registerResponse.request().headers()["x-csrf-token"]).toBeTruthy();
+  await expect(page.locator("[data-email-verification-notice]")).toBeVisible();
+
+  const resendResponsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/auth/email-verification/resend");
+  });
+  await page.locator("[data-email-verification-resend]").click();
+  expect((await resendResponsePromise).status()).toBe(202);
+  await expect(page.locator("[data-email-verification-feedback]")).toBeVisible();
+
+  const adminCookie = await loginAdminFromApi(request);
+  const outboxResponse = await request.get("/api/admin/security-email-outbox", {
+    headers: { cookie: adminCookie }
+  });
+  expect(outboxResponse.ok()).toBe(true);
+  const outbox = (await outboxResponse.json()).items;
+  const token = outbox.find((email) => email.templateId === "email_verification").payload.token;
+  await page.goto(`/socks-product-list.html?view=auth&mode=verify-email&token=${encodeURIComponent(token)}`);
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toBeVisible();
+  await expect(page.locator("[data-email-verification-notice]")).toHaveCount(0);
+});
+
+test("password reset UI keeps enumeration-safe messaging and accepts a valid outbox token", async ({ page, request }) => {
+  await page.request.post("/api/auth/register", {
+    data: { name: "Reset Buyer", email: "reset-ui@example.com", password: "demo1234" }
+  });
+  await page.goto("/socks-product-list.html?view=auth&mode=forgot-password");
+  await page.locator('[data-auth-field="email"]').fill("reset-ui@example.com");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toContainText(/instructions|说明/i);
+
+  const adminCookie = await loginAdminFromApi(request);
+  const outboxResponse = await request.get("/api/admin/security-email-outbox", {
+    headers: { cookie: adminCookie }
+  });
+  expect(outboxResponse.ok()).toBe(true);
+  const outbox = (await outboxResponse.json()).items;
+  const token = outbox.find((email) => email.templateId === "password_reset").payload.token;
+  await page.goto(`/socks-product-list.html?view=auth&mode=reset-password&token=${encodeURIComponent(token)}`);
+  await page.locator('[data-auth-field="password"]').fill("new-password-123");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toContainText(/updated|已更新/i);
+});
+
+test("security cooldown shows Retry-After and does not retry login automatically", async ({ page }) => {
+  let loginRequests = 0;
+  await page.route("**/api/auth/login", async (route) => {
+    loginRequests += 1;
+    await route.fulfill({
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": "42" },
+      body: JSON.stringify({
+        ok: false,
+        error: { code: "RATE_LIMITED", message: "Too many requests.", details: { retryAfterSeconds: 42 } }
+      })
+    });
+  });
+  await page.goto("/socks-product-list.html?view=auth&mode=login");
+  await page.locator('[data-auth-field="email"]').fill("buyer@example.com");
+  await page.locator('[data-auth-field="password"]').fill("wrong-password");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-error]")).toContainText("42");
+  expect(loginRequests).toBe(1);
+});
+
 test("logs out from the storefront header", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=auth&mode=register");
   await page.locator('[data-auth-field="name"]').fill("Alex Chen");
@@ -1005,7 +1093,11 @@ test("uses a default saved address during checkout", async ({ page }) => {
   await page.locator('[data-address-field="city"]').fill("Seattle");
   await page.locator('[data-address-field="region"]').fill("WA");
   await page.locator('[data-address-field="postalCode"]').fill("98101");
+  const addressResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/me/addresses") && response.request().method() === "POST";
+  });
   await page.locator("[data-address-submit]").click();
+  expect((await addressResponse).status()).toBe(201);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await expect(page.locator("[data-checkout-address-option]")).toContainText("100 Demo Street");

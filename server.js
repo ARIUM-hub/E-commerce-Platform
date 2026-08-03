@@ -87,6 +87,7 @@ const {
   createSession,
   findSession,
   deleteSession,
+  markUserEmailVerified,
   replaceAddresses
 } = require("./lib/repositories/users");
 const {
@@ -176,6 +177,7 @@ const {
 } = require("./lib/repositories/payment-methods");
 const { processPaymentWebhook } = require("./lib/repositories/payment-events");
 const { listSecurityAuditEvents } = require("./lib/repositories/security-audit");
+const { listOutbox } = require("./lib/repositories/email-outbox");
 const {
   createInvoiceForOrder,
   findInvoiceById,
@@ -1270,6 +1272,8 @@ const supportLookupLimiter = createSupportLookupLimiter();
 registerHealthRoutes(router);
 registerSecurityRoutes(router, {
   csrfService,
+  isProduction: config.nodeEnv === "production",
+  listOutbox,
   listSecurityAuditEvents,
   requirePermission: authorization.requirePermission,
   sendJsonWithHeaders,
@@ -1385,7 +1389,11 @@ registerTrustRoutes(router, {
   normalizeLocale
 });
 registerTestRoutes(router, {
+  createPublicUser,
   isTest: config.isTest,
+  markUserEmailVerified,
+  requireUser,
+  withDatabase,
   async resetTestDatabase() {
     await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
     withDatabase(() => null);

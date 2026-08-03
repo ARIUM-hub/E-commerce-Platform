@@ -6,6 +6,67 @@
       NO_SHOW: "no-show"
     };
 
+    const nativeFetch = window.fetch.bind(window);
+    let csrfToken = "";
+    let csrfTokenPromise = null;
+
+    async function loadCsrfToken() {
+      if (csrfToken) return csrfToken;
+      if (!csrfTokenPromise) {
+        csrfTokenPromise = nativeFetch("/api/security/csrf", { credentials: "same-origin" })
+          .then(async (response) => {
+            if (!response.ok) throw new Error("CSRF token request failed");
+            const payload = await response.json();
+            csrfToken = payload.csrfToken;
+            return csrfToken;
+          })
+          .finally(() => {
+            csrfTokenPromise = null;
+          });
+      }
+      return csrfTokenPromise;
+    }
+
+    async function apiFetch(input, init = {}, retryState = { csrfRetried: false }) {
+      const requestUrl = new URL(typeof input === "string" ? input : input.url, window.location.origin);
+      const method = String(init.method || input?.method || "GET").toUpperCase();
+      const isApiWrite = requestUrl.origin === window.location.origin
+        && requestUrl.pathname.startsWith("/api/")
+        && !["GET", "HEAD", "OPTIONS"].includes(method);
+      if (!isApiWrite) return nativeFetch(input, init);
+
+      const headers = new Headers(input instanceof Request ? input.headers : undefined);
+      new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+      headers.set("X-CSRF-Token", await loadCsrfToken());
+      const response = await nativeFetch(input, {
+        ...init,
+        headers,
+        credentials: init.credentials || "same-origin"
+      });
+      let payload = null;
+      if (response.status === 403 || response.status === 429) {
+        payload = await response.clone().json().catch(() => null);
+      }
+      if (response.status === 403
+        && payload?.error?.code === "CSRF_INVALID"
+        && !retryState.csrfRetried) {
+        csrfToken = "";
+        return apiFetch(input, init, { csrfRetried: true });
+      }
+      if (response.status === 429) {
+        const retryAfterSeconds = Number(
+          response.headers.get("Retry-After") || payload?.error?.details?.retryAfterSeconds || 0
+        );
+        const error = new Error(payload?.error?.message || "Too many requests.");
+        error.code = "RATE_LIMITED";
+        error.retryAfterSeconds = retryAfterSeconds;
+        throw error;
+      }
+      return response;
+    }
+
+    window.fetch = apiFetch;
+
     const SORT_KEY = {
       RECOMMENDED: "recommended",
       PRICE_ASC: "price-asc",
@@ -138,7 +199,11 @@
     const authTitle = document.querySelector("[data-auth-title]");
     const authCopy = document.querySelector("[data-auth-copy]");
     const authNameRow = document.querySelector("[data-auth-name-row]");
+    const authEmailRow = document.querySelector("[data-auth-email-row]");
+    const authPasswordRow = document.querySelector("[data-auth-password-row]");
     const authError = document.querySelector("[data-auth-error]");
+    const authSuccess = document.querySelector("[data-auth-success]");
+    const authSecondaryActions = document.querySelector("[data-auth-secondary-actions]");
     const authSubmit = document.querySelector("[data-auth-submit]");
     const addressForm = document.querySelector("[data-address-form]");
     const addressList = document.querySelector("[data-address-list]");
@@ -3189,7 +3254,10 @@
     }
 
     function getAuthMode() {
-      return getSearchParams().get("mode") === "register" ? "register" : "login";
+      const mode = getSearchParams().get("mode") || "login";
+      return ["login", "register", "forgot-password", "reset-password", "verify-email"].includes(mode)
+        ? mode
+        : "login";
     }
 
     function renderAuthShell() {
@@ -3197,11 +3265,23 @@
       siteOrdersLink.hidden = !isAuthenticated;
 
       if (isAuthenticated) {
+        const verificationMarkup = currentUser.emailVerified ? "" : `
+          <span class="account-verification" data-email-verification-notice>
+            <span>${activeLocale === LOCALE_KEY.EN_US
+              ? "Verify your email before checkout."
+              : "结算前请先验证邮箱。"}</span>
+            <button type="button" data-email-verification-resend>${activeLocale === LOCALE_KEY.EN_US
+              ? "Send verification email"
+              : "发送验证邮件"}</button>
+            <span data-email-verification-feedback role="status" aria-live="polite"></span>
+          </span>
+        `;
         authShell.innerHTML = `
           <span class="site-action__eyebrow">${activeLocale === LOCALE_KEY.EN_US ? "Account" : "账户"}</span>
           <span class="site-action__value" data-auth-user-name>${escapeHtml(currentUser.name)}</span>
           <a class="site-action__eyebrow" href="/socks-product-list.html?view=addresses" data-auth-addresses-link>Addresses</a>
           <button class="site-action__eyebrow" type="button" data-auth-logout>Logout</button>
+          ${verificationMarkup}
         `;
         return;
       }
@@ -3215,13 +3295,48 @@
 
     function renderAuthView() {
       const mode = getAuthMode();
-      authTitle.textContent = mode === "register" ? "Create account" : "Sign in";
-      authCopy.textContent = mode === "register"
-        ? "Create a demo account to keep your socks cart and orders together."
-        : "Sign in to restore your cart, addresses, and order history.";
+      const content = {
+        login: {
+          title: "Sign in",
+          copy: "Sign in to restore your cart, addresses, and order history.",
+          submit: "Sign in"
+        },
+        register: {
+          title: "Create account",
+          copy: "Create a demo account to keep your socks cart and orders together.",
+          submit: "Create account"
+        },
+        "forgot-password": {
+          title: "Reset your password",
+          copy: "Enter your email. We show the same confirmation whether or not an account exists.",
+          submit: "Send reset instructions"
+        },
+        "reset-password": {
+          title: "Choose a new password",
+          copy: "Use 8 to 128 characters. All previous sessions will be signed out.",
+          submit: "Update password"
+        },
+        "verify-email": {
+          title: "Verify your email",
+          copy: "Confirm this email before placing an order.",
+          submit: "Verify email"
+        }
+      }[mode];
+      authTitle.textContent = content.title;
+      authCopy.textContent = content.copy;
       authNameRow.hidden = mode !== "register";
-      authSubmit.textContent = mode === "register" ? "Create account" : "Sign in";
+      authEmailRow.hidden = !["login", "register", "forgot-password"].includes(mode);
+      authPasswordRow.hidden = !["login", "register", "reset-password"].includes(mode);
+      authPasswordRow.querySelector("input").autocomplete = mode === "reset-password"
+        ? "new-password"
+        : "current-password";
+      authSubmit.textContent = content.submit;
       authError.textContent = "";
+      authSuccess.hidden = true;
+      authSuccess.textContent = "";
+      authSecondaryActions.innerHTML = mode === "login"
+        ? `<a href="${STOREFRONT_PATH}?view=auth&mode=forgot-password">Forgot password?</a>`
+        : `<a href="${STOREFRONT_PATH}?view=auth&mode=login">Back to sign in</a>`;
     }
 
     async function fetchSession() {
@@ -3243,6 +3358,34 @@
     async function submitAuthForm(form) {
       const mode = getAuthMode();
       const formData = new FormData(form);
+      const token = getSearchParams().get("token") || "";
+      if (mode === "forgot-password") {
+        const response = await fetch("/api/auth/password-reset/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: formData.get("email") })
+        });
+        if (!response.ok) throw await createCartRequestError(response, "Password reset request failed");
+        return response.json();
+      }
+      if (mode === "reset-password") {
+        const response = await fetch("/api/auth/password-reset/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password: formData.get("password") })
+        });
+        if (!response.ok) throw await createCartRequestError(response, "Password reset failed");
+        return response.json();
+      }
+      if (mode === "verify-email") {
+        const response = await fetch("/api/auth/email-verification/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token })
+        });
+        if (!response.ok) throw await createCartRequestError(response, "Email verification failed");
+        return response.json();
+      }
       const payload = {
         email: formData.get("email"),
         password: formData.get("password")
@@ -7311,11 +7454,29 @@
 
     authForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const mode = getAuthMode();
       authError.textContent = "";
+      authSuccess.hidden = true;
       authSubmit.disabled = true;
 
       try {
         const payload = await submitAuthForm(authForm);
+        if (mode === "forgot-password") {
+          authSuccess.textContent = "If an account exists, reset instructions have been queued.";
+          authSuccess.hidden = false;
+          return;
+        }
+        if (mode === "reset-password") {
+          authSuccess.textContent = "Your password has been updated. Sign in with the new password.";
+          authSuccess.hidden = false;
+          return;
+        }
+        if (mode === "verify-email") {
+          await fetchSession();
+          authSuccess.textContent = "Your email is verified. You can now continue to checkout.";
+          authSuccess.hidden = false;
+          return;
+        }
         currentUser = payload.user;
         window.StorefrontCustomerSupport?.setUser(currentUser);
         setCartStateFromPayload(payload);
@@ -7325,15 +7486,46 @@
         syncPageView();
         await renderProducts();
       } catch (error) {
-        authError.textContent = error.code === "EMAIL_ALREADY_REGISTERED"
-          ? "This email is already registered."
-          : "Email or password is incorrect.";
+        if (error.code === "RATE_LIMITED") {
+          authError.textContent = `Too many requests. Try again in ${error.retryAfterSeconds || 1} seconds.`;
+        } else if (error.code === "EMAIL_ALREADY_REGISTERED") {
+          authError.textContent = "This email is already registered.";
+        } else if (error.code === "PASSWORD_POLICY_INVALID") {
+          authError.textContent = "Password must be between 8 and 128 characters.";
+        } else {
+          authError.textContent = mode === "login"
+            ? "Email or password is incorrect."
+            : "This security link is invalid or expired.";
+        }
       } finally {
         authSubmit.disabled = false;
       }
     });
 
     authShell.addEventListener("click", async (event) => {
+      const resendButton = event.target.closest("[data-email-verification-resend]");
+      if (resendButton) {
+        const feedback = authShell.querySelector("[data-email-verification-feedback]");
+        resendButton.disabled = true;
+        try {
+          const response = await fetch("/api/auth/email-verification/resend", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}"
+          });
+          if (!response.ok) throw await createCartRequestError(response, "Verification resend failed");
+          feedback.textContent = activeLocale === LOCALE_KEY.EN_US
+            ? "Verification email queued."
+            : "验证邮件已进入发送队列。";
+        } catch (error) {
+          feedback.textContent = error.code === "RATE_LIMITED"
+            ? `Try again in ${error.retryAfterSeconds || 1} seconds.`
+            : "Unable to resend right now.";
+        } finally {
+          resendButton.disabled = false;
+        }
+        return;
+      }
       const logoutButton = event.target.closest("[data-auth-logout]");
       if (!logoutButton) {
         return;
@@ -7403,9 +7595,15 @@
         renderCartState();
         window.location.href = `${STOREFRONT_PATH}?view=payment&id=${encodeURIComponent(payload.order.id)}`;
       } catch (error) {
-        errorNode.textContent = error.code === "CHECKOUT_VALIDATION_FAILED"
-          ? t("checkout.validationError")
-          : t("checkout.submitError");
+        if (error.code === "EMAIL_VERIFICATION_REQUIRED") {
+          errorNode.textContent = activeLocale === LOCALE_KEY.EN_US
+            ? "Verify your email from the account area before checkout. Your cart and form are unchanged."
+            : "请先在账户区验证邮箱。购物车和表单内容已保留。";
+        } else {
+          errorNode.textContent = error.code === "CHECKOUT_VALIDATION_FAILED"
+            ? t("checkout.validationError")
+            : t("checkout.submitError");
+        }
         submitButton.disabled = false;
       }
     });

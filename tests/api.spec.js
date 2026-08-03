@@ -3354,7 +3354,10 @@ function getSessionCookie(response) {
 async function registerAndGetCookie(request) {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
-  return getSessionCookie(response);
+  const cookie = getSessionCookie(response);
+  const verification = await request.post("/api/test/verify-email", { headers: { cookie } });
+  expect(verification.ok()).toBe(true);
+  return cookie;
 }
 
 async function registerApiUser(request, { name = "Admin User", email, password = "demo1234" } = {}) {
@@ -3362,7 +3365,10 @@ async function registerApiUser(request, { name = "Admin User", email, password =
     data: { name, email, password }
   });
   expect(response.ok()).toBe(true);
-  return response.headers()["set-cookie"];
+  const cookie = getSessionCookie(response);
+  const verification = await request.post("/api/test/verify-email", { headers: { cookie } });
+  expect(verification.ok()).toBe(true);
+  return cookie;
 }
 
 async function loginApiAdmin(request) {
@@ -5110,6 +5116,10 @@ async function postSignedPaymentWebhook(request, body) {
 async function createLoggedInOrder(request, userPayload = registerPayload) {
   const registerResponse = await request.post("/api/auth/register", { data: userPayload });
   const sessionCookie = getSessionCookie(registerResponse);
+  const verification = await request.post("/api/test/verify-email", {
+    headers: { cookie: sessionCookie }
+  });
+  expect(verification.ok()).toBe(true);
   await request.post("/api/cart/items", {
     headers: { cookie: sessionCookie },
     data: { productId: "sock-01", size: "39", quantity: 1 }
