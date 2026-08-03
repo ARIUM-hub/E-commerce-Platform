@@ -4388,6 +4388,79 @@ test("email verification lifecycle queues mail invalidates old tokens and verifi
   expect((await sessionResponse.json()).user.emailVerified).toBe(true);
 });
 
+test("password reset lifecycle is enumeration-safe and invalidates only the user sessions", async ({ request }) => {
+  const firstRegistration = await request.post("/api/auth/register", { data: registerPayload });
+  const firstSessionCookie = getSessionCookie(firstRegistration);
+  const otherRegistration = await request.post("/api/auth/register", {
+    data: { name: "Other Buyer", email: "other-reset@example.com", password: "demo1234" }
+  });
+  const otherSessionCookie = getSessionCookie(otherRegistration);
+
+  const unknownResponse = await request.post("/api/auth/password-reset/request", {
+    data: { email: "missing@example.com" }
+  });
+  const knownResponse = await request.post("/api/auth/password-reset/request", {
+    data: { email: registerPayload.email }
+  });
+  expect(unknownResponse.status()).toBe(202);
+  expect(knownResponse.status()).toBe(202);
+  expect(await unknownResponse.json()).toEqual(await knownResponse.json());
+
+  let db = createDatabase(testDbFile);
+  const resetEmails = db.prepare(`
+    SELECT payload FROM email_outbox WHERE template_id = 'password_reset' ORDER BY rowid ASC
+  `).all();
+  expect(resetEmails).toHaveLength(1);
+  const resetToken = JSON.parse(resetEmails[0].payload).token;
+  db.close();
+
+  const shortPassword = await request.post("/api/auth/password-reset/confirm", {
+    data: { token: resetToken, password: "1234567" }
+  });
+  expect(shortPassword.status()).toBe(400);
+  expect((await shortPassword.json()).error.code).toBe("PASSWORD_POLICY_INVALID");
+  const longPassword = await request.post("/api/auth/password-reset/confirm", {
+    data: { token: resetToken, password: "x".repeat(129) }
+  });
+  expect(longPassword.status()).toBe(400);
+  expect((await longPassword.json()).error.code).toBe("PASSWORD_POLICY_INVALID");
+  const invalidToken = await request.post("/api/auth/password-reset/confirm", {
+    data: { token: "invalid-reset-token", password: "new-password-123" }
+  });
+  expect(invalidToken.status()).toBe(400);
+  expect((await invalidToken.json()).error.code).toBe("PASSWORD_RESET_TOKEN_INVALID");
+
+  const confirmResponse = await request.post("/api/auth/password-reset/confirm", {
+    data: { token: resetToken, password: "new-password-123" }
+  });
+  expect(confirmResponse.ok()).toBe(true);
+
+  const oldSession = await request.get("/api/session", {
+    headers: { cookie: firstSessionCookie }
+  });
+  expect((await oldSession.json()).authenticated).toBe(false);
+  const otherSession = await request.get("/api/session", {
+    headers: { cookie: otherSessionCookie }
+  });
+  expect((await otherSession.json()).authenticated).toBe(true);
+
+  const oldPasswordLogin = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: registerPayload.password }
+  });
+  expect(oldPasswordLogin.status()).toBe(401);
+  const newPasswordLogin = await request.post("/api/auth/login", {
+    data: { email: registerPayload.email, password: "new-password-123" }
+  });
+  expect(newPasswordLogin.ok()).toBe(true);
+
+  db = createDatabase(testDbFile);
+  expect(db.prepare("SELECT password_changed_at FROM users WHERE email = ?")
+    .get(registerPayload.email).password_changed_at).toBeTruthy();
+  expect(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?")
+    .get((await firstRegistration.json()).user.id).count).toBe(1);
+  db.close();
+});
+
 test("persists registered users and sessions in SQLite", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
