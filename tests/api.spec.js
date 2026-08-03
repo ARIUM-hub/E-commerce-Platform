@@ -2781,6 +2781,41 @@ async function loginApiAdmin(request) {
   return response.headers()["set-cookie"];
 }
 
+async function assignRoleAndLogin(request, email, role) {
+  const customerCookie = await registerApiUser(request, { email });
+  const session = await request.get("/api/session", { headers: { cookie: customerCookie } });
+  const user = (await session.json()).user;
+  const rootCookie = await loginApiAdmin(request);
+  const changed = await request.patch(`/api/admin/users/${user.id}/role`, {
+    headers: { cookie: rootCookie },
+    data: { role, reason: `API permission test for ${role}` }
+  });
+  expect(changed.ok()).toBe(true);
+  const login = await request.post("/api/auth/login", {
+    data: { email, password: "demo1234" }
+  });
+  expect(login.ok()).toBe(true);
+  return login.headers()["set-cookie"];
+}
+
+for (const scenario of [
+  { role: "operator", path: "/api/admin/analytics?range=30d", status: 200 },
+  { role: "customer_service", path: "/api/admin/analytics?range=30d", status: 403 },
+  { role: "customer_service", path: "/api/admin/reviews", status: 200 },
+  { role: "warehouse", path: "/api/admin/reviews", status: 403 },
+  { role: "customer_service", path: "/api/admin/support/tickets", status: 200 }
+]) {
+  test(`${scenario.role} access to ${scenario.path}`, async ({ request }) => {
+    const email = `${scenario.role}-${scenario.path.replace(/\W/g, "-")}@example.com`;
+    const cookie = await assignRoleAndLogin(request, email, scenario.role);
+    const response = await request.get(scenario.path, { headers: { cookie } });
+    expect(response.status()).toBe(scenario.status);
+    if (scenario.status === 403) {
+      expect((await response.json()).error.code).toBe("PERMISSION_DENIED");
+    }
+  });
+}
+
 test("lets only super admins manage roles and invalidates target sessions", async ({ request }) => {
   const rootCookie = await loginApiAdmin(request);
   const staffCookie = await registerApiUser(request, { email: "staff@example.com" });

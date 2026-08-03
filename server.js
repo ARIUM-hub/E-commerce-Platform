@@ -1250,7 +1250,7 @@ registerAnalyticsRoutes(router, {
 });
 registerAdminAnalyticsRoutes(router, {
   getAdminAnalytics,
-  requireAdmin,
+  requirePermission: authorization.requirePermission,
   withDatabase
 });
 registerAdminReviewRoutes(router, {
@@ -1259,7 +1259,7 @@ registerAdminReviewRoutes(router, {
   listAdminProductReviews,
   moderateReviewBatch,
   readRequestBody,
-  requireAdmin,
+  requirePermission: authorization.requirePermission,
   upsertMerchantReply,
   withdrawMerchantReply,
   withDatabase
@@ -1284,7 +1284,7 @@ registerAdminSupportRoutes(router, {
   handleRequestBodyError,
   listAdminSupportTickets,
   readRequestBody,
-  requireAdmin,
+  requirePermission: authorization.requirePermission,
   updateSupportTicket,
   withDatabase
 });
