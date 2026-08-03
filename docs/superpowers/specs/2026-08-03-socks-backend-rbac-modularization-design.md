@@ -30,7 +30,7 @@
 - 不引入 Express、Fastify、Koa 或新的 Web 框架。
 - 不接入第三方身份提供商、OAuth、SSO 或多因素认证。
 - 不在本阶段开发后台角色管理页面，只提供受保护的管理 API。
-- 不重写 Repository 层业务规则，不改变现有订单、退款、履约和退货状态机。
+- 不重写现有订单、退款和履约业务规则；退货状态机仅增加 `received` 状态，用于隔离仓库收货与运营退款职责。
 - 不进行压力测试、并发模型探测或多后台智能体执行。
 
 ## 4. 方案选择
@@ -187,6 +187,10 @@ audit.read
 
 默认角色，不拥有 `/api/admin/*` 权限。现有用户只能操作自己的购物车、地址、订单、支付、退款进度、退货、收藏、最近浏览和客服记录。
 
+### 7.6 退货收货权限边界
+
+退货状态流转调整为 `submitted → reviewing → approved → received → completed`。`warehouse` 的 `returns.receive` 只能执行 `approved → received`，该操作不创建退款，也不执行库存回补。`operator` 的 `returns.review` 负责审核、拒绝以及 `received → completed`；只有完成操作可以创建退款和执行既有库存处理。这样可以避免仓库角色通过“完成退货”间接取得退款权限。
+
 ## 8. 授权服务
 
 `lib/auth/authorization.js` 提供：
@@ -310,7 +314,7 @@ Required: audit.read
 - `admin-product-routes.js`：商品、图片上传和 SKU。
 - `admin-inventory-routes.js`：库存查询和调整。
 - `admin-order-routes.js`：订单查询、状态、发货、取消和退款。
-- `admin-return-routes.js`：后台退货审核。
+- `admin-return-routes.js`：后台退货审核、仓库收货和完成退款。
 - `admin-marketing-routes.js`：营销资源和活动状态。
 - `admin-payment-routes.js`：支付配置。
 - `admin-user-routes.js`：账号、角色和审计。
