@@ -12,13 +12,14 @@ const {
 } = require("./lib/security/rate-limit-service");
 const { createRequestSecurity } = require("./lib/security/request-security");
 const { hashSecurityIdentifier } = require("./lib/security/security-identifiers");
+const { verifyWebhookSignature } = require("./lib/security/webhook-signature");
 const { createApiError } = require("./lib/api-errors");
 const {
   sendError: sendHttpError,
   sendJson: sendHttpJson,
   sendJsonWithHeaders: sendHttpJsonWithHeaders
 } = require("./lib/http/responses");
-const { JsonBodyError, readJsonBody } = require("./lib/http/request-body");
+const { JsonBodyError, readJsonBody, readRawBody } = require("./lib/http/request-body");
 const {
   getCookieValue
 } = require("./lib/http/cookies");
@@ -174,6 +175,7 @@ const {
   updatePaymentMethod
 } = require("./lib/repositories/payment-methods");
 const { processPaymentWebhook } = require("./lib/repositories/payment-events");
+const { listSecurityAuditEvents } = require("./lib/repositories/security-audit");
 const {
   createInvoiceForOrder,
   findInvoiceById,
@@ -1268,7 +1270,10 @@ const supportLookupLimiter = createSupportLookupLimiter();
 registerHealthRoutes(router);
 registerSecurityRoutes(router, {
   csrfService,
-  sendJsonWithHeaders
+  listSecurityAuditEvents,
+  requirePermission: authorization.requirePermission,
+  sendJsonWithHeaders,
+  withDatabase
 });
 registerProductRoutes(router, {
   createProductQuestion,
@@ -1444,7 +1449,28 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "POST" && requestUrl.pathname === "/api/payments/webhook") {
     try {
-      const body = await readRequestBody(request);
+      const rawBody = await readRawBody(request, { limitBytes: config.requestBodyLimitBytes });
+      const signature = request.headers["x-payment-signature"];
+      if (!verifyWebhookSignature({
+        rawBody,
+        signature,
+        secret: config.paymentWebhookSecret
+      })) {
+        sendError(
+          response,
+          401,
+          "PAYMENT_WEBHOOK_SIGNATURE_INVALID",
+          "Payment webhook signature is invalid."
+        );
+        return;
+      }
+      let body;
+      try {
+        body = rawBody.length ? JSON.parse(rawBody.toString("utf8")) : {};
+      } catch {
+        throw new JsonBodyError("INVALID_JSON", "Request body must be valid JSON.", 400);
+      }
+      body.signature = String(signature);
       const result = withDatabase((db) => processPaymentWebhook(db, {
         body,
         findOrderById,
@@ -2432,6 +2458,15 @@ const server = http.createServer(async (request, response) => {
       const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request);
       const cart = activeCart.cart;
+      if (activeCart.user && !activeCart.user.emailVerifiedAt) {
+        sendError(
+          response,
+          403,
+          "EMAIL_VERIFICATION_REQUIRED",
+          "Email verification is required before checkout."
+        );
+        return;
+      }
       const body = await readRequestBody(request);
       const locale = normalizeLocale(body.locale);
 

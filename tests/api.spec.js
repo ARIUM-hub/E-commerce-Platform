@@ -4461,6 +4461,117 @@ test("password reset lifecycle is enumeration-safe and invalidates only the user
   db.close();
 });
 
+test("verified checkout blocks unverified users without mutating cart or inventory", async ({ request }) => {
+  const registerResponse = await request.post("/api/auth/register", { data: registerPayload });
+  const sessionCookie = getSessionCookie(registerResponse);
+  await request.post("/api/cart/items", {
+    headers: { cookie: sessionCookie },
+    data: { productId: "sock-01", size: "39", quantity: 1 }
+  });
+  let db = createDatabase(testDbFile);
+  const stockBefore = db.prepare("SELECT stock_quantity FROM product_variants WHERE sku_id = ?")
+    .get("sock-01-39").stock_quantity;
+  const token = JSON.parse(db.prepare(`
+    SELECT payload FROM email_outbox WHERE template_id = 'email_verification' ORDER BY rowid DESC LIMIT 1
+  `).get().payload).token;
+  db.close();
+
+  const blocked = await request.post("/api/orders", {
+    headers: { cookie: sessionCookie },
+    data: checkoutPayload
+  });
+  expect(blocked.status()).toBe(403);
+  expect((await blocked.json()).error.code).toBe("EMAIL_VERIFICATION_REQUIRED");
+  const cartAfterBlock = await request.get("/api/cart", { headers: { cookie: sessionCookie } });
+  expect((await cartAfterBlock.json()).items).toHaveLength(1);
+  db = createDatabase(testDbFile);
+  expect(db.prepare("SELECT stock_quantity FROM product_variants WHERE sku_id = ?")
+    .get("sock-01-39").stock_quantity).toBe(stockBefore);
+  expect(db.prepare("SELECT COUNT(*) AS count FROM orders").get().count).toBe(0);
+  db.close();
+
+  const confirm = await request.post("/api/auth/email-verification/confirm", {
+    data: { token }
+  });
+  expect(confirm.ok()).toBe(true);
+  const checkout = await request.post("/api/orders", {
+    headers: { cookie: sessionCookie },
+    data: checkoutPayload
+  });
+  expect(checkout.status()).toBe(201);
+});
+
+test("webhook signature validates the exact raw payment callback body", async ({ request }) => {
+  const crypto = require("node:crypto");
+  const { order } = await createOrderViaApi(request);
+  const paymentResponse = await request.post(`/api/orders/${order.id}/payments`, {
+    data: { method: "card", locale: "en-US" }
+  });
+  const payment = (await paymentResponse.json()).payment;
+  const body = {
+    eventId: "evt-hmac-success-0001",
+    paymentId: payment.id,
+    orderId: order.id,
+    status: "succeeded",
+    provider: "demo_gateway",
+    idempotencyKey: "hmac-callback-success-0001",
+    locale: "en-US"
+  };
+  const rawBody = JSON.stringify(body);
+
+  const unsigned = await request.post("/api/payments/webhook", {
+    headers: { "content-type": "application/json" },
+    data: rawBody
+  });
+  expect(unsigned.status()).toBe(401);
+  expect((await unsigned.json()).error.code).toBe("PAYMENT_WEBHOOK_SIGNATURE_INVALID");
+  const forged = await request.post("/api/payments/webhook", {
+    headers: {
+      "content-type": "application/json",
+      "x-payment-signature": "sha256=forged"
+    },
+    data: rawBody
+  });
+  expect(forged.status()).toBe(401);
+
+  const signature = crypto.createHmac("sha256", "test-payment-webhook-secret")
+    .update(Buffer.from(rawBody))
+    .digest("hex");
+  const signed = await request.post("/api/payments/webhook", {
+    headers: {
+      "content-type": "application/json",
+      "x-payment-signature": `sha256=${signature}`
+    },
+    data: rawBody
+  });
+  expect(signed.ok()).toBe(true);
+  expect((await signed.json()).order.status).toBe("paid");
+});
+
+test("security audit API requires audit permission and returns redacted pagination", async ({ request }) => {
+  const customerCookie = await registerAndGetCookie(request, {
+    name: "Audit Customer",
+    email: "audit-customer@example.com",
+    password: "demo1234"
+  });
+  const denied = await request.get("/api/admin/security-audit?page=1&pageSize=1", {
+    headers: { cookie: customerCookie }
+  });
+  expect(denied.status()).toBe(403);
+
+  const adminCookie = await loginApiAdmin(request);
+  const allowed = await request.get("/api/admin/security-audit?page=1&pageSize=1", {
+    headers: { cookie: adminCookie }
+  });
+  expect(allowed.ok()).toBe(true);
+  const payload = await allowed.json();
+  expect(payload.items).toHaveLength(1);
+  expect(payload.pagination).toMatchObject({ page: 1, pageSize: 1 });
+  expect(JSON.stringify(payload.items[0].metadata)).not.toMatch(
+    /password|token|cookie|authorization|audit-customer@example\.com/i
+  );
+});
+
 test("persists registered users and sessions in SQLite", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
@@ -4981,6 +5092,21 @@ async function createOrderViaApi(request) {
   return response.json();
 }
 
+async function postSignedPaymentWebhook(request, body) {
+  const crypto = require("node:crypto");
+  const rawBody = JSON.stringify(body);
+  const signature = crypto.createHmac("sha256", "test-payment-webhook-secret")
+    .update(Buffer.from(rawBody))
+    .digest("hex");
+  return request.post("/api/payments/webhook", {
+    headers: {
+      "content-type": "application/json",
+      "x-payment-signature": `sha256=${signature}`
+    },
+    data: rawBody
+  });
+}
+
 async function createLoggedInOrder(request, userPayload = registerPayload) {
   const registerResponse = await request.post("/api/auth/register", { data: userPayload });
   const sessionCookie = getSessionCookie(registerResponse);
@@ -5462,17 +5588,14 @@ test("processes a successful payment webhook and creates an invoice", async ({ r
     status: "processing"
   });
 
-  const webhookResponse = await request.post("/api/payments/webhook", {
-    data: {
-      eventId: "evt-demo-success-0001",
-      paymentId: paymentPayload.payment.id,
-      orderId: order.id,
-      status: "succeeded",
-      provider: "demo_gateway",
-      idempotencyKey: "demo-callback-success-0001",
-      signature: "demo-signature",
-      locale: "en-US"
-    }
+  const webhookResponse = await postSignedPaymentWebhook(request, {
+    eventId: "evt-demo-success-0001",
+    paymentId: paymentPayload.payment.id,
+    orderId: order.id,
+    status: "succeeded",
+    provider: "demo_gateway",
+    idempotencyKey: "demo-callback-success-0001",
+    locale: "en-US"
   });
   expect(webhookResponse.ok()).toBe(true);
   const webhookPayload = await webhookResponse.json();
@@ -5494,18 +5617,15 @@ test("keeps orders pending after a failed payment webhook", async ({ request }) 
   });
   const paymentPayload = await paymentResponse.json();
 
-  const webhookResponse = await request.post("/api/payments/webhook", {
-    data: {
-      eventId: "evt-demo-failed-0001",
-      paymentId: paymentPayload.payment.id,
-      orderId: order.id,
-      status: "failed",
-      provider: "demo_gateway",
-      idempotencyKey: "demo-callback-failed-0001",
-      signature: "demo-signature",
-      failureReason: "Demo payment was declined. Please try another method.",
-      locale: "en-US"
-    }
+  const webhookResponse = await postSignedPaymentWebhook(request, {
+    eventId: "evt-demo-failed-0001",
+    paymentId: paymentPayload.payment.id,
+    orderId: order.id,
+    status: "failed",
+    provider: "demo_gateway",
+    idempotencyKey: "demo-callback-failed-0001",
+    failureReason: "Demo payment was declined. Please try another method.",
+    locale: "en-US"
   });
   expect(webhookResponse.ok()).toBe(true);
   const webhookPayload = await webhookResponse.json();
@@ -5531,13 +5651,12 @@ test("handles duplicate successful payment webhooks idempotently", async ({ requ
     status: "succeeded",
     provider: "demo_gateway",
     idempotencyKey: "demo-callback-success-duplicate",
-    signature: "demo-signature",
     locale: "en-US"
   };
 
-  const firstResponse = await request.post("/api/payments/webhook", { data: webhookBody });
+  const firstResponse = await postSignedPaymentWebhook(request, webhookBody);
   const firstPayload = await firstResponse.json();
-  const secondResponse = await request.post("/api/payments/webhook", { data: webhookBody });
+  const secondResponse = await postSignedPaymentWebhook(request, webhookBody);
   const secondPayload = await secondResponse.json();
 
   expect(firstResponse.ok()).toBe(true);
