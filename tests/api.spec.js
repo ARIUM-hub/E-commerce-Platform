@@ -758,6 +758,59 @@ test("initializes RBAC roles assignments and audit storage idempotently", () => 
   db.close();
 });
 
+test("initializes account security storage and backfills existing users safely", () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare(`
+    INSERT INTO users (
+      id, name, email, password, password_hash, password_salt, created_at, updated_at
+    ) VALUES ('security-legacy', 'Security Legacy', 'security-legacy@example.com',
+      'hash', 'hash', 'salt', ?, ?)
+  `).run("2026-08-03T00:00:00.000Z", "2026-08-03T00:00:00.000Z");
+  db.prepare("DELETE FROM schema_migrations WHERE id = '0014_security_account_recovery'").run();
+
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+
+  expect(db.prepare("PRAGMA table_info(users)").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining(["email_verified_at", "password_changed_at"]));
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining([
+      "email_verification_tokens",
+      "password_reset_tokens",
+      "security_rate_limit_buckets",
+      "security_audit_events",
+      "email_outbox"
+    ]));
+  expect(db.prepare("SELECT email_verified_at FROM users WHERE id = 'security-legacy'").get().email_verified_at)
+    .toBeTruthy();
+  expect(db.prepare("PRAGMA index_list(email_verification_tokens)").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining([
+      "idx_email_verification_token_hash",
+      "idx_email_verification_user_expiry"
+    ]));
+  expect(db.prepare("PRAGMA index_list(password_reset_tokens)").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining([
+      "idx_password_reset_token_hash",
+      "idx_password_reset_user_expiry"
+    ]));
+  expect(db.prepare("PRAGMA index_list(security_rate_limit_buckets)").all().map((row) => row.name))
+    .toContain("idx_security_rate_limit_blocked");
+  expect(db.prepare("PRAGMA index_list(security_audit_events)").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining(["idx_security_audit_time", "idx_security_audit_actor_time"]));
+  expect(db.prepare("PRAGMA index_list(email_outbox)").all().map((row) => row.name))
+    .toContain("idx_email_outbox_delivery");
+  expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = '0014_security_account_recovery'")
+    .get().count).toBe(1);
+  db.close();
+});
+
 test("maps fixed RBAC roles to least-privilege permissions", () => {
   const { PERMISSIONS, getPermissionsForRoles, hasPermission } = require("../lib/auth/permissions");
   const superPermissions = getPermissionsForRoles(["super_admin"]);
