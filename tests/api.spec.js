@@ -771,6 +771,250 @@ test("accepts storefront analytics without trusting client identity or time", as
   expect((await invalid.json()).error.code).toBe("ANALYTICS_EVENT_INVALID");
 });
 
+function seedPaidAnalyticsOrder(db, {
+  orderId,
+  paymentId = `${orderId}-payment`,
+  amount,
+  paidAt,
+  items = []
+}) {
+  const orderItems = items.length ? items : [
+    { productId: "sock-01", skuId: "sock-01-39", title: "极简中筒袜", size: "39", quantity: 1, price: amount }
+  ];
+  const order = {
+    id: orderId,
+    orderNumber: orderId,
+    status: "paid",
+    items: orderItems,
+    totals: { subtotal: amount, taxableAmount: amount, total: amount, grandTotal: amount },
+    payment: { status: "succeeded", paidAt },
+    createdAt: paidAt,
+    updatedAt: paidAt
+  };
+  db.prepare(`INSERT INTO orders (id, user_id, status, payload, created_at, updated_at)
+    VALUES (?, NULL, 'paid', ?, ?, ?)`)
+    .run(orderId, JSON.stringify(order), paidAt, paidAt);
+  const insertItem = db.prepare("INSERT INTO order_items (order_id, sku_id, payload) VALUES (?, ?, ?)");
+  orderItems.forEach((item) => insertItem.run(orderId, item.skuId, JSON.stringify(item)));
+  const payment = {
+    id: paymentId,
+    orderId,
+    method: "card",
+    provider: "demo_gateway",
+    status: "succeeded",
+    amount,
+    createdAt: paidAt,
+    updatedAt: paidAt
+  };
+  db.prepare(`INSERT INTO payment_attempts
+    (id, order_id, user_id, method, status, amount, failure_reason, created_at, updated_at, payload)
+    VALUES (?, ?, NULL, 'card', 'succeeded', ?, NULL, ?, ?, ?)`)
+    .run(paymentId, orderId, amount, paidAt, paidAt, JSON.stringify(payment));
+  return order;
+}
+
+function seedSucceededAnalyticsRefund(db, {
+  refundId,
+  orderId,
+  amount,
+  succeededAt,
+  items = [],
+  duplicateEvent = false
+}) {
+  const refund = {
+    id: refundId,
+    orderId,
+    status: "succeeded",
+    amount,
+    amountCents: Math.round(amount * 100),
+    reason: "quality_issue",
+    method: "card",
+    refundType: "order",
+    createdAt: succeededAt,
+    updatedAt: succeededAt
+  };
+  db.prepare(`INSERT INTO refunds
+    (id, order_id, user_id, status, amount, reason, method, refund_type, amount_cents, created_at, updated_at, payload)
+    VALUES (?, ?, NULL, 'succeeded', ?, 'quality_issue', 'card', 'order', ?, ?, ?, ?)`)
+    .run(refundId, orderId, amount, refund.amountCents, succeededAt, succeededAt, JSON.stringify(refund));
+  const insertEvent = db.prepare(`INSERT INTO refund_events
+    (id, refund_id, order_id, status, label, description, at)
+    VALUES (?, ?, ?, 'succeeded', '退款成功', '退款成功', ?)`);
+  insertEvent.run(`${refundId}-event-1`, refundId, orderId, succeededAt);
+  if (duplicateEvent) insertEvent.run(`${refundId}-event-2`, refundId, orderId, succeededAt);
+  const insertItem = db.prepare(`INSERT INTO refund_items
+    (id, refund_id, order_id, product_id, sku_id, title, size, quantity,
+     unit_paid_amount, refund_amount, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  items.forEach((item, index) => insertItem.run(
+    `${refundId}-item-${index}`,
+    refundId,
+    orderId,
+    item.productId,
+    item.skuId,
+    item.title || item.productId,
+    item.size,
+    item.quantity,
+    item.unitPaidAmount || item.refundAmount,
+    item.refundAmount,
+    succeededAt
+  ));
+}
+
+function seedAnalyticsVisitors(db, visitorIds, occurredAt = "2026-08-02T02:00:00.000Z") {
+  const bucketDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date(occurredAt));
+  visitorIds.forEach((visitorId) => db.prepare(`INSERT INTO analytics_events
+    (id, event_type, visitor_id, session_id, user_id, product_id, order_id,
+     occurred_at, bucket_date, dedupe_key, metadata)
+    VALUES (?, 'storefront_visit', ?, NULL, NULL, NULL, NULL, ?, ?, ?, '{}')`)
+    .run(
+      `event-${visitorId}-${occurredAt}`,
+      visitorId,
+      occurredAt,
+      bucketDate,
+      `storefront_visit:${visitorId}:${bucketDate}`
+    ));
+}
+
+test("builds Shanghai analytics periods and previous comparisons", () => {
+  const { createAnalyticsPeriod } = require("../lib/repositories/admin-analytics");
+  const period = createAnalyticsPeriod("7d", new Date("2026-08-03T03:00:00.000Z"));
+  expect(period).toMatchObject({
+    range: "7d",
+    start: "2026-07-27T16:00:00.000Z",
+    end: "2026-08-03T16:00:00.000Z",
+    previousStart: "2026-07-20T16:00:00.000Z",
+    previousEnd: "2026-07-27T16:00:00.000Z",
+    timezone: "Asia/Shanghai",
+    bucket: "day"
+  });
+  expect(createAnalyticsPeriod("30d", new Date("2026-08-03T03:00:00.000Z"))).toMatchObject({
+    start: "2026-07-04T16:00:00.000Z",
+    end: "2026-08-03T16:00:00.000Z",
+    bucket: "day"
+  });
+  expect(createAnalyticsPeriod("90d", new Date("2026-08-03T03:00:00.000Z"))).toMatchObject({
+    start: "2026-05-05T16:00:00.000Z",
+    end: "2026-08-03T16:00:00.000Z",
+    bucket: "week"
+  });
+  expect(createAnalyticsPeriod("custom", new Date()).validationError.code).toBe("ANALYTICS_RANGE_INVALID");
+});
+
+test("calculates net sales conversion and refund rate from business facts", () => {
+  const { getAdminAnalytics } = require("../lib/repositories/admin-analytics");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-paid-1",
+    paymentId: "analytics-payment-1",
+    amount: 100,
+    paidAt: "2026-08-02T02:00:00.000Z"
+  });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-paid-2",
+    paymentId: "analytics-payment-2",
+    amount: 80,
+    paidAt: "2026-08-02T03:00:00.000Z"
+  });
+  const duplicatePayment = {
+    id: "analytics-payment-1-duplicate",
+    orderId: "analytics-paid-1",
+    status: "succeeded",
+    amount: 100,
+    createdAt: "2026-08-02T02:05:00.000Z",
+    updatedAt: "2026-08-02T02:05:00.000Z"
+  };
+  db.prepare(`INSERT INTO payment_attempts
+    (id, order_id, user_id, method, status, amount, failure_reason, created_at, updated_at, payload)
+    VALUES (?, ?, NULL, 'card', 'succeeded', ?, NULL, ?, ?, ?)`)
+    .run(
+      duplicatePayment.id,
+      duplicatePayment.orderId,
+      duplicatePayment.amount,
+      duplicatePayment.createdAt,
+      duplicatePayment.updatedAt,
+      JSON.stringify(duplicatePayment)
+    );
+  seedSucceededAnalyticsRefund(db, {
+    refundId: "analytics-refund-1",
+    orderId: "analytics-paid-1",
+    amount: 20,
+    succeededAt: "2026-08-03T02:00:00.000Z",
+    duplicateEvent: true
+  });
+  seedAnalyticsVisitors(db, ["visitor-a", "visitor-b", "visitor-c", "visitor-d"]);
+  const result = getAdminAnalytics(db, { range: "7d", now: new Date("2026-08-03T03:00:00.000Z") });
+  expect(result.summary).toMatchObject({
+    netSales: 160,
+    uniqueVisitors: 4,
+    paidOrderCount: 2,
+    conversionRate: 50,
+    refundedOrderCount: 1,
+    refundRate: 50
+  });
+  expect(result.summary.netSalesComparison).toBeNull();
+  expect(JSON.stringify(result)).not.toMatch(/Infinity|NaN/);
+  expect(result.funnel).toMatchObject({
+    uniqueVisitors: 4,
+    cartAddSessions: 0,
+    checkoutSessions: 0,
+    paidOrderCount: 2
+  });
+  expect(result.trend[0].label).toBe("2026-07-28");
+  expect(result.trend.some((bucket) => bucket.netSales > 0)).toBe(true);
+  db.close();
+});
+
+test("excludes failed payments and allows refund rate above 100 percent", () => {
+  const { getAdminAnalytics } = require("../lib/repositories/admin-analytics");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-current-paid",
+    amount: 50,
+    paidAt: "2026-08-02T02:00:00.000Z"
+  });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-failed-order",
+    paymentId: "analytics-failed-payment",
+    amount: 999,
+    paidAt: "2026-08-02T03:00:00.000Z"
+  });
+  db.prepare("UPDATE payment_attempts SET status = 'failed' WHERE id = ?").run("analytics-failed-payment");
+  for (const suffix of ["a", "b"]) {
+    const orderId = `analytics-previous-${suffix}`;
+    seedPaidAnalyticsOrder(db, {
+      orderId,
+      amount: 40,
+      paidAt: `2026-07-21T0${suffix === "a" ? 2 : 3}:00:00.000Z`
+    });
+    seedSucceededAnalyticsRefund(db, {
+      refundId: `analytics-current-refund-${suffix}`,
+      orderId,
+      amount: 10,
+      succeededAt: `2026-08-02T0${suffix === "a" ? 4 : 5}:00:00.000Z`
+    });
+  }
+  seedAnalyticsVisitors(db, ["visitor-only"]);
+  const result = getAdminAnalytics(db, { range: "7d", now: new Date("2026-08-03T03:00:00.000Z") });
+  expect(result.summary).toMatchObject({
+    netSales: 30,
+    netSalesComparison: -62.5,
+    paidOrderCount: 1,
+    conversionRateDelta: 100,
+    refundedOrderCount: 2,
+    refundRate: 200,
+    refundRateDelta: 200
+  });
+  db.close();
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);
