@@ -881,6 +881,84 @@ test("initializes account security storage and backfills existing users safely",
   db.close();
 });
 
+test("account tokens are hashed one-time and invalidate older user tokens", () => {
+  const { createUser } = require("../lib/repositories/users");
+  const {
+    consumeAccountToken,
+    issueAccountToken
+  } = require("../lib/repositories/account-tokens");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const user = createUser(db, {
+    id: "token-user",
+    name: "Token User",
+    email: "token-user@example.com",
+    passwordHash: "hash",
+    passwordSalt: "salt"
+  });
+  const now = new Date("2026-08-03T10:00:00.000Z");
+  const first = issueAccountToken(db, {
+    type: "email_verification",
+    userId: user.id,
+    rawToken: "raw-secret-first",
+    requestedIpHash: "ip-hash",
+    now,
+    ttlMs: 86400000
+  });
+  const storedFirst = db.prepare(`
+    SELECT token_hash, consumed_at FROM email_verification_tokens WHERE id = ?
+  `).get(first.id);
+  expect(storedFirst.token_hash).toMatch(/^[a-f0-9]{64}$/);
+  expect(storedFirst.token_hash).not.toContain("raw-secret-first");
+  expect(storedFirst.consumed_at).toBeNull();
+
+  const secondNow = new Date(now.getTime() + 1000);
+  const second = issueAccountToken(db, {
+    type: "email_verification",
+    userId: user.id,
+    rawToken: "raw-secret-second",
+    requestedIpHash: "ip-hash",
+    now: secondNow,
+    ttlMs: 86400000
+  });
+  expect(db.prepare("SELECT consumed_at FROM email_verification_tokens WHERE id = ?").get(first.id).consumed_at)
+    .toBe(secondNow.toISOString());
+
+  const consumed = consumeAccountToken(db, {
+    type: "email_verification",
+    rawToken: "raw-secret-second",
+    now: new Date(secondNow.getTime() + 1000)
+  });
+  expect(consumed).toMatchObject({ id: second.id, userId: user.id });
+  expect(consumeAccountToken(db, {
+    type: "email_verification",
+    rawToken: "raw-secret-second",
+    now: new Date(secondNow.getTime() + 2000)
+  })).toBeNull();
+  expect(consumeAccountToken(db, {
+    type: "email_verification",
+    rawToken: "wrong-token",
+    now: secondNow
+  })).toBeNull();
+
+  issueAccountToken(db, {
+    type: "password_reset",
+    userId: user.id,
+    rawToken: "expired-reset-token",
+    requestedIpHash: "ip-hash",
+    now,
+    ttlMs: 1000
+  });
+  expect(consumeAccountToken(db, {
+    type: "password_reset",
+    rawToken: "expired-reset-token",
+    now: new Date(now.getTime() + 2000)
+  })).toBeNull();
+  db.close();
+});
+
 test("maps fixed RBAC roles to least-privilege permissions", () => {
   const { PERMISSIONS, getPermissionsForRoles, hasPermission } = require("../lib/auth/permissions");
   const superPermissions = getPermissionsForRoles(["super_admin"]);
