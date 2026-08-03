@@ -26,6 +26,8 @@ const { PERMISSIONS } = require("./lib/auth/permissions");
 const { createAuthorization } = require("./lib/auth/authorization");
 const { createSessionService } = require("./lib/services/session-service");
 const { createAuthService, createPublicUser } = require("./lib/services/auth-service");
+const { createMailerService } = require("./lib/services/mailer-service");
+const { createAccountSecurityService } = require("./lib/services/account-security-service");
 const {
   resolveStaticFile,
   sendStaticFile
@@ -48,6 +50,7 @@ const { registerAuthRoutes } = require("./lib/routes/auth-routes");
 const { registerTrustRoutes } = require("./lib/routes/trust-routes");
 const { registerTestRoutes } = require("./lib/routes/test-routes");
 const { registerSecurityRoutes } = require("./lib/routes/security-routes");
+const { registerAccountSecurityRoutes } = require("./lib/routes/account-security-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createAnalyticsEventLimiter,
@@ -326,6 +329,17 @@ const persistentRateLimiter = createPersistentRateLimiter({
     value,
     config.securityHashSecret,
     `persistent-rate-limit-${type}`
+  )
+});
+const mailerService = createMailerService({ config, withDatabase });
+const accountSecurityService = createAccountSecurityService({
+  withDatabase,
+  mailerService,
+  auditRetentionDays: config.auditRetentionDays,
+  hashIdentifier: (value, type) => hashSecurityIdentifier(
+    value,
+    config.securityHashSecret,
+    type
   )
 });
 const authService = createAuthService(config);
@@ -1337,6 +1351,7 @@ registerAdminUserRoutes(router, {
   withDatabase
 });
 registerAuthRoutes(router, {
+  accountSecurityService,
   authService,
   createPublicUser,
   getCartPayload,
@@ -1349,6 +1364,16 @@ registerAuthRoutes(router, {
   sessionService,
   trustProxy: config.trustProxy,
   withDatabase
+});
+registerAccountSecurityRoutes(router, {
+  accountSecurityService,
+  createPublicUser,
+  handleRequestBodyError,
+  persistentRateLimiter,
+  readRequestBody,
+  requireUser,
+  sendJsonWithHeaders,
+  trustProxy: config.trustProxy
 });
 registerTrustRoutes(router, {
   getTrustCenterContent,

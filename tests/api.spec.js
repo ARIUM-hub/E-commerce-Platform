@@ -4330,6 +4330,64 @@ test("registers a user and creates an http-only session", async ({ request }) =>
   }
 });
 
+test("email verification lifecycle queues mail invalidates old tokens and verifies the user", async ({ request }) => {
+  const registerResponse = await request.post("/api/auth/register", { data: registerPayload });
+  expect(registerResponse.status()).toBe(201);
+  const registerBody = await registerResponse.json();
+  expect(registerBody.user.emailVerified).toBe(false);
+  const sessionCookie = getSessionCookie(registerResponse);
+
+  let db = createDatabase(testDbFile);
+  let outbox = db.prepare(`
+    SELECT payload FROM email_outbox WHERE template_id = 'email_verification' ORDER BY rowid ASC
+  `).all();
+  expect(outbox).toHaveLength(1);
+  const firstToken = JSON.parse(outbox[0].payload).token;
+  expect(firstToken).toBeTruthy();
+  expect(db.prepare("SELECT email_verified_at FROM users WHERE email = ?")
+    .get(registerPayload.email).email_verified_at).toBeNull();
+  expect(db.prepare("SELECT email_verified_at FROM users WHERE email = 'admin@socks.test'")
+    .get().email_verified_at).toBeTruthy();
+  db.close();
+
+  const resendResponse = await request.post("/api/auth/email-verification/resend", {
+    headers: { cookie: sessionCookie },
+    data: {}
+  });
+  expect(resendResponse.status()).toBe(202);
+  db = createDatabase(testDbFile);
+  outbox = db.prepare(`
+    SELECT payload FROM email_outbox WHERE template_id = 'email_verification' ORDER BY rowid ASC
+  `).all();
+  expect(outbox).toHaveLength(2);
+  const secondToken = JSON.parse(outbox[1].payload).token;
+  expect(secondToken).not.toBe(firstToken);
+  db.close();
+
+  const staleResponse = await request.post("/api/auth/email-verification/confirm", {
+    data: { token: firstToken }
+  });
+  expect(staleResponse.status()).toBe(400);
+  expect((await staleResponse.json()).error.code).toBe("EMAIL_VERIFICATION_TOKEN_INVALID");
+
+  const confirmResponse = await request.post("/api/auth/email-verification/confirm", {
+    data: { token: secondToken }
+  });
+  expect(confirmResponse.ok()).toBe(true);
+  expect((await confirmResponse.json()).user.emailVerified).toBe(true);
+
+  const repeatedResponse = await request.post("/api/auth/email-verification/confirm", {
+    data: { token: secondToken }
+  });
+  expect(repeatedResponse.status()).toBe(400);
+  expect((await repeatedResponse.json()).error.code).toBe("EMAIL_VERIFICATION_TOKEN_INVALID");
+
+  const sessionResponse = await request.get("/api/session", {
+    headers: { cookie: sessionCookie }
+  });
+  expect((await sessionResponse.json()).user.emailVerified).toBe(true);
+});
+
 test("persists registered users and sessions in SQLite", async ({ request }) => {
   const response = await request.post("/api/auth/register", { data: registerPayload });
   expect(response.status()).toBe(201);
