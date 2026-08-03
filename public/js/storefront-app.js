@@ -2241,6 +2241,14 @@
       return response.json();
     }
 
+    async function requestAdminAnalyticsJson(path, { signal } = {}) {
+      const response = await fetch(path, { signal });
+      if (!response.ok) {
+        throw await createCartRequestError(response, "Admin analytics request failed");
+      }
+      return response.json();
+    }
+
     async function patchAdminJson(path, payload) {
       const response = await fetch(path, {
         method: "PATCH",
@@ -2338,6 +2346,31 @@
         adminUserId: currentUser?.id || null
       });
       return supportModule;
+    }
+
+    function mountAdminAnalyticsDashboard() {
+      const analyticsModule = window.StorefrontAdminAnalytics;
+      if (!analyticsModule) return null;
+      return analyticsModule.mount({
+        panel: adminPanel,
+        request: requestAdminAnalyticsJson,
+        escapeHtml,
+        formatCurrency,
+        async onInventoryOpen(skuId) {
+          activeAdminTab = "inventory";
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("tab", "inventory");
+          nextUrl.searchParams.set("sku", skuId);
+          window.history.replaceState({}, "", nextUrl);
+          await renderAdminPanel();
+          const row = adminPanel.querySelector(`[data-sku-id="${CSS.escape(skuId)}"]`);
+          if (row) {
+            row.tabIndex = -1;
+            row.focus({ preventScroll: true });
+            row.scrollIntoView({ block: "center", behavior: "smooth" });
+          }
+        }
+      });
     }
 
     function yuanInputToCents(value) {
@@ -2787,6 +2820,7 @@
       if (state !== "ready") {
         window.StorefrontAdminReviews?.destroy();
         window.StorefrontAdminSupport?.destroy();
+        window.StorefrontAdminAnalytics?.destroy();
       }
     }
 
@@ -2797,38 +2831,12 @@
       });
     }
 
-    function createKpiMarkup(summary) {
-      const cards = [
-        ["Orders", summary.ordersTotal],
-        ["Sales", formatCurrency(summary.grossSales)],
-        ["Low stock", summary.lowStockSkuCount],
-        ["Open tickets", summary.openTicketCount]
-      ];
-
-      return `<div class="admin-grid">${cards.map(([label, value]) => `
-        <article class="admin-card" data-admin-kpi>
-          <strong>${escapeHtml(value)}</strong>
-          <span>${escapeHtml(label)}</span>
-        </article>
-      `).join("")}</div>`;
-    }
-
     async function renderAdminDashboard() {
-      const payload = await fetchAdminJson("/api/admin/summary");
-      adminData.summary = payload;
-      const recentOrders = Array.isArray(payload.recentOrders) ? payload.recentOrders : [];
-      adminPanel.innerHTML = `
-        ${createKpiMarkup(payload.summary)}
-        <div class="admin-table">
-          ${recentOrders.length ? recentOrders.map((order) => `
-            <article class="admin-row" data-admin-recent-order>
-              <span>${escapeHtml(order.id)}</span>
-              <span>${escapeHtml(order.status)}</span>
-              <span>${formatCurrency(order.total)}</span>
-            </article>
-          `).join("") : `<div class="empty-state">No recent orders yet.</div>`}
-        </div>
-      `;
+      const result = mountAdminAnalyticsDashboard();
+      if (!result) {
+        adminPanel.innerHTML = '<div class="empty-state">经营看板模块加载失败。</div>';
+      }
+      return result;
     }
 
     function createEmptyAdminProductDraft() {
@@ -3137,6 +3145,9 @@
 
     async function renderAdminPanel() {
       renderAdminTabs();
+      if (activeAdminTab !== "dashboard") {
+        window.StorefrontAdminAnalytics?.destroy();
+      }
       if (activeAdminTab === "products") return renderAdminProducts();
       if (activeAdminTab === "inventory") return renderAdminInventory();
       if (activeAdminTab === "orders") return renderAdminOrders();

@@ -209,6 +209,35 @@ test("renders admin dashboard tabs for demo admins", async ({ page }) => {
   await expect(page.locator("[data-admin-kpi]")).not.toHaveCount(0);
 });
 
+test("renders the realistic admin analytics dashboard for the default range", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-range][aria-pressed='true']")).toHaveText("30 天");
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toBeVisible();
+  await expect(page.locator("[data-analytics-kpi='conversion']")).toContainText("%");
+  await expect(page.locator("[data-analytics-kpi='refund-rate']")).toContainText("%");
+  await expect(page.locator("[data-analytics-ratio='conversion']")).toContainText("/");
+  await expect(page.locator("[data-analytics-ratio='refund-rate']")).toContainText("/");
+  await expect(page.locator("[data-analytics-sales-chart]")).toBeVisible();
+  await expect(page.locator("[data-analytics-funnel]")).toBeVisible();
+  await expect(page.locator("[data-analytics-top-products]")).toBeVisible();
+  await expect(page.locator("[data-analytics-inventory]")).toBeVisible();
+  await expect(page.locator("[data-admin-recent-order], [data-admin-work-queue]")).not.toHaveCount(0);
+});
+
+test("switches the analytics range and updates every dashboard section", async ({ page }) => {
+  await registerAdminFromUi(page);
+  const requests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/admin/analytics")) requests.push(request.url());
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect(page.locator("[data-analytics-range='7d']")).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => requests.some((url) => url.includes("range=7d"))).toBe(true);
+  await expect(page.locator("[data-analytics-period-label]")).toContainText("7");
+});
+
 test("moderates and replies from the admin reviews workspace", async ({ page }) => {
   const created = await page.request.post("/api/products/sock-01/reviews", {
     data: {
