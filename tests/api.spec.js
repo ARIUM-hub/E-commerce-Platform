@@ -719,6 +719,45 @@ test("initializes analytics event storage and indexes idempotently", () => {
   db.close();
 });
 
+test("initializes RBAC roles assignments and audit storage idempotently", () => {
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  db.prepare(`
+    INSERT INTO users (
+      id, name, email, password, password_hash, password_salt, created_at, updated_at
+    ) VALUES ('legacy-user', 'Legacy', 'legacy@example.com', 'hash', 'hash', 'salt', ?, ?)
+  `).run("2026-08-03T00:00:00.000Z", "2026-08-03T00:00:00.000Z");
+  db.prepare("DELETE FROM schema_migrations WHERE id = '0013_rbac_authorization'").run();
+
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+
+  expect(db.prepare("SELECT id FROM roles ORDER BY id").all().map((row) => row.id)).toEqual([
+    "customer",
+    "customer_service",
+    "operator",
+    "super_admin",
+    "warehouse"
+  ]);
+  expect(db.prepare("SELECT role_id FROM user_roles WHERE user_id = 'legacy-user'").get())
+    .toEqual({ role_id: "customer" });
+  expect(db.prepare("PRAGMA index_list(role_assignment_events)").all().map((row) => row.name))
+    .toEqual(expect.arrayContaining([
+      "idx_role_assignment_target_time",
+      "idx_role_assignment_actor_time"
+    ]));
+  expect(db.prepare("SELECT COUNT(*) AS count FROM roles").get().count).toBe(5);
+  expect(db.prepare("SELECT id FROM schema_migrations WHERE id = '0013_rbac_authorization'").get())
+    .toEqual({ id: "0013_rbac_authorization" });
+  db.close();
+});
+
 test("records allowlisted analytics events once per visitor day", () => {
   const { recordAnalyticsEvent } = require("../lib/repositories/analytics-events");
   const db = createDatabase(testDbFile);
