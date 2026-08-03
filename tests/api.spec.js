@@ -74,6 +74,76 @@ test("rejects invalid engineering config values", async () => {
   expect(() => createConfig({ DATA_DIR: "   " })).toThrow("DATA_DIR cannot be empty");
 });
 
+test("requires complete production security config and exposes safe non-production defaults", () => {
+  const { createConfig } = require("../lib/config");
+  const productionBase = {
+    NODE_ENV: "production",
+    CSRF_SECRET: "csrf-production-secret",
+    SECURITY_HASH_SECRET: "hash-production-secret",
+    PAYMENT_WEBHOOK_SECRET: "webhook-production-secret",
+    ALLOWED_ORIGINS: "https://shop.example.com",
+    SMTP_HOST: "smtp.example.com",
+    SMTP_PORT: "465",
+    SMTP_SECURE: "true",
+    SMTP_USER: "mailer",
+    SMTP_PASSWORD: "mailer-password",
+    SMTP_FROM: "shop@example.com"
+  };
+
+  expect(() => createConfig({ NODE_ENV: "production" }))
+    .toThrow("CSRF_SECRET is required in production");
+  expect(() => createConfig({ ...productionBase, SECURITY_HASH_SECRET: "" }))
+    .toThrow("SECURITY_HASH_SECRET is required in production");
+  expect(() => createConfig({ ...productionBase, PAYMENT_WEBHOOK_SECRET: "" }))
+    .toThrow("PAYMENT_WEBHOOK_SECRET is required in production");
+  expect(() => createConfig({ ...productionBase, SMTP_HOST: "" }))
+    .toThrow("SMTP_HOST is required in production");
+  expect(() => createConfig({ ...productionBase, SMTP_PASSWORD: "" }))
+    .toThrow("SMTP_PASSWORD is required in production");
+
+  expect(createConfig(productionBase)).toMatchObject({
+    csrfSecret: "csrf-production-secret",
+    securityHashSecret: "hash-production-secret",
+    paymentWebhookSecret: "webhook-production-secret",
+    allowedOrigins: ["https://shop.example.com"],
+    trustProxy: false,
+    generalRateLimit: 120,
+    auditRetentionDays: 180,
+    smtp: {
+      host: "smtp.example.com",
+      port: 465,
+      secure: true,
+      user: "mailer",
+      password: "mailer-password",
+      from: "shop@example.com"
+    }
+  });
+  expect(createConfig({ NODE_ENV: "test" })).toMatchObject({
+    csrfSecret: expect.stringContaining("test"),
+    securityHashSecret: expect.stringContaining("test"),
+    paymentWebhookSecret: expect.stringContaining("test")
+  });
+});
+
+test("hashes normalized security identifiers and trusts forwarded IPs only when configured", () => {
+  const {
+    hashSecurityIdentifier,
+    normalizeClientIp
+  } = require("../lib/security/security-identifiers");
+  const first = hashSecurityIdentifier(" Buyer@Example.com ", "secret", "account");
+  const second = hashSecurityIdentifier("buyer@example.com", "secret", "account");
+  expect(first).toBe(second);
+  expect(first).toMatch(/^[a-f0-9]{64}$/);
+  expect(first).not.toContain("buyer@example.com");
+
+  const request = {
+    headers: { "x-forwarded-for": "203.0.113.8, 10.0.0.1" },
+    socket: { remoteAddress: "127.0.0.1" }
+  };
+  expect(normalizeClientIp(request, { trustProxy: false })).toBe("127.0.0.1");
+  expect(normalizeClientIp(request, { trustProxy: true })).toBe("203.0.113.8");
+});
+
 test("filters structured logger output by level", async () => {
   const { createLogger } = require("../lib/logger");
   const lines = [];
