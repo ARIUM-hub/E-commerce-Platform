@@ -1015,6 +1015,86 @@ test("excludes failed payments and allows refund rate above 100 percent", () => 
   db.close();
 });
 
+test("ranks paid products by units and includes succeeded refunded units", () => {
+  const { listTopProducts } = require("../lib/repositories/admin-analytics");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-product-order",
+    amount: 207,
+    paidAt: "2026-08-02T02:00:00.000Z",
+    items: [
+      { productId: "sock-01", skuId: "sock-01-39", title: "极简中筒袜", size: "39", quantity: 3, price: 39 },
+      { productId: "sock-02", skuId: "sock-02-40", title: "通勤罗纹袜", size: "40", quantity: 2, price: 45 }
+    ]
+  });
+  seedSucceededAnalyticsRefund(db, {
+    refundId: "analytics-product-refund",
+    orderId: "analytics-product-order",
+    amount: 39,
+    succeededAt: "2026-08-03T02:00:00.000Z",
+    duplicateEvent: true,
+    items: [{
+      productId: "sock-01",
+      skuId: "sock-01-39",
+      title: "极简中筒袜",
+      size: "39",
+      quantity: 1,
+      unitPaidAmount: 3900,
+      refundAmount: 3900
+    }]
+  });
+  const products = listTopProducts(db, "2026-07-27T16:00:00.000Z", "2026-08-03T16:00:00.000Z");
+  expect(products[0]).toMatchObject({ productId: "sock-01", unitsSold: 3, refundedUnits: 1 });
+  expect(products[1]).toMatchObject({ productId: "sock-02", unitsSold: 2, refundedUnits: 0 });
+  expect(products[0].sales).toBeGreaterThan(0);
+  db.close();
+});
+
+test("counts a succeeded full refund without refund items once", () => {
+  const { listTopProducts } = require("../lib/repositories/admin-analytics");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  seedPaidAnalyticsOrder(db, {
+    orderId: "analytics-full-refund-order",
+    amount: 168,
+    paidAt: "2026-08-01T02:00:00.000Z",
+    items: [
+      { productId: "sock-01", skuId: "sock-01-39", title: "极简中筒袜", size: "39", quantity: 2, price: 39 },
+      { productId: "sock-02", skuId: "sock-02-40", title: "通勤罗纹袜", size: "40", quantity: 2, price: 45 }
+    ]
+  });
+  seedSucceededAnalyticsRefund(db, {
+    refundId: "analytics-full-refund",
+    orderId: "analytics-full-refund-order",
+    amount: 168,
+    succeededAt: "2026-08-03T03:00:00.000Z",
+    duplicateEvent: true
+  });
+  const products = listTopProducts(db, "2026-07-27T16:00:00.000Z", "2026-08-03T16:00:00.000Z");
+  expect(products.find((item) => item.productId === "sock-01").refundedUnits).toBe(2);
+  expect(products.find((item) => item.productId === "sock-02").refundedUnits).toBe(2);
+  db.close();
+});
+
+test("classifies SKU inventory alerts by stock and threshold", () => {
+  const { listAnalyticsInventoryAlerts } = require("../lib/repositories/admin-analytics");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, { productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json") });
+  db.prepare("UPDATE product_variants SET stock_quantity = 0, is_available = 0 WHERE sku_id = ?").run("sock-01-39");
+  db.prepare("UPDATE product_variants SET stock_quantity = 2, low_stock_threshold = 5 WHERE sku_id = ?").run("sock-01-40");
+  db.prepare("UPDATE product_variants SET stock_quantity = 4, low_stock_threshold = 5 WHERE sku_id = ?").run("sock-01-41");
+  const alerts = listAnalyticsInventoryAlerts(db);
+  expect(alerts).toEqual(expect.arrayContaining([
+    expect.objectContaining({ skuId: "sock-01-39", severity: "out_of_stock" }),
+    expect.objectContaining({ skuId: "sock-01-40", severity: "critical" }),
+    expect.objectContaining({ skuId: "sock-01-41", severity: "low" })
+  ]));
+  expect(alerts.findIndex((item) => item.skuId === "sock-01-39"))
+    .toBeLessThan(alerts.findIndex((item) => item.skuId === "sock-01-40"));
+  db.close();
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);
