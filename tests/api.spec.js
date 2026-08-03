@@ -176,6 +176,76 @@ test("GET security/csrf issues a signed double-submit cookie", async ({ request 
   expect(response.headers()["set-cookie"]).not.toContain("HttpOnly");
 });
 
+test("request security gateway enforces browser CSRF and bounded API rate limits", () => {
+  const { createCsrfService } = require("../lib/security/csrf");
+  const { createMemoryRateLimiter } = require("../lib/security/rate-limit-service");
+  const { createRequestSecurity } = require("../lib/security/request-security");
+  let currentTime = new Date("2026-08-03T12:00:00.000Z");
+  const csrfService = createCsrfService({
+    secret: "csrf-test-secret",
+    now: () => currentTime,
+    randomBytes: () => Buffer.from("gateway-csrf-nonce")
+  });
+  const csrfToken = csrfService.issueToken().token;
+  const rateLimiter = createMemoryRateLimiter({
+    limit: 1000,
+    windowMs: 60_000,
+    now: () => currentTime
+  });
+  const requestSecurity = createRequestSecurity({
+    allowedOrigins: ["https://shop.example.com"],
+    csrfService,
+    generalRateLimiter: rateLimiter,
+    securityHashSecret: "hash-test-secret",
+    trustProxy: false,
+    isTest: true
+  });
+  const createRequest = (headers = {}) => ({
+    method: "POST",
+    headers,
+    socket: { remoteAddress: "127.0.0.1" }
+  });
+  const requestUrl = new URL("https://shop.example.com/api/cart/items");
+  const validHeaders = {
+    origin: "https://shop.example.com",
+    "sec-fetch-site": "same-origin",
+    "x-csrf-token": csrfToken,
+    cookie: `socks_csrf=${csrfToken}`
+  };
+
+  expect(requestSecurity.check(createRequest(validHeaders), requestUrl).allowed).toBe(true);
+  expect(requestSecurity.check(createRequest({
+    origin: "https://shop.example.com",
+    "sec-fetch-site": "same-origin"
+  }), requestUrl)).toMatchObject({ allowed: false, statusCode: 403, code: "CSRF_INVALID" });
+  expect(requestSecurity.check(createRequest({
+    ...validHeaders,
+    origin: "https://attacker.example.com"
+  }), requestUrl)).toMatchObject({ allowed: false, statusCode: 403, code: "CSRF_INVALID" });
+  expect(requestSecurity.check(createRequest({
+    ...validHeaders,
+    "sec-fetch-site": "cross-site"
+  }), requestUrl)).toMatchObject({ allowed: false, statusCode: 403, code: "CSRF_INVALID" });
+  expect(requestSecurity.check(createRequest(), requestUrl).allowed).toBe(true);
+
+  const strictLimiter = createMemoryRateLimiter({
+    limit: 120,
+    windowMs: 60_000,
+    now: () => currentTime
+  });
+  for (let count = 0; count < 120; count += 1) {
+    expect(strictLimiter.consume("ip-hash").allowed).toBe(true);
+  }
+  expect(strictLimiter.consume("ip-hash")).toMatchObject({
+    allowed: false,
+    retryAfterSeconds: 60
+  });
+  currentTime = new Date(currentTime.getTime() + 60_000);
+  expect(strictLimiter.consume("ip-hash").allowed).toBe(true);
+  strictLimiter.reset();
+  expect(strictLimiter.consume("ip-hash").allowed).toBe(true);
+});
+
 test("hashes normalized security identifiers and trusts forwarded IPs only when configured", () => {
   const {
     hashSecurityIdentifier,

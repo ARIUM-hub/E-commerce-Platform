@@ -6,6 +6,9 @@ const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { createLogger } = require("./lib/logger");
 const { createCsrfService } = require("./lib/security/csrf");
+const { createMemoryRateLimiter } = require("./lib/security/rate-limit-service");
+const { createRequestSecurity } = require("./lib/security/request-security");
+const { createApiError } = require("./lib/api-errors");
 const {
   sendError: sendHttpError,
   sendJson: sendHttpJson,
@@ -195,6 +198,18 @@ const logger = createLogger({ level: config.logLevel });
 const csrfService = createCsrfService({
   secret: config.csrfSecret,
   isProduction: config.nodeEnv === "production"
+});
+const generalRateLimiter = createMemoryRateLimiter({
+  limit: config.generalRateLimit,
+  windowMs: 60_000
+});
+const requestSecurity = createRequestSecurity({
+  allowedOrigins: config.allowedOrigins,
+  csrfService,
+  generalRateLimiter,
+  securityHashSecret: config.securityHashSecret,
+  trustProxy: config.trustProxy,
+  isTest: config.isTest
 });
 const host = config.host;
 const port = config.port;
@@ -1330,11 +1345,27 @@ registerTestRoutes(router, {
   async resetTestDatabase() {
     await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
     withDatabase(() => null);
+    generalRateLimiter.reset();
   }
 });
 
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
+  const securityResult = requestSecurity.check(request, requestUrl);
+  if (!securityResult.allowed) {
+    const isRateLimited = securityResult.code === "RATE_LIMITED";
+    const apiError = createApiError(securityResult.code, {
+      statusCode: securityResult.statusCode,
+      message: isRateLimited ? "Too many requests." : "Request security validation failed.",
+      details: isRateLimited
+        ? { retryAfterSeconds: securityResult.retryAfterSeconds }
+        : {}
+    });
+    sendJsonWithHeaders(response, securityResult.statusCode, apiError.payload, isRateLimited ? {
+      "Retry-After": String(securityResult.retryAfterSeconds)
+    } : {});
+    return;
+  }
   const wasHandledByRouter = await router.dispatch({
     request,
     response,
