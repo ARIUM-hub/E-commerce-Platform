@@ -1095,6 +1095,38 @@ test("classifies SKU inventory alerts by stock and threshold", () => {
   db.close();
 });
 
+test("returns admin analytics for fixed ranges only", async ({ request }) => {
+  const anonymous = await request.get("/api/admin/analytics?range=30d");
+  expect(anonymous.status()).toBe(401);
+  const adminCookie = await registerApiUser(request, { email: "admin@socks.test" });
+  const response = await request.get("/api/admin/analytics?range=30d", {
+    headers: { cookie: adminCookie }
+  });
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload).toMatchObject({
+    period: { range: "30d", timezone: "Asia/Shanghai", bucket: "day" },
+    summary: {
+      netSales: expect.any(Number),
+      conversionRate: expect.any(Number),
+      refundRate: expect.any(Number),
+      uniqueVisitors: expect.any(Number),
+      paidOrderCount: expect.any(Number),
+      lowStockSkuCount: expect.any(Number),
+      outOfStockSkuCount: expect.any(Number)
+    },
+    funnel: expect.any(Object),
+    trend: expect.any(Array),
+    topProducts: expect.any(Array),
+    inventoryAlerts: expect.any(Array)
+  });
+  const invalid = await request.get("/api/admin/analytics?range=365d", {
+    headers: { cookie: adminCookie }
+  });
+  expect(invalid.status()).toBe(400);
+  expect((await invalid.json()).error.code).toBe("ANALYTICS_RANGE_INVALID");
+});
+
 test("saves campaign drafts with optimistic versions", async () => {
   const { createCampaignDraft, saveCampaignDraft } = require("../lib/repositories/marketing-campaigns");
   const db = createDatabase(testDbFile);

@@ -28,6 +28,7 @@ const { registerHealthRoutes } = require("./lib/routes/health-routes");
 const { registerProductRoutes } = require("./lib/routes/product-routes");
 const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
 const { registerAnalyticsRoutes } = require("./lib/routes/analytics-routes");
+const { registerAdminAnalyticsRoutes } = require("./lib/routes/admin-analytics-routes");
 const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
 const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
 const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
@@ -36,6 +37,7 @@ const {
   createAnalyticsEventLimiter,
   recordAnalyticsEvent
 } = require("./lib/repositories/analytics-events");
+const { getAdminAnalytics } = require("./lib/repositories/admin-analytics");
 const {
   createProductReview,
   findAdminReviewById,
@@ -1347,6 +1349,11 @@ registerAnalyticsRoutes(router, {
   readActiveCart,
   readRequestBody,
   recordAnalyticsEvent,
+  withDatabase
+});
+registerAdminAnalyticsRoutes(router, {
+  getAdminAnalytics,
+  requireAdmin,
   withDatabase
 });
 registerAdminReviewRoutes(router, {
