@@ -959,6 +959,88 @@ test("account tokens are hashed one-time and invalidate older user tokens", () =
   db.close();
 });
 
+test("security audit redacts sensitive metadata paginates and cleans up in bounded batches", () => {
+  const {
+    cleanupExpiredSecurityAudit,
+    listSecurityAuditEvents,
+    recordSecurityAudit
+  } = require("../lib/repositories/security-audit");
+  const db = createDatabase(testDbFile);
+  initializeDatabase(db, {
+    productsSeedFile: path.join(__dirname, "fixtures", "test-data", "products.json")
+  });
+  const now = new Date("2026-08-03T12:00:00.000Z");
+  const event = recordSecurityAudit(db, {
+    eventType: "auth.login",
+    outcome: "denied",
+    ipHash: "ip-hash",
+    userAgentHash: "ua-hash",
+    targetHash: "account-hash",
+    metadata: {
+      reasonCode: "INVALID_CREDENTIALS",
+      route: "/api/auth/login",
+      method: "POST",
+      retryAfterSeconds: 60,
+      password: "secret-password",
+      token: "raw-token",
+      cookie: "socks_session=secret",
+      authorization: "Bearer secret",
+      email: "buyer@example.com",
+      ip: "203.0.113.9"
+    },
+    occurredAt: now,
+    retentionDays: 180
+  });
+  const stored = db.prepare("SELECT metadata, expires_at FROM security_audit_events WHERE id = ?")
+    .get(event.id);
+  expect(JSON.parse(stored.metadata)).toEqual({
+    reasonCode: "INVALID_CREDENTIALS",
+    route: "/api/auth/login",
+    method: "POST",
+    retryAfterSeconds: 60
+  });
+  expect(stored.expires_at).toBe("2027-01-30T12:00:00.000Z");
+
+  recordSecurityAudit(db, {
+    eventType: "auth.login",
+    outcome: "success",
+    ipHash: "ip-hash",
+    userAgentHash: "ua-hash",
+    occurredAt: new Date(now.getTime() + 1000),
+    retentionDays: 180
+  });
+  const listed = listSecurityAuditEvents(db, {
+    eventType: "auth.login",
+    page: 1,
+    pageSize: 1
+  });
+  expect(listed.items).toHaveLength(1);
+  expect(listed.items[0].outcome).toBe("success");
+  expect(listed.pagination).toMatchObject({ page: 1, pageSize: 1, total: 2, totalPages: 2 });
+
+  const insertExpired = db.prepare(`
+    INSERT INTO security_audit_events (
+      id, event_type, outcome, actor_user_id, session_id, ip_hash, user_agent_hash,
+      target_hash, metadata, occurred_at, expires_at
+    ) VALUES (?, 'test.expired', 'success', NULL, NULL, '', '', NULL, '{}', ?, ?)
+  `);
+  const seedExpired = db.transaction(() => {
+    for (let index = 0; index < 105; index += 1) {
+      insertExpired.run(
+        `expired-audit-${index}`,
+        "2025-01-01T00:00:00.000Z",
+        "2025-06-01T00:00:00.000Z"
+      );
+    }
+  });
+  seedExpired();
+  expect(cleanupExpiredSecurityAudit(db, { now, limit: 100 })).toBe(100);
+  expect(db.prepare(`
+    SELECT COUNT(*) AS count FROM security_audit_events WHERE event_type = 'test.expired'
+  `).get().count).toBe(5);
+  db.close();
+});
+
 test("maps fixed RBAC roles to least-privilege permissions", () => {
   const { PERMISSIONS, getPermissionsForRoles, hasPermission } = require("../lib/auth/permissions");
   const superPermissions = getPermissionsForRoles(["super_admin"]);
