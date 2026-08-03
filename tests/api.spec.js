@@ -852,6 +852,17 @@ test("requires authenticated users and exact permissions", async () => {
   }, {})).resolves.toMatchObject({ id: "warehouse" });
 });
 
+test("registers PATCH and DELETE route helpers", async () => {
+  const { createRouter } = require("../lib/http/router");
+  const router = createRouter();
+  const methods = [];
+  router.patch("/resource", ({ request }) => methods.push(request.method));
+  router.delete("/resource", ({ request }) => methods.push(request.method));
+  await router.dispatch({ request: { method: "PATCH" }, requestUrl: new URL("http://test/resource") });
+  await router.dispatch({ request: { method: "DELETE" }, requestUrl: new URL("http://test/resource") });
+  expect(methods).toEqual(["PATCH", "DELETE"]);
+});
+
 test("bootstraps administrators safely by environment", () => {
   const { createAuthService } = require("../lib/services/auth-service");
   const { createUser } = require("../lib/repositories/users");
@@ -3713,7 +3724,9 @@ test("registers a user and creates an http-only session", async ({ request }) =>
   expect(payload.user).toMatchObject({
     name: "Alex Chen",
     email: "alex@example.com",
-    addresses: []
+    addresses: [],
+    roles: ["customer"],
+    permissions: []
   });
   expect(payload.user.id).toMatch(/^user-\d{4}$/);
   expect(payload.user.passwordHash).toBeUndefined();

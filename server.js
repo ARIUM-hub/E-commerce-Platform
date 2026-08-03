@@ -36,6 +36,9 @@ const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes"
 const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
 const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
 const { registerAdminUserRoutes } = require("./lib/routes/admin-user-routes");
+const { registerAuthRoutes } = require("./lib/routes/auth-routes");
+const { registerTrustRoutes } = require("./lib/routes/trust-routes");
+const { registerTestRoutes } = require("./lib/routes/test-routes");
 const { listProducts, findProductById } = require("./lib/repositories/products");
 const {
   createAnalyticsEventLimiter,
@@ -300,11 +303,8 @@ const sessionService = createSessionService({
 });
 const {
   getSessionContext,
-  createUserSession,
-  removeSession,
   createSessionId,
-  createSessionCookie,
-  createExpiredSessionCookie
+  createSessionCookie
 } = sessionService;
 const authorization = createAuthorization({ getSessionContext, sendError });
 const { requireUser } = authorization;
@@ -1299,6 +1299,29 @@ registerAdminUserRoutes(router, {
   requirePermission: authorization.requirePermission,
   withDatabase
 });
+registerAuthRoutes(router, {
+  authService,
+  createPublicUser,
+  getCartPayload,
+  handleRequestBodyError,
+  mergeAnonymousCartIntoUserCart,
+  readRequestBody,
+  sendJsonWithHeaders,
+  sessionCookieName,
+  sessionService,
+  withDatabase
+});
+registerTrustRoutes(router, {
+  getTrustCenterContent,
+  normalizeLocale
+});
+registerTestRoutes(router, {
+  isTest: config.isTest,
+  async resetTestDatabase() {
+    await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
+    withDatabase(() => null);
+  }
+});
 
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
@@ -1316,43 +1339,6 @@ const server = http.createServer(async (request, response) => {
 
   if (requestUrl.pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
-    return;
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/test/reset") {
-    if (process.env.NODE_ENV !== "test") {
-      sendError(response, 404, "NOT_FOUND", "Resource was not found.");
-      return;
-    }
-
-    try {
-      await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
-      withDatabase(() => null);
-      sendJson(response, 200, { ok: true });
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "GET" && requestUrl.pathname === "/api/session") {
-    try {
-      const { user } = await getSessionContext(request);
-      sendJson(response, 200, {
-        authenticated: Boolean(user),
-        user: createPublicUser(user)
-      });
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "GET" && requestUrl.pathname === "/api/trust-center") {
-    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
-    sendJson(response, 200, getTrustCenterContent(locale));
     return;
   }
 
@@ -1857,98 +1843,6 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
-    try {
-      const body = await readRequestBody(request);
-      const result = withDatabase((db) => authService.registerUser(db, body));
-      if (result.validationError) {
-        sendError(
-          response,
-          result.validationError.statusCode,
-          result.validationError.code,
-          result.validationError.message,
-          result.validationError.details
-        );
-        return;
-      }
-      const { user } = result;
-
-      const previousSessionId = getCookieValue(request, sessionCookieName);
-      const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
-      sendJsonWithHeaders(response, 201, {
-        ok: true,
-        user: createPublicUser(user),
-        cart: getCartPayload(mergeResult.cart),
-        cartMergeWarnings: mergeResult.warnings
-      }, {
-        "Set-Cookie": createSessionCookie(session.id)
-      });
-      return;
-    } catch (error) {
-      if (handleRequestBodyError(error, response)) {
-        return;
-      }
-
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
-    try {
-      const body = await readRequestBody(request);
-      const result = withDatabase((db) => authService.authenticateUser(db, body));
-      if (result.validationError) {
-        sendError(
-          response,
-          result.validationError.statusCode,
-          result.validationError.code,
-          result.validationError.message,
-          result.validationError.details
-        );
-        return;
-      }
-      const { user } = result;
-
-      const previousSessionId = getCookieValue(request, sessionCookieName);
-      const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
-      sendJsonWithHeaders(response, 200, {
-        ok: true,
-        user: createPublicUser(user),
-        cart: getCartPayload(mergeResult.cart),
-        cartMergeWarnings: mergeResult.warnings
-      }, {
-        "Set-Cookie": createSessionCookie(session.id)
-      });
-      return;
-    } catch (error) {
-      if (handleRequestBodyError(error, response)) {
-        return;
-      }
-
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/logout") {
-    try {
-      const sessionId = getCookieValue(request, sessionCookieName);
-      if (sessionId) {
-        await removeSession(sessionId);
-      }
-      sendJsonWithHeaders(response, 200, { ok: true }, {
-        "Set-Cookie": createExpiredSessionCookie()
-      });
-      return;
-    } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
