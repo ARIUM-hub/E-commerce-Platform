@@ -695,3 +695,31 @@ test("requires a stopped application before production restore", async () => {
   expect(script).toContain("node scripts/restore-database.js");
   expect(script).toContain("--confirm RESTORE");
 });
+
+test("defines a non-root production container stack", async () => {
+  const rootDir = path.join(__dirname, "..");
+  const dockerfile = await fs.readFile(path.join(rootDir, "Dockerfile"), "utf8");
+  const compose = await fs.readFile(path.join(rootDir, "compose.production.yml"), "utf8");
+  const caddy = await fs.readFile(path.join(rootDir, "deploy", "Caddyfile"), "utf8");
+  const timer = await fs.readFile(
+    path.join(rootDir, "deploy", "systemd", "socks-backup.timer"),
+    "utf8"
+  );
+  const appSection = compose.split("\n  caddy:")[0];
+
+  expect(dockerfile).toContain("FROM node:22-bookworm-slim");
+  expect(dockerfile).toContain("npm ci --omit=dev");
+  expect(dockerfile).toContain("USER node");
+  expect(dockerfile).toContain("/api/ready");
+  expect(compose).toContain("name: socks-store");
+  expect(appSection).not.toContain("ports:");
+  expect(appSection).toContain("expose:");
+  expect(compose).toContain("${UPLOAD_DIR_HOST:-./public/uploads}:/app/public/uploads");
+  expect(compose).toContain('max-size: "10m"');
+  expect(compose).toContain('max-file: "5"');
+  expect(compose).toContain('["node", "scripts/backup-database.js"]');
+  expect(caddy).toContain("reverse_proxy app:4173");
+  expect(caddy).toContain("{$STORE_DOMAIN}");
+  expect(timer).toContain("OnCalendar=*-*-* 03:30:00 Asia/Shanghai");
+  expect(timer).toContain("Persistent=true");
+});

@@ -1,0 +1,15 @@
+.git
+.github
+.config
+node_modules
+tests
+test-results
+playwright-report
+playwright.config.js
+docs
+data
+backups
+public/uploads
+.env*
+!.env.production.example
+npm-debug.log*

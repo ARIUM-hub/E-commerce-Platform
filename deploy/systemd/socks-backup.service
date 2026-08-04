@@ -1,0 +1,13 @@
+[Unit]
+Description=Socks Store SQLite backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/socks-store
+ExecStart=/usr/bin/docker compose --env-file .env.production -f compose.production.yml --profile ops run --rm backup
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

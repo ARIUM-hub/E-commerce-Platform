@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Socks Store SQLite backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=5m
+Unit=socks-backup.service
+
+[Install]
+WantedBy=timers.target
