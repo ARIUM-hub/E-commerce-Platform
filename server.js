@@ -5,6 +5,10 @@ const crypto = require("node:crypto");
 const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { createLogger } = require("./lib/logger");
+const {
+  createRequestContext,
+  attachRequestCompletionLog
+} = require("./lib/http/request-context");
 const { createCsrfService } = require("./lib/security/csrf");
 const {
   createMemoryRateLimiter,
@@ -1410,6 +1414,14 @@ registerTestRoutes(router, {
 
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
+  const requestContext = createRequestContext(request, response);
+  attachRequestCompletionLog({
+    request,
+    response,
+    requestUrl,
+    requestContext,
+    logger
+  });
   const securityResult = requestSecurity.check(request, requestUrl);
   if (!securityResult.allowed) {
     const isRateLimited = securityResult.code === "RATE_LIMITED";
@@ -1429,6 +1441,7 @@ const server = http.createServer(async (request, response) => {
     request,
     response,
     requestUrl,
+    requestContext,
     sendError,
     sendJson
   });

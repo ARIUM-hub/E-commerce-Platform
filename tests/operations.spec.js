@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { EventEmitter } = require("node:events");
 const { createConfig } = require("../lib/config");
 const { createLogger } = require("../lib/logger");
 
@@ -122,4 +123,72 @@ test("writes redacted production JSON logs", () => {
   });
   expect(lines[0]).not.toContain("password-secret");
   expect(lines[0]).not.toContain("authorization-secret");
+});
+
+test("validates and propagates request ids", () => {
+  const { createRequestContext } = require("../lib/http/request-context");
+  const acceptedHeaders = {};
+  const accepted = createRequestContext({
+    headers: { "x-request-id": "edge-request-123" }
+  }, {
+    setHeader: (name, value) => { acceptedHeaders[name] = value; }
+  }, {
+    now: () => 1000,
+    randomUUID: () => "generated-request-id"
+  });
+
+  expect(accepted.requestId).toBe("edge-request-123");
+  expect(acceptedHeaders["X-Request-Id"]).toBe("edge-request-123");
+  expect(accepted.complete(2000)).toEqual({ durationMs: 1000 });
+
+  const generatedHeaders = {};
+  const generated = createRequestContext({
+    headers: { "x-request-id": "bad id" }
+  }, {
+    setHeader: (name, value) => { generatedHeaders[name] = value; }
+  }, {
+    now: () => 1000,
+    randomUUID: () => "generated-request-id"
+  });
+
+  expect(generated.requestId).toBe("generated-request-id");
+  expect(generatedHeaders["X-Request-Id"]).toBe("generated-request-id");
+});
+
+test("logs HTTP completion once without query parameters", () => {
+  const {
+    createRequestContext,
+    attachRequestCompletionLog
+  } = require("../lib/http/request-context");
+  const response = new EventEmitter();
+  response.statusCode = 201;
+  response.setHeader = () => {};
+  let currentTime = 1000;
+  const requestContext = createRequestContext({ headers: {}, method: "POST" }, response, {
+    now: () => currentTime,
+    randomUUID: () => "generated-request-id"
+  });
+  const entries = [];
+
+  attachRequestCompletionLog({
+    request: { method: "POST" },
+    response,
+    requestUrl: new URL("https://shop.example.com/api/orders?token=hidden"),
+    requestContext,
+    logger: { info: (event, context) => entries.push({ event, context }) }
+  });
+  currentTime = 1045;
+  response.emit("finish");
+  response.emit("close");
+
+  expect(entries).toEqual([{
+    event: "http.request.completed",
+    context: {
+      requestId: "generated-request-id",
+      method: "POST",
+      route: "/api/orders",
+      statusCode: 201,
+      durationMs: 45
+    }
+  }]);
 });

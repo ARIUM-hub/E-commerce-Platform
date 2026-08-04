@@ -391,6 +391,19 @@ test("adds baseline security headers to API responses", async ({ request }) => {
   expect(response.headers()["permissions-policy"]).toContain("camera=()");
 });
 
+test("returns a validated request id for API responses", async ({ request }) => {
+  const accepted = await request.get("/api/health", {
+    headers: { "x-request-id": "client-request-123" }
+  });
+  expect(accepted.headers()["x-request-id"]).toBe("client-request-123");
+
+  const replaced = await request.get("/api/health", {
+    headers: { "x-request-id": "bad id" }
+  });
+  expect(replaced.headers()["x-request-id"]).toMatch(/^[A-Za-z0-9._-]{8,128}$/);
+  expect(replaced.headers()["x-request-id"]).not.toBe("bad id");
+});
+
 test("serves the external storefront script", async ({ request }) => {
   const response = await request.get("/public/js/storefront-app.js");
 
