@@ -1,7 +1,10 @@
 const { test, expect } = require("@playwright/test");
 const { EventEmitter } = require("node:events");
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const { createConfig } = require("../lib/config");
 const { createLogger } = require("../lib/logger");
+const { createDatabase } = require("../lib/database");
 
 function createProductionEnv(overrides = {}) {
   return {
@@ -389,4 +392,39 @@ test("contains unhandled request errors at the HTTP boundary", async () => {
     "INTERNAL_ERROR",
     "Unexpected server error."
   ]]);
+});
+
+test("creates an integrity-checked compressed SQLite backup", async ({}, testInfo) => {
+  const {
+    createDatabaseBackup,
+    verifyBackupArchive
+  } = require("../lib/database-backup");
+  const sourcePath = testInfo.outputPath("source.db");
+  const backupDir = testInfo.outputPath("backups");
+  const db = createDatabase(sourcePath);
+  db.exec("CREATE TABLE sample (value TEXT); INSERT INTO sample VALUES ('kept');");
+  db.close();
+
+  const result = await createDatabaseBackup({
+    sourcePath,
+    backupDir,
+    serviceVersion: "abc1234",
+    now: () => new Date("2026-08-04T03:30:00.000Z")
+  });
+
+  expect(path.basename(result.archivePath))
+    .toBe("socks-store-20260804T033000Z-abc1234.db.gz");
+  expect(await fs.readFile(result.checksumPath, "utf8"))
+    .toBe(`${result.sha256}  ${path.basename(result.archivePath)}\n`);
+  expect(result.integrity).toBe("ok");
+  await expect(verifyBackupArchive({
+    archivePath: result.archivePath,
+    checksumPath: result.checksumPath,
+    workingDir: backupDir
+  })).resolves.toMatchObject({
+    integrity: "ok",
+    sha256: result.sha256
+  });
+  await expect(fs.access(`${backupDir}/socks-store-20260804T033000Z-abc1234.db.partial`))
+    .rejects.toThrow();
 });
