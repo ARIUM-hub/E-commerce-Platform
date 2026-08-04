@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { createConfig } = require("../lib/config");
+const { createLogger } = require("../lib/logger");
 
 function createProductionEnv(overrides = {}) {
   return {
@@ -73,4 +74,52 @@ test("uses safe development operations defaults", () => {
       bucket: ""
     }
   });
+});
+
+test("writes redacted production JSON logs", () => {
+  const lines = [];
+  const circular = { statusCode: 200 };
+  circular.self = circular;
+  const logger = createLogger({
+    level: "info",
+    format: "json",
+    baseContext: {
+      environment: "production",
+      serviceVersion: "abc123"
+    },
+    sink: (line) => lines.push(line),
+    now: () => new Date("2026-08-04T00:00:00.000Z")
+  });
+
+  logger.debug("request.hidden", { statusCode: 100 });
+  logger.info("request.completed", {
+    requestId: "req-12345678",
+    password: "password-secret",
+    nested: {
+      authorization: "Bearer authorization-secret",
+      statusCode: 200
+    },
+    circular
+  });
+
+  expect(lines).toHaveLength(1);
+  expect(JSON.parse(lines[0])).toEqual({
+    timestamp: "2026-08-04T00:00:00.000Z",
+    level: "info",
+    event: "request.completed",
+    environment: "production",
+    serviceVersion: "abc123",
+    requestId: "req-12345678",
+    password: "[REDACTED]",
+    nested: {
+      authorization: "[REDACTED]",
+      statusCode: 200
+    },
+    circular: {
+      statusCode: 200,
+      self: "[CIRCULAR]"
+    }
+  });
+  expect(lines[0]).not.toContain("password-secret");
+  expect(lines[0]).not.toContain("authorization-secret");
 });

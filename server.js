@@ -205,7 +205,14 @@ const { createPricingSummary } = require("./lib/pricing");
 const { createCheckoutTotals } = require("./lib/checkout-totals");
 
 const config = createConfig(process.env);
-const logger = createLogger({ level: config.logLevel });
+const logger = createLogger({
+  level: config.logLevel,
+  format: config.logFormat,
+  baseContext: {
+    environment: config.nodeEnv,
+    serviceVersion: config.serviceVersion
+  }
+});
 const csrfService = createCsrfService({
   secret: config.csrfSecret,
   isProduction: config.nodeEnv === "production"
