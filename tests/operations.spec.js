@@ -744,3 +744,35 @@ test("keeps CI isolated and single-worker", async () => {
   expect(workflow).not.toContain("S3_SECRET_ACCESS_KEY: ${{ secrets");
   expect(workflow).not.toContain("SENTRY_DSN: ${{ secrets");
 });
+
+test("requires approval and bounded rollback for production deployment", async () => {
+  const rootDir = path.join(__dirname, "..");
+  const workflow = await fs.readFile(
+    path.join(rootDir, ".github", "workflows", "deploy-production.yml"),
+    "utf8"
+  );
+  const script = await fs.readFile(
+    path.join(rootDir, "scripts", "deploy-production.sh"),
+    "utf8"
+  );
+
+  expect(workflow).toContain("workflow_dispatch:");
+  expect(workflow).toContain("commit_sha:");
+  expect(workflow).toContain("environment: production");
+  expect(workflow).toContain("group: production-deployment");
+  expect(workflow).toContain("cancel-in-progress: false");
+  expect(workflow).toMatch(/gh run list .*--workflow ci\.yml/);
+  expect(workflow).toContain("PRODUCTION_SSH_KNOWN_HOSTS");
+  expect(workflow).toContain("compose.production.yml");
+  expect(workflow).toContain("deploy/Caddyfile");
+  expect(workflow).not.toContain("ssh-keyscan");
+  expect(script).toContain("set -Eeuo pipefail");
+  expect(script).toContain("previous_image=");
+  expect(script).toContain("--profile ops run --rm backup");
+  expect(script).toContain("node scripts/migrate-database.js");
+  expect(script).toContain("seq 1 20");
+  expect(script).toContain("rollback");
+  expect(script).not.toContain("restore-database.js");
+  expect(script.indexOf("--profile ops run --rm backup"))
+    .toBeLessThan(script.indexOf("pull app"));
+});
