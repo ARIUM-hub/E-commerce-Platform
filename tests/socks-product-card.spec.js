@@ -20,7 +20,6 @@ test("fails to start when DATA_DIR does not contain required JSON files", async 
 
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("products.json");
-  expect(result.stderr).toContain("cart.json");
 });
 
 test("keeps product fixtures identical between app and test datasets", async () => {

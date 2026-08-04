@@ -2,19 +2,105 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { createApiError } = require("./lib/api-errors");
-const { createDatabase, initializeDatabase, getDatabasePath } = require("./lib/database");
-const { listProducts } = require("./lib/repositories/products");
+const { createConfig } = require("./lib/config");
+const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
+const { createLogger } = require("./lib/logger");
+const { createErrorReporter } = require("./lib/monitoring/error-reporter");
 const {
-  findUserByEmail,
+  createRequestContext,
+  attachRequestCompletionLog
+} = require("./lib/http/request-context");
+const { createSafeRequestHandler } = require("./lib/http/request-boundary");
+const { registerServerLifecycle } = require("./lib/server-lifecycle");
+const { createCsrfService } = require("./lib/security/csrf");
+const {
+  createMemoryRateLimiter,
+  createPersistentRateLimiter
+} = require("./lib/security/rate-limit-service");
+const { createRequestSecurity } = require("./lib/security/request-security");
+const { hashSecurityIdentifier } = require("./lib/security/security-identifiers");
+const { verifyWebhookSignature } = require("./lib/security/webhook-signature");
+const { createApiError } = require("./lib/api-errors");
+const {
+  sendError: sendHttpError,
+  sendJson: sendHttpJson,
+  sendJsonWithHeaders: sendHttpJsonWithHeaders
+} = require("./lib/http/responses");
+const { JsonBodyError, readJsonBody, readRawBody } = require("./lib/http/request-body");
+const {
+  getCookieValue
+} = require("./lib/http/cookies");
+const { PERMISSIONS } = require("./lib/auth/permissions");
+const { createAuthorization } = require("./lib/auth/authorization");
+const { createSessionService } = require("./lib/services/session-service");
+const { createAuthService, createPublicUser } = require("./lib/services/auth-service");
+const { createMailerService } = require("./lib/services/mailer-service");
+const { createAccountSecurityService } = require("./lib/services/account-security-service");
+const {
+  resolveStaticFile,
+  sendStaticFile
+} = require("./lib/http/static-files");
+const {
+  MultipartError,
+  readMultipartFile
+} = require("./lib/http/multipart");
+const { createRouter } = require("./lib/http/router");
+const { registerHealthRoutes } = require("./lib/routes/health-routes");
+const { registerProductRoutes } = require("./lib/routes/product-routes");
+const { registerMarketingRoutes } = require("./lib/routes/marketing-routes");
+const { registerAnalyticsRoutes } = require("./lib/routes/analytics-routes");
+const { registerAdminAnalyticsRoutes } = require("./lib/routes/admin-analytics-routes");
+const { registerAdminReviewRoutes } = require("./lib/routes/admin-review-routes");
+const { registerSupportTicketRoutes } = require("./lib/routes/support-ticket-routes");
+const { registerAdminSupportRoutes } = require("./lib/routes/admin-support-routes");
+const { registerAdminUserRoutes } = require("./lib/routes/admin-user-routes");
+const { registerAuthRoutes } = require("./lib/routes/auth-routes");
+const { registerTrustRoutes } = require("./lib/routes/trust-routes");
+const { registerTestRoutes } = require("./lib/routes/test-routes");
+const { registerSecurityRoutes } = require("./lib/routes/security-routes");
+const { registerAccountSecurityRoutes } = require("./lib/routes/account-security-routes");
+const { listProducts, findProductById } = require("./lib/repositories/products");
+const {
+  createAnalyticsEventLimiter,
+  recordAnalyticsEvent
+} = require("./lib/repositories/analytics-events");
+const { getAdminAnalytics } = require("./lib/repositories/admin-analytics");
+const {
+  createProductReview,
+  findAdminReviewById,
+  listAdminProductReviews,
+  listProductReviews,
+  markProductReviewHelpful,
+  summarizeReviews
+} = require("./lib/repositories/product-reviews");
+const {
+  moderateReviewBatch,
+  upsertMerchantReply,
+  withdrawMerchantReply
+} = require("./lib/repositories/admin-review-actions");
+const {
+  createProductQuestion,
+  listProductQuestions,
+  summarizeQuestions
+} = require("./lib/repositories/product-questions");
+const {
+  listSavedProducts,
+  removeSavedProduct,
+  saveProduct
+} = require("./lib/repositories/saved-products");
+const {
   findUserById,
-  countUsers,
-  createUser,
+  listAdminUsers,
   createSession,
   findSession,
   deleteSession,
+  markUserEmailVerified,
   replaceAddresses
 } = require("./lib/repositories/users");
+const {
+  assignUserRole,
+  listRoleAssignmentEvents
+} = require("./lib/repositories/roles");
 const {
   ensureCart,
   getCart,
@@ -23,25 +109,143 @@ const {
   setCartCouponCode
 } = require("./lib/repositories/carts");
 const {
+  clearRecentViews,
   findBundleById,
   findCouponByCode,
   listRecentProductIds,
+  listRecentViews,
   recordRecentView,
-  listActiveMarketingCampaigns
+  listActiveMarketingCampaigns,
+  removeRecentView
 } = require("./lib/repositories/marketing");
+const {
+  addCustomerTicketMessage,
+  createSupportTicket,
+  findSupportTicketById,
+  findSupportTicketByNumber,
+  findSupportTicketForGuest,
+  getTrustCenterContent,
+  listAdminSupportTickets,
+  listSupportTicketsForUser
+} = require("./lib/repositories/support");
+const {
+  addAdminSupportMessage,
+  updateSupportTicket
+} = require("./lib/repositories/admin-support-actions");
+const { createSupportLookupLimiter } = require("./lib/support-lookup-limiter");
+const {
+  findAdminOrder,
+  getAdminSummary,
+  listAdminMarketing,
+  listAdminOrders,
+  listAdminPaymentMethods,
+  listAdminProducts,
+  listInventory,
+  updateAdminOrderStatus,
+  updateInventoryItem,
+  updateMarketingStatus
+} = require("./lib/repositories/admin");
+const {
+  createAdminProduct,
+  findAdminProductById,
+  updateAdminProduct
+} = require("./lib/repositories/admin-products");
+const {
+  cancelAdminOrder,
+  createAdminPartialRefund,
+  listAdminActionsForResource,
+  reviewAdminReturnRequest,
+  shipAdminOrder
+} = require("./lib/repositories/admin-order-actions");
 const {
   createOrderTransaction,
   countOrders,
   listOrders,
   findOrderById,
+  reorderItemsFromOrder,
   saveOrder
 } = require("./lib/repositories/orders");
+const {
+  createReturnRequest,
+  findReturnRequestById,
+  listAdminReturnRequests,
+  listReturnRequestsByUser,
+  updateReturnRequestStatus
+} = require("./lib/repositories/returns");
+const {
+  createPaymentAttempt,
+  findPaymentAttemptById,
+  savePaymentAttempt,
+  listPaymentAttemptsByOrder
+} = require("./lib/repositories/payments");
+const {
+  listPaymentMethods,
+  updatePaymentMethod
+} = require("./lib/repositories/payment-methods");
+const { processPaymentWebhook } = require("./lib/repositories/payment-events");
+const { listSecurityAuditEvents } = require("./lib/repositories/security-audit");
+const { listOutbox } = require("./lib/repositories/email-outbox");
+const {
+  createInvoiceForOrder,
+  findInvoiceById,
+  findInvoiceByOrderId
+} = require("./lib/repositories/invoices");
+const {
+  confirmShipment,
+  createFulfillmentForOrder,
+  createFulfillmentSummary,
+  findFulfillmentByOrderId,
+  getShippingMethodForOrder,
+  getShippingMethodsForAddress,
+  syncFulfillmentForOrderStatus,
+  updateFulfillmentStatus
+} = require("./lib/repositories/fulfillment");
+const {
+  createRefundForOrder,
+  createRefundSummary,
+  findRefundById,
+  getRefundableOrderSummary,
+  listRefundsByOrderId,
+  updateRefundStatus
+} = require("./lib/repositories/refunds");
 const { createPricingSummary } = require("./lib/pricing");
+const { createCheckoutTotals } = require("./lib/checkout-totals");
 
-const host = "127.0.0.1";
-const port = Number.parseInt(process.env.PORT || "4173", 10);
-const rootDir = __dirname;
-const dataDir = path.resolve(rootDir, process.env.DATA_DIR || "data");
+const config = createConfig(process.env);
+const errorReporter = createErrorReporter({
+  dsn: config.sentry.dsn,
+  environment: config.sentry.environment,
+  release: config.serviceVersion
+});
+const logger = createLogger({
+  level: config.logLevel,
+  format: config.logFormat,
+  baseContext: {
+    environment: config.nodeEnv,
+    serviceVersion: config.serviceVersion
+  },
+  reportError: (event, context) => errorReporter.captureMessage(event, context)
+});
+const csrfService = createCsrfService({
+  secret: config.csrfSecret,
+  isProduction: config.nodeEnv === "production"
+});
+const generalRateLimiter = createMemoryRateLimiter({
+  limit: config.generalRateLimit,
+  windowMs: 60_000
+});
+const requestSecurity = createRequestSecurity({
+  allowedOrigins: config.allowedOrigins,
+  csrfService,
+  generalRateLimiter,
+  securityHashSecret: config.securityHashSecret,
+  trustProxy: config.trustProxy,
+  isTest: config.isTest
+});
+const host = config.host;
+const port = config.port;
+const rootDir = config.rootDir;
+const dataDir = config.dataDir;
 const productsFile = path.join(dataDir, "products.json");
 const requiredDataFiles = [
   "products.json"
@@ -55,7 +259,14 @@ const staticRoutes = new Map([
 const validFilters = new Set(["all", "sport", "daily", "crew", "no-show"]);
 const validSorts = new Set(["recommended", "price-asc", "price-desc", "newest"]);
 const validLocales = new Set(["zh-CN", "en-US"]);
+const adminImageTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/svg+xml", "svg"]
+]);
 const validStockFilters = new Set(["all", "in-stock", "low-stock", "out-of-stock"]);
+const DEMO_ADMIN_EMAILS = new Set(["admin@socks.test"]);
 const shippingMethods = {
   standard: {
     id: "standard",
@@ -76,31 +287,19 @@ const orderStatusLabels = {
   processing: { "zh-CN": "处理中", "en-US": "Processing" },
   shipped: { "zh-CN": "已发货", "en-US": "Shipped" },
   delivered: { "zh-CN": "已送达", "en-US": "Delivered" },
-  cancelled: { "zh-CN": "已取消", "en-US": "Cancelled" }
+  cancelled: { "zh-CN": "已取消", "en-US": "Cancelled" },
+  refund_pending: { "zh-CN": "退款处理中", "en-US": "Refund pending" },
+  refunded: { "zh-CN": "已退款", "en-US": "Refunded" }
 };
 const sessionCookieName = "socks_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 
-const mimeTypes = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8"
-};
-
 function sendJson(response, statusCode, payload) {
-  response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(payload));
+  sendHttpJson(response, statusCode, payload, config);
 }
 
 function sendJsonWithHeaders(response, statusCode, payload, headers = {}) {
-  response.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
-    ...headers
-  });
-  response.end(JSON.stringify(payload));
+  sendHttpJsonWithHeaders(response, statusCode, payload, headers, config);
 }
 
 function sendCartJson(response, statusCode, payload, activeCart) {
@@ -115,8 +314,7 @@ function sendCartJson(response, statusCode, payload, activeCart) {
 }
 
 function sendError(response, statusCode, code, message, details = {}) {
-  const apiError = createApiError(code, { statusCode, message, details });
-  sendJson(response, apiError.statusCode, apiError.payload);
+  sendHttpError(response, statusCode, code, message, details, config);
 }
 
 function validateDataDir() {
@@ -125,23 +323,15 @@ function validateDataDir() {
   });
 
   if (missingFiles.length > 0) {
-    console.error(
-      `DATA_DIR "${dataDir}" is missing required files: ${missingFiles.join(", ")}`
-    );
+    logger.error("data.directory.invalid", {
+      missingFiles
+    });
     process.exit(1);
   }
 }
 
-function sendFile(response, filePath) {
-  const extension = path.extname(filePath).toLowerCase();
-  const contentType = mimeTypes[extension] || "application/octet-stream";
-
-  response.writeHead(200, { "Content-Type": contentType });
-  fs.createReadStream(filePath).pipe(response);
-}
-
 function getStaticFilePath(urlPathname) {
-  return staticRoutes.get(urlPathname) || null;
+  return resolveStaticFile(urlPathname, { rootDir, staticRoutes });
 }
 
 function withDatabase(callback) {
@@ -150,24 +340,78 @@ function withDatabase(callback) {
   });
 
   try {
+    authService.bootstrapAdmin(db);
     return callback(db);
   } finally {
     db.close();
   }
 }
 
+const persistentRateLimiter = createPersistentRateLimiter({
+  withDatabase,
+  hashIdentifier: (value, type) => hashSecurityIdentifier(
+    value,
+    config.securityHashSecret,
+    `persistent-rate-limit-${type}`
+  )
+});
+const mailerService = createMailerService({ config, withDatabase });
+const accountSecurityService = createAccountSecurityService({
+  withDatabase,
+  mailerService,
+  auditRetentionDays: config.auditRetentionDays,
+  hashIdentifier: (value, type) => hashSecurityIdentifier(
+    value,
+    config.securityHashSecret,
+    type
+  )
+});
+const authService = createAuthService(config);
+const sessionService = createSessionService({
+  withDatabase,
+  sessionCookieName,
+  sessionMaxAgeSeconds
+});
+const {
+  getSessionContext,
+  createSessionId,
+  createSessionCookie
+} = sessionService;
+const authorization = createAuthorization({ getSessionContext, sendError });
+const { requireUser } = authorization;
+
 async function readRequestBody(request) {
-  const chunks = [];
+  return readJsonBody(request, { limitBytes: config.requestBodyLimitBytes });
+}
 
-  for await (const chunk of request) {
-    chunks.push(chunk);
+function handleRequestBodyError(error, response) {
+  if (error instanceof JsonBodyError) {
+    sendError(response, error.statusCode, error.code, error.message);
+    return true;
   }
 
-  if (chunks.length === 0) {
-    return {};
+  if (error instanceof SyntaxError) {
+    sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+    return true;
   }
 
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return false;
+}
+
+function handleMultipartError(error, response) {
+  if (!(error instanceof MultipartError)) {
+    return false;
+  }
+
+  sendError(response, error.statusCode, error.code, error.message);
+  return true;
+}
+
+function createAdminImageName(productId, contentType) {
+  const extension = adminImageTypes.get(contentType);
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const suffix = crypto.randomBytes(3).toString("hex");
+  return `${productId}-${stamp}-${suffix}.${extension}`;
 }
 
 function sortRecommended(left, right) {
@@ -431,6 +675,27 @@ function getProductsPayload(products, filterValue, sortValue, localeValue, query
 
 function getMarketingPayload() {
   return withDatabase((db) => listActiveMarketingCampaigns(db));
+}
+
+function getRecentViewsPayload(db, owner, products, locale, limit) {
+  const views = listRecentViews(db, {
+    userId: owner.userId,
+    sessionId: owner.sessionId,
+    limit
+  });
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const items = views
+    .map((view) => {
+      const product = productsById.get(view.productId);
+      return product ? { ...localizeProduct(product, locale), viewedAt: view.viewedAt } : null;
+    })
+    .filter(Boolean);
+
+  return {
+    ok: true,
+    productIds: views.map((view) => view.productId),
+    items
+  };
 }
 
 function getCartPayload(cart, options = {}) {
@@ -708,107 +973,6 @@ function createTimelineEntry(status, locale = "zh-CN") {
   };
 }
 
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function createPublicUser(user) {
-  if (!user) {
-    return null;
-  }
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    addresses: Array.isArray(user.addresses) ? user.addresses : []
-  };
-}
-
-function buildUserId(users) {
-  return `user-${String(users.length + 1).padStart(4, "0")}`;
-}
-
-function createPasswordSalt() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-function hashPassword(password, salt) {
-  const hash = crypto.createHash("sha256");
-  hash.update(`${salt}:${password}`);
-  return `sha256:${hash.digest("hex")}`;
-}
-
-function verifyPassword(password, user) {
-  return hashPassword(password, user.passwordSalt) === user.passwordHash;
-}
-
-function createSessionId() {
-  return crypto.randomBytes(24).toString("hex");
-}
-
-function getCookieValue(request, cookieName) {
-  const cookieHeader = request.headers.cookie || "";
-  return cookieHeader
-    .split(";")
-    .map((entry) => entry.trim())
-    .map((entry) => entry.split("="))
-    .find(([name]) => name === cookieName)?.[1] || "";
-}
-
-function createSessionCookie(sessionId) {
-  return `${sessionCookieName}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionMaxAgeSeconds}`;
-}
-
-function createExpiredSessionCookie() {
-  return `${sessionCookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
-}
-
-async function getSessionContext(request) {
-  const sessionId = getCookieValue(request, sessionCookieName);
-  if (!sessionId) {
-    return { session: null, user: null };
-  }
-
-  const { session, user } = withDatabase((db) => {
-    const foundSession = findSession(db, sessionId);
-    const now = Date.now();
-    const isActiveSession = foundSession && (!foundSession.expiresAt || new Date(foundSession.expiresAt).getTime() > now);
-    return {
-      session: isActiveSession ? foundSession : null,
-      user: isActiveSession && foundSession.userId ? findUserById(db, foundSession.userId) : null
-    };
-  });
-
-  return { session, user };
-}
-
-async function createUserSession(userId) {
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + sessionMaxAgeSeconds * 1000);
-  const session = {
-    id: createSessionId(),
-    userId,
-    createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString()
-  };
-
-  withDatabase((db) => createSession(db, session));
-  return session;
-}
-
-async function removeSession(sessionId) {
-  withDatabase((db) => deleteSession(db, sessionId));
-}
-
-function validateAuthPayload(body, mode) {
-  const missingFields = [];
-  if (mode === "register" && !String(body.name || "").trim()) missingFields.push("name");
-  if (!normalizeEmail(body.email)) missingFields.push("email");
-  if (!String(body.password || "").trim()) missingFields.push("password");
-  return missingFields;
-}
-
 function normalizeCartPayload(cart) {
   return {
     couponCode: cart.couponCode || "",
@@ -817,7 +981,7 @@ function normalizeCartPayload(cart) {
 }
 
 async function readActiveCart(request, options = {}) {
-  const { user } = await getSessionContext(request);
+  const { session, user } = await getSessionContext(request);
   if (!user) {
     let sessionId = getCookieValue(request, sessionCookieName);
     let setCookieHeader = null;
@@ -850,6 +1014,7 @@ async function readActiveCart(request, options = {}) {
     return {
       user: null,
       sessionId,
+      visitorId: sessionId,
       setCookieHeader,
       ...withDatabase((db) => {
         const databaseCart = sessionId ? getCart(db, { sessionId }) : { items: [] };
@@ -865,6 +1030,7 @@ async function readActiveCart(request, options = {}) {
   return {
     user,
     sessionId: null,
+    visitorId: session?.id || null,
     setCookieHeader: null,
     cartId: userDatabaseCart.id || null,
     cart: normalizeCartPayload(userDatabaseCart)
@@ -978,13 +1144,8 @@ function normalizeAddressPayload(body, existingAddress = {}) {
   };
 }
 
-async function requireUser(request, response) {
-  const { user } = await getSessionContext(request);
-  if (!user) {
-    sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
-    return null;
-  }
-  return user;
+async function requireAdmin(request, response) {
+  return authorization.requirePermission(PERMISSIONS.ANALYTICS_READ, request, response);
 }
 
 async function updateUser(userId, updater) {
@@ -1011,7 +1172,9 @@ const allowedOrderTransitions = {
   processing: new Set(["shipped"]),
   shipped: new Set(["delivered"]),
   delivered: new Set([]),
-  cancelled: new Set([])
+  cancelled: new Set([]),
+  refund_pending: new Set(["refunded"]),
+  refunded: new Set([])
 };
 
 function parseOrderIdFromPath(pathname) {
@@ -1019,119 +1182,353 @@ function parseOrderIdFromPath(pathname) {
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
 }
 
+function parseOrderReorderPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/reorder$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function parseOrderStatusPath(pathname) {
   const orderMatch = pathname.match(/^\/api\/orders\/([^/]+)\/status$/);
   return orderMatch ? decodeURIComponent(orderMatch[1]) : null;
 }
 
-const server = http.createServer(async (request, response) => {
+function parseOrderPaymentsPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/payments$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderInvoicePath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/invoice$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseInvoiceIdFromPath(pathname) {
+  const match = pathname.match(/^\/api\/invoices\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderFulfillmentPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/fulfillment$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderFulfillmentStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/fulfillment\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderCancelPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/cancel$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseOrderRefundsPath(pathname) {
+  const match = pathname.match(/^\/api\/orders\/([^/]+)\/refunds$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseRefundStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/refunds\/([^/]+)\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseReturnIdFromPath(pathname) {
+  const match = pathname.match(/^\/api\/returns\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseReturnStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/returns\/([^/]+)\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminInventoryPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/inventory\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminProductPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/products\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminProductImagePath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/products\/([^/]+)\/images$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminOrderPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminOrderStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/status$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminOrderActionPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/actions\/(ship|cancel|refund)$/);
+  return match ? { orderId: decodeURIComponent(match[1]), action: match[2] } : null;
+}
+
+function parseAdminReturnActionPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/returns\/([^/]+)\/actions\/review$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function parseAdminMarketingStatusPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/marketing\/([^/]+)\/([^/]+)\/status$/);
+  return match ? { type: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) } : null;
+}
+
+function parseAdminPaymentMethodPath(pathname) {
+  const match = pathname.match(/^\/api\/admin\/payment-methods\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+const router = createRouter();
+const supportLookupLimiter = createSupportLookupLimiter();
+registerHealthRoutes(router, {
+  checkReadiness() {
+    return withDatabase((db) => db.prepare("SELECT 1 AS ready").get());
+  }
+});
+registerSecurityRoutes(router, {
+  csrfService,
+  isProduction: config.nodeEnv === "production",
+  listOutbox,
+  listSecurityAuditEvents,
+  requirePermission: authorization.requirePermission,
+  sendJsonWithHeaders,
+  withDatabase
+});
+registerProductRoutes(router, {
+  createProductQuestion,
+  createProductReview,
+  findProductById,
+  getProductsPayload,
+  listProductQuestions,
+  listProductReviews,
+  listProducts,
+  listSavedProducts,
+  markProductReviewHelpful,
+  readRequestBody,
+  readActiveCart,
+  removeSavedProduct,
+  saveProduct,
+  summarizeQuestions,
+  summarizeReviews,
+  withDatabase
+});
+registerMarketingRoutes(router, {
+  getMarketingPayload
+});
+registerAnalyticsRoutes(router, {
+  createAnalyticsEventLimiter,
+  handleRequestBodyError,
+  readActiveCart,
+  readRequestBody,
+  recordAnalyticsEvent,
+  withDatabase
+});
+registerAdminAnalyticsRoutes(router, {
+  getAdminAnalytics,
+  requirePermission: authorization.requirePermission,
+  withDatabase
+});
+registerAdminReviewRoutes(router, {
+  findAdminReviewById,
+  handleRequestBodyError,
+  listAdminProductReviews,
+  moderateReviewBatch,
+  readRequestBody,
+  requirePermission: authorization.requirePermission,
+  upsertMerchantReply,
+  withdrawMerchantReply,
+  withDatabase
+});
+registerSupportTicketRoutes(router, {
+  addCustomerTicketMessage,
+  createSupportTicket,
+  findSupportTicketById,
+  findSupportTicketByNumber,
+  findSupportTicketForGuest,
+  handleRequestBodyError,
+  listSupportTicketsForUser,
+  readActiveCart,
+  readRequestBody,
+  requireUser,
+  supportLookupLimiter,
+  withDatabase
+});
+registerAdminSupportRoutes(router, {
+  addAdminSupportMessage,
+  findSupportTicketById,
+  handleRequestBodyError,
+  listAdminSupportTickets,
+  readRequestBody,
+  requirePermission: authorization.requirePermission,
+  updateSupportTicket,
+  withDatabase
+});
+registerAdminUserRoutes(router, {
+  assignUserRole,
+  createPublicUser,
+  findUserById,
+  handleRequestBodyError,
+  listAdminUsers,
+  listRoleAssignmentEvents,
+  readRequestBody,
+  requirePermission: authorization.requirePermission,
+  withDatabase
+});
+registerAuthRoutes(router, {
+  accountSecurityService,
+  authService,
+  createPublicUser,
+  getCartPayload,
+  handleRequestBodyError,
+  mergeAnonymousCartIntoUserCart,
+  persistentRateLimiter,
+  readRequestBody,
+  sendJsonWithHeaders,
+  sessionCookieName,
+  sessionService,
+  trustProxy: config.trustProxy,
+  withDatabase
+});
+registerAccountSecurityRoutes(router, {
+  accountSecurityService,
+  createPublicUser,
+  handleRequestBodyError,
+  persistentRateLimiter,
+  readRequestBody,
+  requireUser,
+  sendJsonWithHeaders,
+  trustProxy: config.trustProxy
+});
+registerTrustRoutes(router, {
+  getTrustCenterContent,
+  normalizeLocale
+});
+registerTestRoutes(router, {
+  createPublicUser,
+  isTest: config.isTest,
+  markUserEmailVerified,
+  requireUser,
+  withDatabase,
+  async resetTestDatabase() {
+    await resetDatabase(getDatabasePath({ dataDir, nodeEnv: "test" }));
+    withDatabase(() => null);
+    generalRateLimiter.reset();
+  }
+});
+
+async function handleHttpRequest(request, response) {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
+  const requestContext = createRequestContext(request, response);
+  attachRequestCompletionLog({
+    request,
+    response,
+    requestUrl,
+    requestContext,
+    logger
+  });
+  const securityResult = requestSecurity.check(request, requestUrl);
+  if (!securityResult.allowed) {
+    const isRateLimited = securityResult.code === "RATE_LIMITED";
+    const apiError = createApiError(securityResult.code, {
+      statusCode: securityResult.statusCode,
+      message: isRateLimited ? "Too many requests." : "Request security validation failed.",
+      details: isRateLimited
+        ? { retryAfterSeconds: securityResult.retryAfterSeconds }
+        : {}
+    });
+    sendJsonWithHeaders(response, securityResult.statusCode, apiError.payload, isRateLimited ? {
+      "Retry-After": String(securityResult.retryAfterSeconds)
+    } : {});
+    return;
+  }
+  const wasHandledByRouter = await router.dispatch({
+    request,
+    response,
+    requestUrl,
+    requestContext,
+    sendError,
+    sendJson
+  });
+
+  if (wasHandledByRouter) {
+    return;
+  }
 
   if (requestUrl.pathname === "/api/health") {
     sendJson(response, 200, { ok: true });
     return;
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/api/products") {
-    try {
-      const products = withDatabase((db) => listProducts(db));
-      const payload = getProductsPayload(
-        products,
-        requestUrl.searchParams.get("filter"),
-        requestUrl.searchParams.get("sort"),
-        requestUrl.searchParams.get("locale"),
-        requestUrl.searchParams.get("q"),
-        {
-          page: requestUrl.searchParams.get("page"),
-          pageSize: requestUrl.searchParams.get("pageSize"),
-          minPrice: requestUrl.searchParams.get("minPrice"),
-          maxPrice: requestUrl.searchParams.get("maxPrice"),
-          size: requestUrl.searchParams.get("size"),
-          stock: requestUrl.searchParams.get("stock"),
-          ratingMin: requestUrl.searchParams.get("ratingMin")
-        }
-      );
-      sendJson(response, 200, payload);
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
+  if (request.method === "GET" && requestUrl.pathname === "/api/shipping-methods") {
+    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+    const methods = getShippingMethodsForAddress({
+      region: requestUrl.searchParams.get("region") || "",
+      postalCode: requestUrl.searchParams.get("postalCode") || ""
+    }, locale);
+    sendJson(response, 200, { ok: true, methods });
+    return;
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/api/session") {
-    try {
-      const { user } = await getSessionContext(request);
-      sendJson(response, 200, {
-        authenticated: Boolean(user),
-        user: createPublicUser(user)
-      });
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
+  if (request.method === "GET" && requestUrl.pathname === "/api/payment-methods") {
+    const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+    const orderId = requestUrl.searchParams.get("orderId") || "";
+    const order = orderId ? withDatabase((db) => findOrderById(db, orderId)) : null;
+    const orderTotal = Number(order?.totals?.grandTotal ?? order?.totals?.total ?? 0);
+    const methods = withDatabase((db) => listPaymentMethods(db, { locale, orderTotal }));
+    sendJson(response, 200, { ok: true, methods });
+    return;
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/api/marketing") {
+  if (request.method === "POST" && requestUrl.pathname === "/api/payments/webhook") {
     try {
-      sendJson(response, 200, getMarketingPayload());
-      return;
-    } catch (error) {
-      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
-      return;
-    }
-  }
-
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
-    try {
-      const body = await readRequestBody(request);
-      const missingFields = validateAuthPayload(body, "register");
-      if (missingFields.length) {
-        sendJson(response, 400, {
-          ok: false,
-          error: {
-            code: "AUTH_VALIDATION_FAILED",
-            message: "Registration information is incomplete.",
-            fields: missingFields,
-            details: { fields: missingFields }
-          }
-        });
+      const rawBody = await readRawBody(request, { limitBytes: config.requestBodyLimitBytes });
+      const signature = request.headers["x-payment-signature"];
+      if (!verifyWebhookSignature({
+        rawBody,
+        signature,
+        secret: config.paymentWebhookSecret
+      })) {
+        sendError(
+          response,
+          401,
+          "PAYMENT_WEBHOOK_SIGNATURE_INVALID",
+          "Payment webhook signature is invalid."
+        );
         return;
       }
-
-      const email = normalizeEmail(body.email);
-      if (withDatabase((db) => findUserByEmail(db, email))) {
-        sendError(response, 409, "EMAIL_ALREADY_REGISTERED", "Email is already registered.");
-        return;
+      let body;
+      try {
+        body = rawBody.length ? JSON.parse(rawBody.toString("utf8")) : {};
+      } catch {
+        throw new JsonBodyError("INVALID_JSON", "Request body must be valid JSON.", 400);
       }
-
-      const passwordSalt = createPasswordSalt();
-      const user = withDatabase((db) => createUser(db, {
-        id: buildUserId({ length: countUsers(db) }),
-        name: String(body.name).trim(),
-        email,
-        passwordHash: hashPassword(String(body.password), passwordSalt),
-        passwordSalt,
-        createdAt: new Date().toISOString(),
-        addresses: []
+      body.signature = String(signature);
+      const result = withDatabase((db) => processPaymentWebhook(db, {
+        body,
+        findOrderById,
+        saveOrder,
+        findPaymentAttemptById,
+        savePaymentAttempt,
+        createTimelineEntry,
+        createInvoiceForOrder
       }));
-
-      const previousSessionId = getCookieValue(request, sessionCookieName);
-      const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
-      sendJsonWithHeaders(response, 201, {
-        ok: true,
-        user: createPublicUser(user),
-        cart: getCartPayload(mergeResult.cart),
-        cartMergeWarnings: mergeResult.warnings
-      }, {
-        "Set-Cookie": createSessionCookie(session.id)
-      });
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+      sendJson(response, 200, { ok: true, ...result });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1140,37 +1537,170 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/summary") {
     try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const payload = withDatabase((db) => getAdminSummary(db));
+      sendJson(response, 200, { ok: true, ...payload });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/products") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const products = withDatabase((db) => listAdminProducts(db));
+      sendJson(response, 200, { ok: true, products });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminProductImageId = parseAdminProductImagePath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminProductImageId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const product = withDatabase((db) => findAdminProductById(db, requestedAdminProductImageId));
+      if (!product) {
+        sendError(response, 404, "ADMIN_PRODUCT_NOT_FOUND", "Product was not found.");
+        return;
+      }
+
+      const file = await readMultipartFile(request, { limitBytes: 3 * 1024 * 1024 });
+      if (!adminImageTypes.has(file.contentType)) {
+        sendError(response, 400, "ADMIN_IMAGE_TYPE_INVALID", "Image type is invalid.");
+        return;
+      }
+
+      const safeFileName = createAdminImageName(requestedAdminProductImageId, file.contentType);
+      const uploadDir = path.join(rootDir, "public", "uploads", "products");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadDir, safeFileName), file.buffer);
+      const image = {
+        id: safeFileName.replace(/\.[^.]+$/, ""),
+        src: `/public/uploads/products/${safeFileName}`,
+        alt: `${requestedAdminProductImageId} product image`
+      };
+
+      sendJson(response, 201, { ok: true, image });
+      return;
+    } catch (error) {
+      if (handleMultipartError(error, response)) return;
+
+      sendError(response, 500, "ADMIN_IMAGE_SAVE_FAILED", "Image could not be saved.");
+      return;
+    }
+  }
+
+  const requestedAdminProductId = parseAdminProductPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedAdminProductId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const product = withDatabase((db) => findAdminProductById(db, requestedAdminProductId));
+      if (!product) {
+        sendError(response, 404, "ADMIN_PRODUCT_NOT_FOUND", "Product was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, product });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/products") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
       const body = await readRequestBody(request);
-      const missingFields = validateAuthPayload(body, "login");
-      if (missingFields.length) {
-        sendError(response, 400, "AUTH_VALIDATION_FAILED", "Login information is incomplete.");
+      const result = withDatabase((db) => createAdminProduct(db, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
         return;
       }
 
-      const email = normalizeEmail(body.email);
-      const user = withDatabase((db) => findUserByEmail(db, email));
-      if (!user || !verifyPassword(String(body.password), user)) {
-        sendError(response, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
-        return;
-      }
-
-      const previousSessionId = getCookieValue(request, sessionCookieName);
-      const session = await createUserSession(user.id);
-      const mergeResult = await mergeAnonymousCartIntoUserCart(user, previousSessionId);
-      sendJsonWithHeaders(response, 200, {
-        ok: true,
-        user: createPublicUser(user),
-        cart: getCartPayload(mergeResult.cart),
-        cartMergeWarnings: mergeResult.warnings
-      }, {
-        "Set-Cookie": createSessionCookie(session.id)
-      });
+      sendJson(response, 201, { ok: true, product: result.product });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) return;
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "PATCH" && requestedAdminProductId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateAdminProduct(db, requestedAdminProductId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, product: result.product });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/inventory") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const items = withDatabase((db) => listInventory(db, {
+        stock: requestUrl.searchParams.get("stock") || "all",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, items });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminSkuId = parseAdminInventoryPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedAdminSkuId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateInventoryItem(db, requestedAdminSkuId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, item: result.item });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1179,17 +1709,287 @@ const server = http.createServer(async (request, response) => {
     }
   }
 
-  if (request.method === "POST" && requestUrl.pathname === "/api/auth/logout") {
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/orders") {
     try {
-      const sessionId = getCookieValue(request, sessionCookieName);
-      if (sessionId) {
-        await removeSession(sessionId);
-      }
-      sendJsonWithHeaders(response, 200, { ok: true }, {
-        "Set-Cookie": createExpiredSessionCookie()
-      });
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const orders = withDatabase((db) => listAdminOrders(db, {
+        status: requestUrl.searchParams.get("status") || "",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, orders });
       return;
     } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminOrderAction = parseAdminOrderActionPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminOrderAction) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => {
+        const order = findAdminOrder(db, requestedAdminOrderAction.orderId);
+        if (!order) {
+          return {
+            validationError: {
+              statusCode: 404,
+              code: "ADMIN_ORDER_NOT_FOUND",
+              message: "Order was not found."
+            }
+          };
+        }
+        if (requestedAdminOrderAction.action === "ship") {
+          return shipAdminOrder(db, {
+            admin,
+            order,
+            body,
+            confirmShipment,
+            saveOrder,
+            createTimelineEntry
+          });
+        }
+        if (requestedAdminOrderAction.action === "refund") {
+          return createAdminPartialRefund(db, { admin, order, body });
+        }
+        return cancelAdminOrder(db, {
+          admin,
+          order,
+          body,
+          saveOrder,
+          createTimelineEntry
+        });
+      });
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message
+        );
+        return;
+      }
+
+      const statusCode = requestedAdminOrderAction.action === "refund" && !result.replayed ? 201 : 200;
+      sendJson(response, statusCode, { ok: true, ...result });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+      logger.error("admin.order_action.failed", {
+        message: error.message,
+        code: error.code || "",
+        stack: error.stack || ""
+      });
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminReturnId = parseAdminReturnActionPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedAdminReturnId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => {
+        const returnRequest = findReturnRequestById(db, requestedAdminReturnId);
+        if (!returnRequest) {
+          return {
+            validationError: {
+              statusCode: 404,
+              code: "RETURN_NOT_FOUND",
+              message: "Return request was not found."
+            }
+          };
+        }
+        return reviewAdminReturnRequest(db, { admin, returnRequest, body });
+      });
+      if (result.validationError) {
+        sendError(
+          response,
+          result.validationError.statusCode,
+          result.validationError.code,
+          result.validationError.message
+        );
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) return;
+      logger.error("admin.return_action.failed", {
+        message: error.message,
+        code: error.code || "",
+        stack: error.stack || ""
+      });
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/returns") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const returnRequests = withDatabase((db) => listAdminReturnRequests(db, {
+        status: requestUrl.searchParams.get("status") || "",
+        q: requestUrl.searchParams.get("q") || ""
+      }));
+      sendJson(response, 200, { ok: true, returnRequests });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminOrderId = parseAdminOrderPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedAdminOrderId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const detail = withDatabase((db) => {
+        const order = findAdminOrder(db, requestedAdminOrderId);
+        if (!order) return null;
+        return {
+          order,
+          refunds: listRefundsByOrderId(db, requestedAdminOrderId),
+          refundable: getRefundableOrderSummary(db, order),
+          adminActions: listAdminActionsForResource(db, "order", requestedAdminOrderId)
+        };
+      });
+      if (!detail) {
+        sendError(response, 404, "ADMIN_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, ...detail });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedAdminStatusOrderId = parseAdminOrderStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedAdminStatusOrderId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateAdminOrderStatus(
+        db,
+        requestedAdminStatusOrderId,
+        String(body.status || "").trim(),
+        normalizeLocale(body.locale),
+        createTimelineEntry,
+        saveOrder
+      ));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/marketing") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const marketing = withDatabase((db) => listAdminMarketing(db));
+      sendJson(response, 200, { ok: true, ...marketing });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/payment-methods") {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const methods = withDatabase((db) => listAdminPaymentMethods(db));
+      sendJson(response, 200, { ok: true, methods });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedPaymentMethodId = parseAdminPaymentMethodPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedPaymentMethodId) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updatePaymentMethod(db, requestedPaymentMethodId, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, method: result.method });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedMarketingStatus = parseAdminMarketingStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedMarketingStatus) {
+    try {
+      const admin = await requireAdmin(request, response);
+      if (!admin) return;
+
+      const body = await readRequestBody(request);
+      const result = withDatabase((db) => updateMarketingStatus(
+        db,
+        requestedMarketingStatus.type,
+        requestedMarketingStatus.id,
+        body.status
+      ));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, resource: result.resource });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
@@ -1238,8 +2038,7 @@ const server = http.createServer(async (request, response) => {
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1355,11 +2154,73 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, { ok: true }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/recent-views") {
+    try {
+      const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      const products = withDatabase((db) => listProducts(db));
+      const payload = withDatabase((db) => getRecentViewsPayload(
+        db,
+        owner,
+        products,
+        locale,
+        requestUrl.searchParams.get("limit")
+      ));
+      sendCartJson(response, 200, payload, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const recentViewProductMatch = requestUrl.pathname.match(/^\/api\/recent-views\/([^/]+)$/);
+  if (request.method === "DELETE" && recentViewProductMatch) {
+    try {
+      const locale = normalizeLocale(requestUrl.searchParams.get("locale"));
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      const productId = decodeURIComponent(recentViewProductMatch[1]);
+      const products = withDatabase((db) => listProducts(db));
+      const payload = withDatabase((db) => {
+        removeRecentView(db, { ...owner, productId });
+        return getRecentViewsPayload(db, owner, products, locale, 24);
+      });
+      sendCartJson(response, 200, payload, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/recent-views/clear") {
+    try {
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const owner = {
+        userId: activeCart.user ? activeCart.user.id : null,
+        sessionId: activeCart.sessionId
+      };
+      withDatabase((db) => clearRecentViews(db, owner));
+      sendCartJson(response, 200, { ok: true, productIds: [], items: [] }, activeCart);
+      return;
+    } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
@@ -1436,6 +2297,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       const item = cart.items.find((entry) => {
         return entry.skuId === variant.skuId
@@ -1445,12 +2307,12 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, {
         ok: true,
         item,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1467,6 +2329,7 @@ const server = http.createServer(async (request, response) => {
       sendCartJson(response, 200, {
         ok: true,
         items: [],
+        cart: getCartPayload(emptyCart),
         meta: { itemCount: 0 }
       }, activeCart);
       return;
@@ -1523,8 +2386,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 201, { ok: true, address, addresses: nextUser.addresses });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -1557,8 +2419,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, address: updatedAddress, addresses: nextUser.addresses });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -1638,6 +2499,15 @@ const server = http.createServer(async (request, response) => {
       const products = withDatabase((db) => listProducts(db));
       const activeCart = await readActiveCart(request);
       const cart = activeCart.cart;
+      if (activeCart.user && !activeCart.user.emailVerifiedAt) {
+        sendError(
+          response,
+          403,
+          "EMAIL_VERIFICATION_REQUIRED",
+          "Email verification is required before checkout."
+        );
+        return;
+      }
       const body = await readRequestBody(request);
       const locale = normalizeLocale(body.locale);
 
@@ -1660,7 +2530,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const shippingMethod = getShippingMethod(body.shippingMethodId, locale);
+      const shippingMethod = getShippingMethodForOrder(body.shippingMethodId, body.shippingAddress, locale);
       if (!shippingMethod) {
         sendError(response, 400, "INVALID_SHIPPING_METHOD", "Shipping method is invalid.");
         return;
@@ -1687,11 +2557,12 @@ const server = http.createServer(async (request, response) => {
 
       const orderItems = buildOrderItems(cart, products, locale);
       const marketing = getMarketingPayload();
-      const pricing = createPricingSummary({
+      const pricing = createCheckoutTotals({
         cart,
         products,
         marketing,
-        shippingFee: shippingMethod.fee
+        shippingFee: shippingMethod.fee,
+        shippingAddress: body.shippingAddress
       });
       const order = {
         id: buildOrderId({ length: withDatabase((db) => countOrders(db)) }),
@@ -1719,7 +2590,14 @@ const server = http.createServer(async (request, response) => {
           orderDiscount: pricing.orderDiscount,
           couponDiscount: pricing.couponDiscount,
           shipping: pricing.shipping,
-          total: pricing.total
+          paymentFee: pricing.paymentFee,
+          taxableAmount: pricing.taxableAmount,
+          tax: pricing.tax,
+          total: pricing.total,
+          grandTotal: pricing.grandTotal,
+          currency: pricing.currency,
+          taxRegion: pricing.taxRegion,
+          calculatedAt: pricing.calculatedAt
         },
         marketing: {
           coupon: pricing.coupon,
@@ -1734,7 +2612,11 @@ const server = http.createServer(async (request, response) => {
       const savedOrder = withDatabase((db) => createOrderTransaction(db, {
         cart,
         cartId: activeCart.cartId,
-        order
+        order,
+        afterOrderCreated(database, pendingOrder) {
+          const fulfillment = createFulfillmentForOrder(database, pendingOrder, shippingMethod, locale);
+          pendingOrder.fulfillment = createFulfillmentSummary(fulfillment);
+        }
       }));
 
       sendJson(response, 201, {
@@ -1744,8 +2626,7 @@ const server = http.createServer(async (request, response) => {
       });
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1754,6 +2635,16 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      errorReporter.captureException(error, {
+        requestId: requestContext.requestId,
+        route: requestUrl.pathname
+      });
+      logger.error("order.create.failed", {
+        requestId: requestContext.requestId,
+        route: requestUrl.pathname,
+        name: error.name || "Error",
+        code: error.code || ""
+      });
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
@@ -1767,6 +2658,427 @@ const server = http.createServer(async (request, response) => {
       const orders = withDatabase((db) => listOrders(db, user.id));
 
       sendJson(response, 200, { orders });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReorderId = parseOrderReorderPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedReorderId) {
+    try {
+      const activeCart = await readActiveCart(request, { createAnonymousSession: true });
+      const order = withDatabase((db) => findOrderById(db, requestedReorderId));
+      if (!order || (order.userId && (!activeCart.user || activeCart.user.id !== order.userId))) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const products = withDatabase((db) => listProducts(db));
+      const result = withDatabase((db) => reorderItemsFromOrder(db, {
+        order,
+        cart: activeCart.cart,
+        products
+      }));
+
+      if (!result.addedItems.length) {
+        sendError(response, 409, "REORDER_EMPTY", "No order items are available to reorder.");
+        return;
+      }
+
+      const nextCart = { ...activeCart.cart, items: result.items };
+      await writeActiveCart(activeCart, nextCart);
+      sendCartJson(response, 200, {
+        ok: true,
+        cart: getCartPayload(nextCart, { products }),
+        addedItems: result.addedItems,
+        skippedItems: result.skippedItems
+      }, activeCart);
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedPaymentOrderId = parseOrderPaymentsPath(requestUrl.pathname);
+  const requestedInvoiceOrderId = parseOrderInvoicePath(requestUrl.pathname);
+  if (request.method === "GET" && requestedInvoiceOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedInvoiceOrderId));
+      if (!order) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const invoice = withDatabase((db) => findInvoiceByOrderId(db, requestedInvoiceOrderId));
+      if (!invoice) {
+        sendError(response, 409, "INVOICE_NOT_READY", "Invoice is not ready until payment succeeds.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, invoice });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedInvoiceId = parseInvoiceIdFromPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedInvoiceId) {
+    try {
+      const invoice = withDatabase((db) => findInvoiceById(db, requestedInvoiceId));
+      if (!invoice) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      const order = withDatabase((db) => findOrderById(db, invoice.orderId));
+      const { user } = await getSessionContext(request);
+      if (!order || (order.userId && (!user || user.id !== order.userId))) {
+        sendError(response, 404, "INVOICE_NOT_FOUND", "Invoice was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, invoice });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestedPaymentOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedPaymentOrderId));
+      if (!order) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const payments = withDatabase((db) => listPaymentAttemptsByOrder(db, requestedPaymentOrderId));
+      sendJson(response, 200, { payments });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestedPaymentOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+      const order = withDatabase((db) => findOrderById(db, requestedPaymentOrderId));
+
+      if (!order) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "PAYMENT_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => createPaymentAttempt(db, {
+        order,
+        method: body.method,
+        locale,
+        createTimelineEntry,
+        saveOrder
+      }));
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      if (body.outcome) {
+        const callback = withDatabase((db) => processPaymentWebhook(db, {
+          body: {
+            eventId: `evt-${result.payment.id}-${body.outcome}`,
+            paymentId: result.payment.id,
+            orderId: order.id,
+            status: body.outcome,
+            provider: "demo_gateway",
+            idempotencyKey: `demo-${result.payment.id}-${body.outcome}`,
+            signature: "demo-signature",
+            failureReason: body.outcome === "failed" ? "Demo payment was declined. Please try another method." : "",
+            locale
+          },
+          findOrderById,
+          saveOrder,
+          findPaymentAttemptById,
+          savePaymentAttempt,
+          createTimelineEntry,
+          createInvoiceForOrder
+        }));
+        if (callback.validationError) {
+          sendError(response, callback.validationError.statusCode, callback.validationError.code, callback.validationError.message);
+          return;
+        }
+        sendJson(response, 201, { ok: true, payment: callback.payment, order: callback.order, invoice: callback.invoice });
+        return;
+      }
+
+      sendJson(response, 201, {
+        ok: true,
+        payment: result.payment,
+        order: result.order,
+        nextAction: result.payment.nextAction
+      });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedCancelOrderId = parseOrderCancelPath(requestUrl.pathname);
+  if (request.method === "POST" && requestedCancelOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const locale = normalizeLocale(body.locale);
+      const order = withDatabase((db) => findOrderById(db, requestedCancelOrderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      if (["cancelled", "refund_pending", "refunded"].includes(order.status)) {
+        sendError(response, 409, "ORDER_CANCEL_ALREADY_FINAL", "Order has already been cancelled or refunded.");
+        return;
+      }
+
+      if (!["pending_payment", "paid", "processing"].includes(order.status)) {
+        sendError(response, 409, "ORDER_CANCEL_NOT_ALLOWED", "Order can no longer be cancelled.");
+        return;
+      }
+
+      const result = withDatabase((db) => {
+        const transaction = db.transaction(() => {
+          const now = new Date().toISOString();
+          const fulfillment = findFulfillmentByOrderId(db, order.id);
+          order.updatedAt = now;
+          order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
+
+          if (order.status === "pending_payment") {
+            order.status = "cancelled";
+            order.timeline.push(createTimelineEntry("cancelled", locale));
+            const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+              order,
+              fulfillment,
+              orderStatus: "cancelled",
+              locale,
+              createTimelineEntry
+            });
+            if (fulfillmentResult.validationError) return fulfillmentResult;
+            saveOrder(db, order);
+            return { order, refund: null };
+          }
+
+          order.status = "refund_pending";
+          order.timeline.push(createTimelineEntry("refund_pending", locale));
+          const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+            order,
+            fulfillment,
+            orderStatus: "refund_pending",
+            locale,
+            createTimelineEntry
+          });
+          if (fulfillmentResult.validationError) return fulfillmentResult;
+
+          const refund = createRefundForOrder(db, order, {
+            reason: body.reason,
+            locale
+          });
+          order.refund = createRefundSummary(refund);
+          saveOrder(db, order);
+          return { order, refund };
+        });
+
+        return transaction();
+      });
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order, refund: result.refund });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedRefundsOrderId = parseOrderRefundsPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedRefundsOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedRefundsOrderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const refunds = withDatabase((db) => listRefundsByOrderId(db, requestedRefundsOrderId));
+      sendJson(response, 200, { ok: true, refunds });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedRefundStatusId = parseRefundStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedRefundStatusId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true" || (user && DEMO_ADMIN_EMAILS.has(user.email));
+      if (!isDemoAdmin) {
+        sendError(response, 403, "REFUND_FORBIDDEN", "Only demo admins can update refunds.");
+        return;
+      }
+
+      const refund = withDatabase((db) => findRefundById(db, requestedRefundStatusId));
+      if (!refund) {
+        sendError(response, 404, "REFUND_NOT_FOUND", "Refund was not found.");
+        return;
+      }
+      const order = withDatabase((db) => findOrderById(db, refund.orderId));
+      if (!order) {
+        sendError(response, 404, "ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateRefundStatus(db, {
+        refund,
+        order,
+        status: body.status,
+        locale: normalizeLocale(body.locale),
+        saveOrder,
+        createTimelineEntry
+      }));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, refund: result.refund, order: result.order });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedFulfillmentStatusOrderId = parseOrderFulfillmentStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedFulfillmentStatusOrderId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true" || (user && DEMO_ADMIN_EMAILS.has(user.email));
+      if (!isDemoAdmin) {
+        sendError(response, 403, "FULFILLMENT_FORBIDDEN", "Only demo admins can update fulfillment.");
+        return;
+      }
+
+      const order = withDatabase((db) => findOrderById(db, requestedFulfillmentStatusOrderId));
+      const fulfillment = withDatabase((db) => findFulfillmentByOrderId(db, requestedFulfillmentStatusOrderId));
+      if (!order || !fulfillment) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateFulfillmentStatus(db, {
+        order,
+        fulfillment,
+        status: body.status,
+        locale: normalizeLocale(body.locale),
+        saveOrder,
+        createTimelineEntry
+      }));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, order: result.order, fulfillment: result.fulfillment });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedFulfillmentOrderId = parseOrderFulfillmentPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedFulfillmentOrderId) {
+    try {
+      const order = withDatabase((db) => findOrderById(db, requestedFulfillmentOrderId));
+      if (!order) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const { user } = await getSessionContext(request);
+      if (order.userId && (!user || user.id !== order.userId)) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      const fulfillment = withDatabase((db) => findFulfillmentByOrderId(db, requestedFulfillmentOrderId));
+      if (!fulfillment) {
+        sendError(response, 404, "FULFILLMENT_NOT_FOUND", "Fulfillment was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, fulfillment });
       return;
     } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
@@ -1833,15 +3145,152 @@ const server = http.createServer(async (request, response) => {
       order.timeline = Array.isArray(order.timeline) ? order.timeline : [];
       order.timeline.push(createTimelineEntry(nextStatus, locale));
 
-      withDatabase((db) => saveOrder(db, order));
-      sendJson(response, 200, { ok: true, order });
-      return;
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      const result = withDatabase((db) => {
+        const fulfillment = findFulfillmentByOrderId(db, order.id);
+        const fulfillmentResult = syncFulfillmentForOrderStatus(db, {
+          order,
+          fulfillment,
+          orderStatus: nextStatus,
+          locale,
+          createTimelineEntry
+        });
+        if (fulfillmentResult.validationError) {
+          return fulfillmentResult;
+        }
+
+        saveOrder(db, order);
+        return { order };
+      });
+
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
         return;
       }
 
+      sendJson(response, 200, { ok: true, order: result.order });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/me/returns") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+
+      const returnRequests = withDatabase((db) => listReturnRequestsByUser(db, user.id));
+      sendJson(response, 200, { returnRequests });
+      return;
+    } catch (error) {
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/returns") {
+    try {
+      const user = await requireUser(request, response);
+      if (!user) return;
+
+      const body = await readRequestBody(request);
+      const order = withDatabase((db) => findOrderById(db, String(body.orderId || "")));
+      if (!order || order.userId !== user.id) {
+        sendError(response, 404, "RETURN_ORDER_NOT_FOUND", "Order was not found.");
+        return;
+      }
+
+      const result = withDatabase((db) => createReturnRequest(db, order, user, body));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 201, { ok: true, returnRequest: result.returnRequest });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReturnStatusId = parseReturnStatusPath(requestUrl.pathname);
+  if (request.method === "PATCH" && requestedReturnStatusId) {
+    try {
+      const body = await readRequestBody(request);
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true";
+      if (!user && !isDemoAdmin) {
+        sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+        return;
+      }
+
+      const returnRequest = withDatabase((db) => findReturnRequestById(db, requestedReturnStatusId));
+      if (!returnRequest) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+      if (!isDemoAdmin && returnRequest.userId !== user.id) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+
+      const nextStatus = String(body.status || "").trim();
+      if (!isDemoAdmin && nextStatus !== "cancelled") {
+        sendError(response, 403, "RETURN_FORBIDDEN", "Only demo admins can review return requests.");
+        return;
+      }
+
+      const result = withDatabase((db) => updateReturnRequestStatus(db, returnRequest, nextStatus, body.locale));
+      if (result.validationError) {
+        sendError(response, result.validationError.statusCode, result.validationError.code, result.validationError.message);
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, returnRequest: result.returnRequest });
+      return;
+    } catch (error) {
+      if (handleRequestBodyError(error, response)) {
+        return;
+      }
+
+      sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
+      return;
+    }
+  }
+
+  const requestedReturnId = parseReturnIdFromPath(requestUrl.pathname);
+  if (request.method === "GET" && requestedReturnId) {
+    try {
+      const { user } = await getSessionContext(request);
+      const isDemoAdmin = request.headers["x-demo-admin"] === "true";
+      if (!user && !isDemoAdmin) {
+        sendError(response, 401, "AUTH_REQUIRED", "Authentication is required.");
+        return;
+      }
+
+      const returnRequest = withDatabase((db) => findReturnRequestById(db, requestedReturnId));
+      if (!returnRequest) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+      if (!isDemoAdmin && returnRequest.userId !== user.id) {
+        sendError(response, 404, "RETURN_NOT_FOUND", "Return request was not found.");
+        return;
+      }
+
+      sendJson(response, 200, { returnRequest });
+      return;
+    } catch (error) {
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }
@@ -1889,17 +3338,18 @@ const server = http.createServer(async (request, response) => {
         quantity: validation.quantity
       };
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       sendCartJson(response, 200, {
         ok: true,
         item: cart.items[itemIndex],
         items: cart.items,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1929,17 +3379,18 @@ const server = http.createServer(async (request, response) => {
 
       const [removedItem] = cart.items.splice(itemIndex, 1);
       await writeActiveCart(activeCart, cart);
+      const cartPayload = getCartPayload(cart, { products });
 
       sendCartJson(response, 200, {
         ok: true,
         removedItem,
         items: cart.items,
-        meta: getCartPayload(cart).meta
+        cart: cartPayload,
+        meta: cartPayload.meta
       }, activeCart);
       return;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        sendError(response, 400, "INVALID_JSON", "Request body must be valid JSON.");
+      if (handleRequestBodyError(error, response)) {
         return;
       }
 
@@ -1949,36 +3400,32 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    sendJson(response, 405, { error: "Method Not Allowed" });
+    sendError(response, 405, "METHOD_NOT_ALLOWED", "Method is not allowed.");
     return;
   }
 
   const filePath = getStaticFilePath(requestUrl.pathname);
-  if (!filePath) {
-    sendJson(response, 404, { error: "Not Found" });
+  if (!sendStaticFile(request, response, filePath, config)) {
+    sendError(response, 404, "NOT_FOUND", "Resource was not found.");
     return;
   }
+}
 
-  fs.stat(filePath, (error, stats) => {
-    if (error || !stats.isFile()) {
-      sendJson(response, 404, { error: "Not Found" });
-      return;
-    }
-
-    if (request.method === "HEAD") {
-      const extension = path.extname(filePath).toLowerCase();
-      const contentType = mimeTypes[extension] || "application/octet-stream";
-      response.writeHead(200, { "Content-Type": contentType });
-      response.end();
-      return;
-    }
-
-    sendFile(response, filePath);
-  });
+const server = http.createServer(createSafeRequestHandler({
+  handleRequest: handleHttpRequest,
+  sendError,
+  logger,
+  errorReporter
+}));
+registerServerLifecycle({
+  server,
+  logger,
+  errorReporter
 });
 
 validateDataDir();
+withDatabase(() => null);
 
 server.listen(port, host, () => {
-  console.log(`Server listening on http://${host}:${port}`);
+  logger.info("server.listening", { url: `http://${host}:${port}` });
 });

@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Check UTF-8 and whitespace
+        shell: bash
+        run: |
+          git diff --check
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const fs = require("node:fs");
+          const textExtensions = /\.(?:c?js|json|html|css|md|ya?ml|sh|service|timer|example)$/i;
+          const files = execFileSync("git", ["ls-files", "-z"]).toString("utf8").split("\0").filter(Boolean);
+          const decoder = new TextDecoder("utf-8", { fatal: true });
+          for (const file of files.filter((item) => textExtensions.test(item) || /(?:Dockerfile|Caddyfile)$/.test(item))) {
+            decoder.decode(fs.readFileSync(file));
+          }
+          NODE
+
+      - name: Run API tests serially
+        run: npm run test:api -- --workers=1
+
+      - name: Run UI tests serially
+        run: npm run test:ui -- --workers=1
+
+      - name: Run operations tests serially
+        run: npm run test:ops -- --workers=1
+
+      - name: Build production image
+        run: docker build -t socks-store:ci-${GITHUB_SHA} .
+
+      - name: Verify production container health
+        shell: bash
+        run: |
+          docker run -d --name socks-store-ci -p 4173:4173 \
+            -e NODE_ENV=production \
+            -e HOST=0.0.0.0 \
+            -e PORT=4173 \
+            -e DATA_DIR=/app/data \
+            -e LOG_LEVEL=info \
+            -e LOG_FORMAT=json \
+            -e SERVICE_VERSION=${GITHUB_SHA} \
+            -e PUBLIC_BASE_URL=https://shop.example.com \
+            -e CSRF_SECRET=ci-csrf-secret \
+            -e SECURITY_HASH_SECRET=ci-hash-secret \
+            -e PAYMENT_WEBHOOK_SECRET=ci-webhook-secret \
+            -e ALLOWED_ORIGINS=https://shop.example.com \
+            -e SMTP_HOST=smtp.example.com \
+            -e SMTP_PORT=465 \
+            -e SMTP_SECURE=true \
+            -e SMTP_USER=ci-mailer \
+            -e SMTP_PASSWORD=ci-mailer-secret \
+            -e SMTP_FROM=ci@example.com \
+            -e BACKUP_DIR=/app/backups \
+            -e BACKUP_LOCAL_RETENTION_DAYS=7 \
+            -e S3_REGION=auto \
+            -e S3_BUCKET=ci-backups \
+            -e S3_ACCESS_KEY_ID=ci-access-key \
+            -e S3_SECRET_ACCESS_KEY=ci-secret-key \
+            socks-store:ci-${GITHUB_SHA}
+          for attempt in $(seq 1 20); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' socks-store-ci)"
+            if [[ "$status" == "healthy" ]]; then
+              exit 0
+            fi
+            if [[ "$status" == "unhealthy" ]]; then
+              break
+            fi
+            sleep 3
+          done
+          docker logs socks-store-ci
+          exit 1
+
+      - name: Remove CI container
+        if: always()
+        run: docker rm -f socks-store-ci >/dev/null 2>&1 || true

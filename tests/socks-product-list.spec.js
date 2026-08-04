@@ -51,18 +51,128 @@ async function fillCheckoutForm(page) {
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
 }
 
-async function registerFromUi(page) {
+async function payCurrentOrderFromPaymentPage(page) {
+  const paymentResponse = page.waitForResponse((response) => {
+    return response.url().includes("/payments") && response.request().method() === "POST";
+  });
+  await page.locator("[data-payment-submit]").click();
+  expect((await paymentResponse).status()).toBe(201);
+  await expect(page).toHaveURL(/view=order&id=SOCK-/);
+}
+
+async function seedCartFromApi(page, items) {
+  for (const item of items) {
+    const response = await page.request.post("/api/cart/items", { data: item });
+    expect(response.ok()).toBe(true);
+  }
+}
+
+let registerSequence = 0;
+
+async function registerFromUi(page, user = {}) {
+  registerSequence += 1;
+  const name = user.name || "Alex Chen";
+  const email = user.email || `alex-${Date.now()}-${registerSequence}@example.com`;
+  const password = user.password || "demo1234";
+
   await page.goto("/socks-product-list.html?view=auth&mode=register");
-  await page.locator('[data-auth-field="name"]').fill("Alex Chen");
-  await page.locator('[data-auth-field="email"]').fill("alex@example.com");
+  await page.locator('[data-auth-field="name"]').fill(name);
+  await page.locator('[data-auth-field="email"]').fill(email);
+  await page.locator('[data-auth-field="password"]').fill(password);
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-user-name]")).toHaveText(name);
+  const verification = await page.request.post("/api/test/verify-email");
+  expect(verification.ok()).toBe(true);
+}
+
+async function registerAdminFromUi(page) {
+  await page.goto("/socks-product-list.html?view=auth&mode=login");
+  await page.locator('[data-auth-field="email"]').fill("admin@socks.test");
   await page.locator('[data-auth-field="password"]').fill("demo1234");
   await page.locator("[data-auth-submit]").click();
-  await expect(page.locator("[data-auth-user-name]")).toHaveText("Alex Chen");
+  await expect(page.locator("[data-auth-user-name]")).toBeVisible();
+}
+
+async function loginAdminFromApi(request) {
+  const response = await request.post("/api/auth/login", {
+    data: { email: "admin@socks.test", password: "demo1234" }
+  });
+  expect(response.ok()).toBe(true);
+  const match = /socks_session=([^;]+)/.exec(response.headers()["set-cookie"] || "");
+  return match ? `socks_session=${match[1]}` : "";
+}
+
+function createAnalyticsFixture(range = "30d", days = 30, overrides = {}) {
+  const base = {
+    ok: true,
+    period: {
+      range,
+      start: "2026-07-04T16:00:00.000Z",
+      end: "2026-08-03T16:00:00.000Z",
+      timezone: "Asia/Shanghai",
+      bucket: range === "90d" ? "week" : "day"
+    },
+    summary: {
+      netSales: 1280,
+      netSalesComparison: 12.5,
+      conversionRate: 5,
+      conversionRateDelta: 1.2,
+      uniqueVisitors: 100,
+      paidOrderCount: 5,
+      refundRate: 20,
+      refundRateDelta: -2.5,
+      refundedOrderCount: 1,
+      lowStockSkuCount: 1,
+      outOfStockSkuCount: 1
+    },
+    trend: [
+      { label: `近 ${days} 天`, start: "2026-08-02T16:00:00.000Z", netSales: 1280, paidOrderCount: 5 }
+    ],
+    funnel: {
+      uniqueVisitors: 100,
+      cartAddSessions: 24,
+      checkoutSessions: 10,
+      paidOrderCount: 5
+    },
+    topProducts: [
+      {
+        productId: "sock-01",
+        title: "极简中筒袜",
+        image: "/public/images/sock-01.svg",
+        unitsSold: 8,
+        sales: 312,
+        refundedUnits: 1
+      }
+    ],
+    inventoryAlerts: [
+      {
+        productId: "sock-01",
+        skuId: "sock-01-39",
+        title: "极简中筒袜",
+        size: "39",
+        stockQuantity: 0,
+        lowStockThreshold: 5,
+        severity: "out_of_stock"
+      }
+    ]
+  };
+  return {
+    ...base,
+    ...overrides,
+    period: { ...base.period, ...(overrides.period || {}) },
+    summary: { ...base.summary, ...(overrides.summary || {}) },
+    funnel: { ...base.funnel, ...(overrides.funnel || {}) },
+    trend: overrides.trend === undefined ? base.trend : overrides.trend,
+    topProducts: overrides.topProducts === undefined ? base.topProducts : overrides.topProducts,
+    inventoryAlerts: overrides.inventoryAlerts === undefined ? base.inventoryAlerts : overrides.inventoryAlerts
+  };
 }
 
 test.use({ viewport: { width: 1280, height: 960 } });
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ request }) => {
+  const resetResponse = await request.post("/api/test/reset");
+  expect(resetResponse.ok()).toBe(true);
   await fs.writeFile(cartFile, `${JSON.stringify({ items: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(ordersFile, `${JSON.stringify({ orders: [] }, null, 2)}\n`, "utf8");
   await fs.writeFile(usersFile, `${JSON.stringify({ users: [] }, null, 2)}\n`, "utf8");
@@ -93,6 +203,42 @@ test("renders the socks category page shell", async ({ page }) => {
   await expect(page.locator("[data-product-card]").first()).toBeVisible();
 });
 
+test("records storefront detail cart and checkout analytics after successful actions", async ({ page }) => {
+  const events = [];
+  await page.route("**/api/analytics/events", async (route) => {
+    events.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, recorded: true })
+    });
+  });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card][data-product-id='sock-01']")
+    .locator("[data-product-detail-link]").click();
+  await page.locator("[data-detail-size='39']").click();
+  await page.locator("[data-detail-cart-button]").click();
+  await page.goto("/socks-product-list.html?view=checkout");
+  await expect.poll(() => events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+    "storefront_visit",
+    "product_view",
+    "cart_add",
+    "checkout_start"
+  ]));
+});
+
+test("boots the storefront from the external script bundle", async ({ page }) => {
+  const scriptResponse = page.waitForResponse((response) => {
+    return response.url().includes("/public/js/storefront-app.js") && response.status() === 200;
+  });
+
+  await page.goto("/socks-product-list.html");
+
+  expect((await scriptResponse).ok()).toBe(true);
+  await expect(page.locator("[data-product-card]")).not.toHaveCount(0);
+  await expect(page.getByRole("button", { name: "打开购物车" })).toBeVisible();
+});
+
 test("renders the shared storefront shell on storefront, detail, and order views", async ({ page }) => {
   await page.goto("/socks-product-list.html");
   await expect(page.locator("[data-site-header]")).toBeVisible();
@@ -108,6 +254,692 @@ test("renders the shared storefront shell on storefront, detail, and order views
   await expect(page.locator("[data-site-header]")).toBeVisible();
   await expect(page.locator("[data-site-footer]")).toBeVisible();
   await expect(page.locator("[data-site-search-form]")).toBeVisible();
+});
+
+test("shows login prompt for anonymous admin view access", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-auth-required]")).toBeVisible();
+  await expect(page.locator("[data-admin-auth-required]")).toContainText(/登录|sign in/i);
+});
+
+test("shows forbidden state for non-admin users on admin view", async ({ page }) => {
+  await registerFromUi(page, { email: "buyer@example.com" });
+
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-forbidden]")).toBeVisible();
+});
+
+test("renders admin dashboard tabs for demo admins", async ({ page }) => {
+  await registerAdminFromUi(page);
+
+  await page.goto("/socks-product-list.html?view=admin");
+
+  await expect(page.locator("[data-admin-view]")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='dashboard']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='products']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='inventory']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='orders']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='marketing']")).toBeVisible();
+  await expect(page.locator("[data-admin-tab='payments']")).toBeVisible();
+  await expect(page.locator("[data-admin-kpi]")).not.toHaveCount(0);
+});
+
+test("renders the realistic admin analytics dashboard for the default range", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-range][aria-pressed='true']")).toHaveText("30 天");
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toBeVisible();
+  await expect(page.locator("[data-analytics-kpi='conversion']")).toContainText("%");
+  await expect(page.locator("[data-analytics-kpi='refund-rate']")).toContainText("%");
+  await expect(page.locator("[data-analytics-ratio='conversion']")).toContainText("/");
+  await expect(page.locator("[data-analytics-ratio='refund-rate']")).toContainText("/");
+  await expect(page.locator("[data-analytics-sales-chart]")).toBeVisible();
+  await expect(page.locator("[data-analytics-funnel]")).toBeVisible();
+  await expect(page.locator("[data-analytics-top-products]")).toBeVisible();
+  await expect(page.locator("[data-analytics-inventory]")).toBeVisible();
+  await expect(page.locator("[data-admin-recent-order], [data-admin-work-queue]")).not.toHaveCount(0);
+});
+
+test("switches the analytics range and updates every dashboard section", async ({ page }) => {
+  await registerAdminFromUi(page);
+  const requests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/admin/analytics")) requests.push(request.url());
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect(page.locator("[data-analytics-range='7d']")).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => requests.some((url) => url.includes("range=7d"))).toBe(true);
+  await expect(page.locator("[data-analytics-period-label]")).toContainText("7");
+});
+
+test("keeps analytics charts and inventory accessible on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await registerAdminFromUi(page);
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("30d", 30))
+  }));
+  await page.route("**/api/admin/analytics?range=7d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("7d", 7))
+  }));
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-sales-chart][aria-label]")).toBeVisible();
+  await expect(page.locator("[data-analytics-chart-summary]")).toHaveCount(1);
+  await expect(page.locator("[data-analytics-funnel-summary]")).toHaveCount(1);
+  await expect(page.locator("[data-analytics-chart-summary]")).toHaveCSS("position", "absolute");
+  const chartPoint = page.locator("[data-analytics-sales-chart] circle[tabindex='0']").nth(0);
+  await chartPoint.focus();
+  await expect(chartPoint).toBeFocused();
+  const range = page.locator("[data-analytics-range='7d']");
+  await range.focus();
+  await page.keyboard.press("Enter");
+  await expect(range).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const inventoryCards = page.locator("[data-analytics-inventory-card]");
+  expect(await inventoryCards.count()).toBeGreaterThan(0);
+  await expect(inventoryCards.nth(0)).toBeVisible();
+  await page.locator("[data-analytics-inventory-link][data-sku-id='sock-01-39']").click();
+  await expect(page).toHaveURL(/tab=inventory.*sku=sock-01-39|sku=sock-01-39.*tab=inventory/);
+  await expect(page.locator("[data-sku-id='sock-01-39']")).toBeVisible();
+});
+
+test("preserves analytics range through errors and ignores stale responses", async ({ page }) => {
+  await registerAdminFromUi(page);
+  let resolveSeven;
+  await page.route("**/api/admin/analytics?range=7d", (route) => {
+    resolveSeven = () => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(createAnalyticsFixture("7d", 7))
+    });
+  });
+  await page.route("**/api/admin/analytics?range=90d", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(createAnalyticsFixture("90d", 90))
+    });
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect.poll(() => Boolean(resolveSeven)).toBe(true);
+  await expect(page.locator("[data-analytics-loading]")).toBeVisible();
+  await expect(page.locator("[data-analytics-range='7d']")).toBeDisabled();
+  await page.locator("[data-analytics-range='90d']").click();
+  resolveSeven();
+  await expect(page.locator("[data-analytics-period-label]")).toContainText("90");
+
+  let failThirty = true;
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill(
+    failThirty
+      ? { status: 500, body: "{}" }
+      : {
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(createAnalyticsFixture("30d", 30))
+        }
+  ));
+  await page.locator("[data-analytics-range='30d']").click();
+  await expect(page.locator("[data-analytics-error]")).toBeVisible();
+  await expect(page.locator("[data-analytics-range='30d']")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("[data-analytics-retry]")).toBeVisible();
+  failThirty = false;
+  await page.locator("[data-analytics-retry]").click();
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toContainText("1,280");
+  await expect(page.locator("[data-analytics-error]")).toHaveCount(0);
+});
+
+test("renders honest zero and partial analytics states", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.route("**/api/admin/analytics?range=30d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("30d", 30, {
+      summary: {
+        netSales: 0,
+        netSalesComparison: null,
+        conversionRate: 0,
+        conversionRateDelta: 0,
+        uniqueVisitors: 0,
+        paidOrderCount: 0,
+        refundRate: 0,
+        refundRateDelta: 0,
+        refundedOrderCount: 0,
+        lowStockSkuCount: 0,
+        outOfStockSkuCount: 0
+      },
+      funnel: { uniqueVisitors: 0, cartAddSessions: 0, checkoutSessions: 0, paidOrderCount: 0 },
+      trend: [],
+      topProducts: [],
+      inventoryAlerts: []
+    }))
+  }));
+  await page.route("**/api/admin/analytics?range=7d", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(createAnalyticsFixture("7d", 7, {
+      summary: { netSales: 128, uniqueVisitors: 0, paidOrderCount: 2, conversionRate: 0 },
+      funnel: { uniqueVisitors: 0, cartAddSessions: 0, checkoutSessions: 0, paidOrderCount: 2 }
+    }))
+  }));
+  await page.goto("/socks-product-list.html?view=admin");
+  await expect(page.locator("[data-analytics-empty]")).toContainText("当前周期暂无成交/访问");
+  await page.locator("[data-analytics-range='7d']").click();
+  await expect(page.locator("[data-analytics-kpi='net-sales']")).toContainText("128");
+  await expect(page.locator("[data-analytics-kpi='conversion']")).toContainText("0%");
+  await expect(page.locator("[data-analytics-partial]")).toContainText("访问采集尚无数据");
+});
+
+test("moderates and replies from the admin reviews workspace", async ({ page }) => {
+  const created = await page.request.post("/api/products/sock-01/reviews", {
+    data: {
+      author: "Guest",
+      rating: 2,
+      body: "袜口偏紧，需要人工审核。",
+      locale: "zh-CN"
+    }
+  });
+  expect(created.ok()).toBe(true);
+  const review = (await created.json()).review;
+
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='reviews']").click();
+
+  const row = page.locator(`[data-admin-review-row][data-review-id='${review.id}']`);
+  await row.locator("[data-admin-review-select]").check();
+  await page.locator("[data-admin-review-batch-action]").selectOption("publish");
+  await page.locator("[data-admin-review-batch-submit]").click();
+  await expect(row).toContainText(/已发布|published/i);
+
+  await row.locator("[data-admin-review-open]").click();
+  await page.locator("[data-admin-review-reply]").fill("感谢反馈，我们会继续优化袜口弹性。");
+  await page.locator("[data-admin-review-reply-submit]").click();
+  await expect(page.locator("[data-admin-review-drawer]")).toContainText("感谢反馈，我们会继续优化袜口弹性。");
+
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  const publicReview = page.locator(`[data-review-item][data-review-id='${review.id}']`);
+  await expect(publicReview).toBeVisible();
+  await expect(publicReview.locator("[data-review-merchant-reply]")).toContainText("感谢反馈，我们会继续优化袜口弹性。");
+});
+
+test("keeps the admin review drawer accessible on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='reviews']").click();
+
+  const trigger = page.locator("[data-admin-review-row] [data-admin-review-open]").first();
+  await trigger.click();
+  const drawer = page.locator("[data-admin-review-drawer]");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator("[data-admin-review-drawer-title]")).toBeFocused();
+  const drawerLayout = await drawer.evaluate((element) => ({
+    width: element.getBoundingClientRect().width,
+    innerWidth: window.innerWidth,
+    cssWidth: getComputedStyle(element).width,
+    boxSizing: getComputedStyle(element).boxSizing
+  }));
+  expect(drawerLayout.width, JSON.stringify(drawerLayout)).toBeLessThanOrEqual(drawerLayout.innerWidth + 0.01);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("assigns and replies from the admin support workspace", async ({ page }) => {
+  await registerAdminFromUi(page);
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "Buyer",
+      contact: "buyer@example.com",
+      topic: "delivery",
+      message: "物流没有更新",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='support']").click();
+  await page.locator(`[data-admin-ticket-row][data-ticket-id='${ticket.id}'] [data-admin-ticket-open]`).click();
+  await page.locator("[data-admin-ticket-priority]").selectOption("urgent");
+  await page.locator("[data-admin-ticket-update]").click();
+  await page.locator("[data-admin-ticket-public-message]").fill("我们已联系承运商核查。");
+  await page.locator("[data-admin-ticket-public-submit]").click();
+
+  await expect(page.locator("[data-admin-ticket-drawer]")).toContainText("我们已联系承运商核查。");
+  await expect(page.locator(`[data-admin-ticket-row][data-ticket-id='${ticket.id}']`)).toContainText(/紧急|urgent/i);
+});
+
+test("renders admin products inventory orders and marketing tabs", async ({ page }) => {
+  await registerAdminFromUi(page);
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await expect(page.locator("[data-admin-product-row]")).not.toHaveCount(0);
+
+  await page.locator("[data-admin-tab='inventory']").click();
+  await expect(page.locator("[data-admin-inventory-row]")).not.toHaveCount(0);
+
+  await page.locator("[data-admin-tab='orders']").click();
+  await expect(page.locator("[data-admin-orders-empty], [data-admin-order-row]").first()).toBeVisible();
+
+  await page.locator("[data-admin-tab='marketing']").click();
+  await expect(page.locator("[data-admin-marketing-row]")).not.toHaveCount(0);
+});
+
+test("disables a payment method from the admin console and hides it on payment page", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='payments']").click();
+  await page.locator("[data-admin-payment-method][data-method-id='paypal'] [data-admin-payment-toggle]").click();
+  await expect(page.locator("[data-admin-payment-method][data-method-id='paypal']")).toContainText("inactive");
+
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+
+  await expect(page.locator("[data-payment-method='paypal']")).toHaveCount(0);
+});
+
+test("updates inventory from the admin inventory tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='inventory']").click();
+
+  const row = page.locator("[data-admin-inventory-row][data-sku-id='sock-01-39']");
+  await row.locator("[data-admin-stock-input]").fill("0");
+  await row.locator("[data-admin-inventory-save]").click();
+
+  await expect(row).toContainText("out-of-stock");
+});
+
+test("creates a product from the admin product workbench", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await page.locator("[data-admin-product-new]").click();
+
+  await expect(page.locator("[data-admin-product-form]")).toBeVisible();
+  await page.locator("[data-admin-product-id]").fill("sock-ui-new");
+  await page.locator("[data-admin-product-title]").fill("UI 新增中筒袜");
+  await page.locator("[data-admin-product-title-en]").fill("UI New Crew Socks");
+  await page.locator("[data-admin-product-category]").selectOption("crew");
+  await page.locator("[data-admin-product-category-label]").fill("中筒袜");
+  await page.locator("[data-admin-product-category-label-en]").fill("Crew Socks");
+  await page.locator("[data-admin-product-price]").fill("36");
+  await page.locator("[data-admin-product-original-price]").fill("49");
+  await page.locator("[data-admin-product-description]").fill("后台 UI 创建的商品。");
+  await page.locator("[data-admin-product-description-en]").fill("Created from admin UI.");
+  await page.locator("[data-admin-product-colors]").fill("Black, White");
+  await page.locator("[data-admin-product-materials]").fill("Cotton blend");
+  await page.locator("[data-admin-sku-template-input]").fill("39-40");
+  await page.locator("[data-admin-sku-generate]").click();
+  await expect(page.locator("[data-admin-sku-row]")).toHaveCount(2);
+  await page.locator("[data-admin-product-save]").click();
+
+  await expect(page.locator("[data-admin-product-row][data-product-id='sock-ui-new']")).toContainText("UI 新增中筒袜");
+  await page.goto("/socks-product-list.html?q=UI%20新增");
+  await expect(page.locator("[data-product-card][data-product-id='sock-ui-new']")).toBeVisible();
+});
+
+test("edits a product and bulk updates SKU rows from the admin product workbench", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='products']").click();
+  await page.locator("[data-admin-product-row][data-product-id='sock-01'] [data-admin-product-edit]").click();
+
+  await expect(page.locator("[data-admin-product-form]")).toBeVisible();
+  await page.locator("[data-admin-product-title]").fill("UI 编辑后的袜子");
+  await page.locator("[data-admin-sku-row]").first().locator("[data-admin-sku-select]").check();
+  await page.locator("[data-admin-sku-bulk-stock]").fill("3");
+  await page.locator("[data-admin-sku-bulk-threshold]").fill("2");
+  await page.locator("[data-admin-sku-bulk-apply]").click();
+  await expect(page.locator("[data-admin-sku-row]").first()).toContainText("3");
+  await page.locator("[data-admin-product-save]").click();
+
+  await expect(page.locator("[data-admin-product-row][data-product-id='sock-01']")).toContainText("UI 编辑后的袜子");
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  await expect(page.locator("[data-detail-page-title]")).toHaveText("UI 编辑后的袜子");
+});
+
+test("advances an order from the admin orders tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator("[data-admin-order-action='cancelled']").first().click();
+
+  await expect(page.locator("[data-admin-order-row]").first()).toContainText("cancelled");
+});
+
+test("advances fulfillment and refund status from the admin orders tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+  const orderId = new URL(page.url()).searchParams.get("id");
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${orderId}"] [data-admin-order-fulfillment]`).click();
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${orderId}"]`)).toContainText(/preparing|处理中|仓库/);
+
+  await page.request.post(`/api/orders/${orderId}/cancel`, {
+    data: { reason: "changed_mind", locale: "en-US" }
+  });
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${orderId}"] [data-admin-refund-status]`).click();
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${orderId}"]`)).toContainText(/processing|退款处理中/);
+});
+
+test("ships an order from the admin order operation drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Admin Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "processing", locale: "zh-CN" }
+  });
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`).click();
+  await expect(page.locator("[data-admin-order-drawer]")).toHaveAttribute("data-open", "true");
+  await page.locator("[data-admin-carrier]").selectOption("ups");
+  await page.locator("[data-admin-tracking-number]").fill("1Z999AA10123456784");
+  await page.locator("[data-admin-ship-submit]").click();
+
+  await expect(page.locator("[data-admin-order-drawer]")).toContainText("1Z999AA10123456784");
+  await expect(page.locator(`[data-admin-order-row][data-order-id="${order.id}"]`)).toContainText(/已发货|shipped/);
+});
+
+test("creates a partial refund from the admin order operation drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Admin Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/admin/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  await page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`).click();
+  await page.locator("[data-admin-refund-quantity]").first().fill("1");
+  await page.locator("[data-admin-refund-amount]").first().fill("10.00");
+  await page.locator("[data-admin-refund-reason]").selectOption("quality_issue");
+  await page.locator("[data-admin-refund-submit]").click();
+
+  await expect(page.locator("[data-admin-order-refunds]")).toContainText(/10\.00|¥10/);
+});
+
+test("reviews a return request from the admin return drawer", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Return Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+  await page.request.patch(`/api/orders/${order.id}/status`, {
+    data: { status: "paid", locale: "zh-CN" }
+  });
+  const returnResponse = await page.request.post("/api/returns", {
+    data: {
+      orderId: order.id,
+      type: "return_refund",
+      reason: "quality_issue",
+      contact: "admin@socks.test",
+      note: "商品存在瑕疵。",
+      items: [{ skuId: order.items[0].skuId, quantity: 1 }],
+      locale: "zh-CN"
+    }
+  });
+  const returnRequest = (await returnResponse.json()).returnRequest;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='returns']").click();
+  await page.locator(`[data-admin-return-row][data-return-id="${returnRequest.id}"] [data-admin-return-open]`).click();
+  await page.locator("[data-admin-return-action='start_review']").click();
+  await expect(page.locator("[data-admin-return-drawer]")).toContainText(/审核中|reviewing/);
+  await page.locator("[data-admin-return-action='approve']").click();
+  await page.locator("[data-admin-return-refund-amount]").first().fill("10.00");
+  await page.locator("[data-admin-return-confirm]").click();
+
+  await expect(page.locator("[data-admin-return-drawer]")).toContainText(/已通过|approved/);
+  await expect(page.locator(`[data-admin-return-row][data-return-id="${returnRequest.id}"]`)).toContainText(/已通过|approved/);
+});
+
+test("keeps admin operation drawers accessible on desktop and mobile", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  const orderResponse = await page.request.post("/api/orders", {
+    data: {
+      locale: "zh-CN",
+      customer: { name: "Accessible Buyer", contact: "admin@socks.test" },
+      shippingAddress: {
+        address: "100 Demo Street",
+        city: "Seattle",
+        region: "WA",
+        postalCode: "98101"
+      },
+      shippingMethodId: "standard"
+    }
+  });
+  const order = (await orderResponse.json()).order;
+
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='orders']").click();
+  const trigger = page.locator(`[data-admin-order-row][data-order-id="${order.id}"] [data-admin-order-open]`);
+  await trigger.click();
+  const drawer = page.locator("[data-admin-order-drawer]");
+  await expect(drawer).toHaveAttribute("role", "dialog");
+  await expect(drawer).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator("[data-admin-order-drawer-title]")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await trigger.click();
+  const drawerBox = await drawer.boundingBox();
+  expect(drawerBox.width).toBeLessThanOrEqual(375.1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+});
+
+test("toggles a coupon from the admin marketing tab", async ({ page }) => {
+  await registerAdminFromUi(page);
+  await page.goto("/socks-product-list.html?view=admin");
+  await page.locator("[data-admin-tab='marketing']").click();
+
+  const row = page.locator("[data-admin-marketing-row][data-marketing-id='SOCK10']");
+  await row.locator("[data-admin-marketing-toggle]").click();
+
+  await expect(row).toContainText("inactive");
+});
+
+test("opens the trust center from the header help link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-help-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=faq/);
+  await expect(page.locator("[data-support-view]")).toBeVisible();
+  await expect(page.locator("[data-support-title]")).toHaveText("帮助中心");
+});
+
+test("opens returns policy from the header returns link", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-returns-link]").click();
+
+  await expect(page).toHaveURL(/view=support&section=returns/);
+  await expect(page.locator("[data-support-section='returns']")).toHaveClass(/is-active/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("退换政策");
+});
+
+test("footer policy links route to trust center sections", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-footer-support-link='privacy']").click();
+
+  await expect(page).toHaveURL(/view=support&section=privacy/);
+  await expect(page.locator("[data-support-current-title]")).toHaveText("隐私政策");
+});
+
+test("expands and collapses trust center FAQ items", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=faq");
+
+  const firstQuestion = page.locator("[data-support-faq-question]").first();
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
+  await firstQuestion.click();
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "false");
+  await firstQuestion.press("Enter");
+  await expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
+});
+
+test("validates trust center contact form", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+  await page.locator("[data-support-contact-submit]").click();
+
+  await expect(page.locator("[data-support-contact-error='name']")).toHaveText("请填写姓名");
+});
+
+test("submits trust center contact form and shows ticket number", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+  await page.locator("[data-support-contact-field='name']").fill("演示买家");
+  await page.locator("[data-support-contact-field='contact']").fill("buyer@example.com");
+  await page.locator("[data-support-contact-field='topic']").selectOption("returns");
+  await page.locator("[data-support-contact-field='message']").fill("想了解未穿着袜子的退换流程。");
+  await page.locator("[data-support-contact-submit]").click();
+
+  await expect(page.locator("[data-support-ticket]")).toBeVisible();
+  await expect(page.locator("[data-support-ticket]")).toContainText(/SUP-\d{8}-\d{4}/);
+});
+
+test("opens support ticket history and replies as a signed-in customer", async ({ page }) => {
+  await registerFromUi(page, { email: "history@example.com" });
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "History Buyer",
+      contact: "history@example.com",
+      topic: "orders",
+      message: "订单历史问题",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=support-tickets");
+  const row = page.locator(`[data-support-ticket-row][data-ticket-id='${ticket.id}']`);
+  await expect(row).toContainText("订单历史问题");
+  await row.locator("[data-support-ticket-open]").click();
+  await page.locator("[data-support-ticket-reply]").fill("这是登录用户补充的信息。");
+  await page.locator("[data-support-ticket-reply-submit]").click();
+  await expect(page.locator("[data-support-ticket-detail]")).toContainText("这是登录用户补充的信息。");
+});
+
+test("tracks a guest support ticket without exposing internal notes", async ({ page }) => {
+  const created = await page.request.post("/api/support/contact", {
+    data: {
+      name: "Guest",
+      contact: "guest@example.com",
+      topic: "product",
+      message: "商品咨询",
+      locale: "zh-CN"
+    }
+  });
+  const ticket = (await created.json()).ticket;
+
+  await page.goto("/socks-product-list.html?view=support-tickets");
+  await page.locator("[data-support-ticket-number]").fill(ticket.ticketNumber);
+  await page.locator("[data-support-ticket-contact]").fill("guest@example.com");
+  await page.locator("[data-support-ticket-lookup]").click();
+  await expect(page.locator("[data-support-ticket-detail]")).toContainText("商品咨询");
+  await expect(page.locator("[data-support-ticket-detail]")).not.toContainText("客户不可见");
+
+  await page.locator("[data-support-ticket-contact]").fill("wrong@example.com");
+  await page.locator("[data-support-ticket-lookup]").click();
+  await expect(page.locator("[data-support-ticket-error]")).toContainText(/未找到|not found/i);
+  await expect(page.locator("[data-support-ticket-error]")).not.toContainText("联系方式不匹配");
+});
+
+test("renders trust center in English", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=privacy&locale=en-US");
+
+  await expect(page.locator("[data-support-title]")).toHaveText("Help Center");
+  await expect(page.locator("[data-support-current-title]")).toHaveText("Privacy Policy");
+});
+
+test("keeps global shell on detail checkout order and support views", async ({ page }) => {
+  for (const path of [
+    "/socks-product-list.html?view=detail&id=sock-01",
+    "/socks-product-list.html?view=checkout",
+    "/socks-product-list.html?view=order",
+    "/socks-product-list.html?view=support&section=faq"
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("[data-site-header]")).toBeVisible();
+    await expect(page.locator("[data-site-footer]")).toBeVisible();
+  }
+});
+
+test("trust center has no horizontal overflow on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/socks-product-list.html?view=support&section=contact");
+
+  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasOverflow).toBe(false);
 });
 
 test("shows login and register entry points when the visitor is anonymous", async ({ page }) => {
@@ -133,6 +965,83 @@ test("registers from the auth view and updates the storefront header", async ({ 
 
   await expect(page.locator("[data-auth-user-name]")).toHaveText("Alex Chen");
   await expect(page.locator("[data-auth-logout]")).toBeVisible();
+});
+
+test("CSRF wrapper supports email verification and resend without exposing tokens", async ({ page, request }) => {
+  await page.goto("/socks-product-list.html?view=auth&mode=register");
+  await page.locator('[data-auth-field="name"]').fill("Secure Buyer");
+  await page.locator('[data-auth-field="email"]').fill("secure-buyer@example.com");
+  await page.locator('[data-auth-field="password"]').fill("demo1234");
+  const registerResponsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/auth/register") && response.request().method() === "POST";
+  });
+  await page.locator("[data-auth-submit]").click();
+  const registerResponse = await registerResponsePromise;
+  expect(registerResponse.status()).toBe(201);
+  expect(registerResponse.request().headers()["x-csrf-token"]).toBeTruthy();
+  await expect(page.locator("[data-email-verification-notice]")).toBeVisible();
+
+  const resendResponsePromise = page.waitForResponse((response) => {
+    return response.url().includes("/api/auth/email-verification/resend");
+  });
+  await page.locator("[data-email-verification-resend]").click();
+  expect((await resendResponsePromise).status()).toBe(202);
+  await expect(page.locator("[data-email-verification-feedback]")).toBeVisible();
+
+  const adminCookie = await loginAdminFromApi(request);
+  const outboxResponse = await request.get("/api/admin/security-email-outbox", {
+    headers: { cookie: adminCookie }
+  });
+  expect(outboxResponse.ok()).toBe(true);
+  const outbox = (await outboxResponse.json()).items;
+  const token = outbox.find((email) => email.templateId === "email_verification").payload.token;
+  await page.goto(`/socks-product-list.html?view=auth&mode=verify-email&token=${encodeURIComponent(token)}`);
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toBeVisible();
+  await expect(page.locator("[data-email-verification-notice]")).toHaveCount(0);
+});
+
+test("password reset UI keeps enumeration-safe messaging and accepts a valid outbox token", async ({ page, request }) => {
+  await page.request.post("/api/auth/register", {
+    data: { name: "Reset Buyer", email: "reset-ui@example.com", password: "demo1234" }
+  });
+  await page.goto("/socks-product-list.html?view=auth&mode=forgot-password");
+  await page.locator('[data-auth-field="email"]').fill("reset-ui@example.com");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toContainText(/instructions|说明/i);
+
+  const adminCookie = await loginAdminFromApi(request);
+  const outboxResponse = await request.get("/api/admin/security-email-outbox", {
+    headers: { cookie: adminCookie }
+  });
+  expect(outboxResponse.ok()).toBe(true);
+  const outbox = (await outboxResponse.json()).items;
+  const token = outbox.find((email) => email.templateId === "password_reset").payload.token;
+  await page.goto(`/socks-product-list.html?view=auth&mode=reset-password&token=${encodeURIComponent(token)}`);
+  await page.locator('[data-auth-field="password"]').fill("new-password-123");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-success]")).toContainText(/updated|已更新/i);
+});
+
+test("security cooldown shows Retry-After and does not retry login automatically", async ({ page }) => {
+  let loginRequests = 0;
+  await page.route("**/api/auth/login", async (route) => {
+    loginRequests += 1;
+    await route.fulfill({
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": "42" },
+      body: JSON.stringify({
+        ok: false,
+        error: { code: "RATE_LIMITED", message: "Too many requests.", details: { retryAfterSeconds: 42 } }
+      })
+    });
+  });
+  await page.goto("/socks-product-list.html?view=auth&mode=login");
+  await page.locator('[data-auth-field="email"]').fill("buyer@example.com");
+  await page.locator('[data-auth-field="password"]').fill("wrong-password");
+  await page.locator("[data-auth-submit]").click();
+  await expect(page.locator("[data-auth-error]")).toContainText("42");
+  expect(loginRequests).toBe(1);
 });
 
 test("logs out from the storefront header", async ({ page }) => {
@@ -175,10 +1084,8 @@ test("manages saved addresses from the addresses view", async ({ page }) => {
 });
 
 test("uses a default saved address during checkout", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
   await page.goto("/socks-product-list.html?view=addresses");
   await page.locator('[data-address-field="name"]').fill("Alex Chen");
   await page.locator('[data-address-field="contact"]').fill("alex@example.com");
@@ -186,7 +1093,11 @@ test("uses a default saved address during checkout", async ({ page }) => {
   await page.locator('[data-address-field="city"]').fill("Seattle");
   await page.locator('[data-address-field="region"]').fill("WA");
   await page.locator('[data-address-field="postalCode"]').fill("98101");
+  const addressResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/me/addresses") && response.request().method() === "POST";
+  });
   await page.locator("[data-address-submit]").click();
+  expect((await addressResponse).status()).toBe(201);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await expect(page.locator("[data-checkout-address-option]")).toContainText("100 Demo Street");
@@ -197,15 +1108,15 @@ test("uses a default saved address during checkout", async ({ page }) => {
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page).toHaveURL(/view=order&id=SOCK-/);
   await expect(page.locator("[data-order-address]")).toContainText("100 Demo Street");
 });
 
 test("shows the logged-in user's order history after checkout", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
   await page.locator('[data-checkout-field="customer.contact"]').fill("alex@example.com");
@@ -213,12 +1124,53 @@ test("shows the logged-in user's order history after checkout", async ({ page })
   await page.locator('[data-checkout-field="shippingAddress.city"]').fill("Seattle");
   await page.locator('[data-checkout-field="shippingAddress.region"]').fill("WA");
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
+  const orderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/orders") && response.request().method() === "POST";
+  });
   await page.locator("[data-checkout-submit]").click();
+  expect((await orderResponse).status()).toBe(201);
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
 
   await page.goto("/socks-product-list.html?view=orders");
   await expect(page.locator("[data-order-history-card]")).toHaveCount(1);
   await expect(page.locator("[data-order-history-card]")).toContainText("SOCK-");
   await expect(page.locator("[data-order-history-card]")).toContainText(/Minimal Crew Socks|极简中筒袜/);
+});
+
+test("reorders from the order history page", async ({ page }) => {
+  await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment/);
+
+  await page.goto("/socks-product-list.html?view=orders");
+  const reorderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/reorder") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-reorder]").first().click();
+  expect((await reorderResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
+test("reorders from the order detail page", async ({ page }) => {
+  await registerFromUi(page);
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment/);
+  const orderId = new URL(page.url()).searchParams.get("id");
+  expect(orderId).not.toBeNull();
+  await page.goto(`/socks-product-list.html?view=order&id=${orderId}`);
+
+  const reorderResponse = page.waitForResponse((response) => {
+    return response.url().includes("/reorder") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-detail-reorder]").click();
+  expect((await reorderResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
 });
 
 test("requires login before showing order history", async ({ page }) => {
@@ -228,9 +1180,7 @@ test("requires login before showing order history", async ({ page }) => {
 });
 
 test("opens the checkout view from the cart drawer with a live cart summary", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 2 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 2 }]);
 
   await page.goto("/socks-product-list.html");
   await page.locator("[data-cart-toggle]").click();
@@ -244,12 +1194,10 @@ test("opens the checkout view from the cart drawer with a live cart summary", as
 });
 
 test("shows checkout validation errors without creating an order", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator("[data-checkout-submit]").click();
@@ -261,12 +1209,10 @@ test("shows checkout validation errors without creating an order", async ({ page
 });
 
 test("submits checkout, clears cart, and opens the persisted order detail", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 2 }]
-  }, null, 2)}\n`, "utf8");
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 2 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
@@ -282,23 +1228,168 @@ test("submits checkout, clears cart, and opens the persisted order detail", asyn
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
-  await expect(page).toHaveURL(/view=order&id=SOCK-/);
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await expect(page.locator("[data-cart-count]")).toHaveText("0");
+  await payCurrentOrderFromPaymentPage(page);
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-items]")).toContainText("Minimal Crew Socks");
   await expect(page.locator("[data-cart-count]")).toHaveText("0");
 
   await page.reload();
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
   await expect(page.locator("[data-order-items]")).toContainText("Minimal Crew Socks");
 });
 
-test("advances persisted order status from the order detail page", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-01", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+test("opens the payment view after checkout submit", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("socks-storefront-locale", "en-US");
   });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await expect(page.locator("[data-payment-view]")).toBeVisible();
+  await expect(page.locator("[data-payment-method='card']")).toBeVisible();
+  await expect(page.locator("[data-payment-submit]")).toContainText("Pay now");
+});
+
+test("shows configured payment methods and totals breakdown on the payment page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await expect(page.locator("[data-payment-method-card]")).toHaveCount(3);
+  await expect(page.locator("[data-payment-breakdown]")).toContainText("Tax");
+  await expect(page.locator("[data-payment-breakdown]")).toContainText("Grand total");
+});
+
+test("simulates a successful payment from the payment view", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  const paymentResponse = page.waitForResponse((response) => {
+    return response.url().includes("/payments") && response.request().method() === "POST";
+  });
+  await page.locator("[data-payment-submit]").click();
+  expect((await paymentResponse).status()).toBe(201);
+
+  await expect(page).toHaveURL(/view=order&id=SOCK-/);
+  await expect(page.locator("[data-order-status]")).toHaveText("Paid");
+  await expect(page.locator("[data-order-payment]")).toContainText("Card");
+});
+
+test("shows invoice entry after successful payment", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+
+  await expect(page.locator("[data-invoice-card]")).toBeVisible();
+  await expect(page.locator("[data-invoice-card]")).toContainText(/INV-\d{8}-\d{4}/);
+  await expect(page.locator("[data-invoice-card]")).toContainText("Tax");
+});
+
+test("updates checkout delivery estimates from the shipping address", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("Standard delivery");
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("west");
+
+  await page.locator('[data-checkout-field="shippingAddress.region"]').fill("AK");
+  await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("99501");
+  await page.locator("[data-shipping-refresh]").click();
+  await expect(page.locator("[data-shipping-estimate-panel]")).toContainText("remote");
+});
+
+test("shows fulfillment tracking on the order detail page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
+  const orderId = new URL(page.url()).searchParams.get("id");
+
+  await page.request.patch(`/api/orders/${orderId}/status`, { data: { status: "processing", locale: "en-US" } });
+  await page.request.patch(`/api/orders/${orderId}/status`, { data: { status: "shipped", locale: "en-US" } });
+  await page.goto(`/socks-product-list.html?view=order&id=${orderId}`);
+
+  await expect(page.locator("[data-fulfillment-card]")).toBeVisible();
+  await expect(page.locator("[data-fulfillment-tracking-number]")).toContainText(/TRK-/);
+  await expect(page.locator("[data-fulfillment-events]")).toContainText(/Label created|已生成发货单/);
+});
+
+test("cancels a paid order from detail and shows refund progress", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "39", quantity: 1 }]);
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await payCurrentOrderFromPaymentPage(page);
+
+  const cancelResponse = page.waitForResponse((response) => {
+    return response.url().includes("/cancel") && response.request().method() === "POST";
+  });
+  await page.locator("[data-order-cancel]").click();
+  expect((await cancelResponse).ok()).toBe(true);
+  await expect(page.locator("[data-order-status]")).toHaveText(/Refund pending|退款处理中/);
+  await expect(page.locator("[data-refund-progress]")).toContainText(/Refund requested|退款已申请/);
+});
+
+test("shows retry state after a failed demo payment", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
+
+  await page.goto("/socks-product-list.html?view=checkout");
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+
+  await page.locator("[data-payment-fail-demo]").click();
+
+  await expect(page.locator("[data-payment-error]")).toContainText("Payment failed");
+  await expect(page.locator("[data-payment-submit]")).toContainText("Retry payment");
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+});
+
+test("advances persisted order status from the order detail page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("socks-storefront-locale", "en-US");
+  });
+  await seedCartFromApi(page, [{ productId: "sock-01", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=checkout");
   await page.locator('[data-checkout-field="customer.name"]').fill("Alex Chen");
@@ -309,9 +1400,8 @@ test("advances persisted order status from the order detail page", async ({ page
   await page.locator('[data-checkout-field="shippingAddress.postalCode"]').fill("98101");
   await page.locator("[data-checkout-submit]").click();
 
-  await expect(page.locator("[data-order-status]")).toHaveText("Pending payment");
-
-  await page.locator('[data-order-status-action][data-next-status="paid"]').click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page.locator("[data-order-status]")).toHaveText("Paid");
 
   await page.locator('[data-order-status-action][data-next-status="processing"]').click();
@@ -323,6 +1413,83 @@ test("advances persisted order status from the order detail page", async ({ page
   await page.locator('[data-order-status-action][data-next-status="delivered"]').click();
   await expect(page.locator("[data-order-status]")).toHaveText("Delivered");
   await expect(page.locator("[data-order-timeline]")).toContainText("Delivered");
+});
+
+test("submits a return request from persisted order detail", async ({ page }) => {
+  await registerFromUi(page);
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
+  await expect(page).toHaveURL(/view=order&id=/);
+
+  await page.locator("[data-order-return-link]").click();
+  await expect(page).toHaveURL(/view=return/);
+  await expect(page.locator("[data-return-view]")).toBeVisible();
+  await page.locator("[data-return-item-checkbox]").first().check();
+  await page.locator("[data-return-type]").selectOption("return_refund");
+  await page.locator("[data-return-reason]").selectOption("size_issue");
+  await page.locator("[data-return-contact]").fill("alex@example.com");
+  await page.locator("[data-return-note]").fill("尺码偏紧，申请退货退款。");
+  await page.locator("[data-return-submit]").click();
+
+  await expect(page).toHaveURL(/view=returns/);
+  await expect(page.locator("[data-return-history-card]").first()).toContainText(/RET-\d{8}-\d{4}/);
+  await expect(page.locator("[data-return-history-card]").first()).toContainText("已提交");
+});
+
+test("shows return quantity validation in the return form", async ({ page }) => {
+  await registerFromUi(page, { name: "Mia Wong" });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
+  await page.locator("[data-order-return-link]").click();
+
+  await page.locator("[data-return-submit]").click();
+  await expect(page.locator("[data-return-form-error]")).toContainText("请选择至少一件商品");
+});
+
+test("links returns policy to order history and returns history", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=support&section=returns");
+
+  await expect(page.locator("[data-support-return-orders-link]")).toHaveAttribute("href", /view=orders/);
+  await expect(page.locator("[data-support-return-history-link]")).toHaveAttribute("href", /view=returns/);
+});
+
+test("opens a return request detail from return history", async ({ page }) => {
+  await registerFromUi(page, { name: "Noah Lin" });
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-product-card]").first().locator("[data-size='39']").click();
+  await page.locator("[data-product-card]").first().locator("[data-cart-button]").click();
+  await page.locator("[data-cart-toggle]").click();
+  await page.locator("[data-cart-checkout]").click();
+  await fillCheckoutForm(page);
+  await page.locator("[data-checkout-submit]").click();
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
+  await page.locator("[data-order-return-link]").click();
+  await page.locator("[data-return-item-checkbox]").first().check();
+  await page.locator("[data-return-type]").selectOption("return_refund");
+  await page.locator("[data-return-reason]").selectOption("size_issue");
+  await page.locator("[data-return-contact]").fill("alex@example.com");
+  await page.locator("[data-return-submit]").click();
+
+  await page.locator("[data-return-history-detail-link]").first().click();
+  await expect(page).toHaveURL(/view=return&id=/);
+  await expect(page).toHaveURL(/mode=detail/);
+  await expect(page.locator("[data-return-detail]")).toContainText(/RET-\d{8}-\d{4}/);
+  await expect(page.locator("[data-return-detail]")).toContainText("极简中筒袜");
 });
 
 test("switches the storefront copy to English and persists the locale preference", async ({ page }) => {
@@ -467,12 +1634,10 @@ test("shows a friendly empty state when the detail product id is invalid", async
 });
 
 test("loads persisted cart state and opens the cart drawer from the detail view", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html?view=detail&id=sock-02");
 
@@ -504,6 +1669,153 @@ test("updates the visible detail cart state after adding the current product", a
   await expect(page.locator("[data-detail-cart-summary]")).toContainText("1 件");
 });
 
+test("submits anonymous product reviews for moderation on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  await expect(page.locator("[data-product-reviews]")).toBeVisible();
+  await expect(page.locator("[data-review-empty]")).toHaveCount(0);
+  await expect(page.locator("[data-review-item]")).toHaveCount(4);
+  await expect(page.locator("[data-review-item]").first()).toContainText("李然");
+  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
+
+  await page.locator("[data-review-author]").fill("Maya Chen");
+  await page.locator("[data-review-rating]").selectOption("5");
+  await page.locator("[data-review-body]").fill("面料柔软，运动后也很透气。");
+
+  const createReviewResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.request().method() === "POST";
+  });
+
+  await page.locator("[data-review-submit]").click();
+  const response = await createReviewResponse;
+  expect(response.status()).toBe(201);
+  expect((await response.json()).review.status).toBe("pending");
+
+  await expect(page.locator("[data-review-empty]")).toHaveCount(0);
+  await expect(page.locator("[data-review-item]")).toHaveCount(4);
+  await expect(page.getByText("Maya Chen", { exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-review-submission-status]")).toContainText(/已提交.*审核/);
+  await expect(page.locator("[data-product-review-count]")).toContainText("4 条评论");
+});
+
+test("shows review trust signals and helpful voting on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const firstReview = page.locator('[data-review-item][data-review-id="seed-review-sock-02-01"]');
+  await expect(firstReview.locator("[data-verified-purchase]")).toHaveText("Verified Purchase");
+  await expect(firstReview.locator("[data-review-media]")).toHaveCount(1);
+  await expect(firstReview.locator("[data-review-helpful-button]")).toContainText("有帮助 12");
+
+  const negativeReview = page.locator('[data-review-item][data-review-id="seed-review-sock-02-04"]');
+  await expect(negativeReview.locator("[data-review-reason-tag]")).toHaveText(["尺码偏紧", "厚度偏厚"]);
+
+  const helpfulResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews/seed-review-sock-02-01/helpful");
+  });
+  await firstReview.locator("[data-review-helpful-button]").click();
+  expect((await helpfulResponse).ok()).toBe(true);
+  await expect(firstReview.locator("[data-review-helpful-button]")).toContainText("有帮助 13");
+});
+
+test("saves and unsaves a product from the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const saveButton = page.locator("[data-save-product-button]");
+  await expect(saveButton).toHaveText("保存到稍后购买");
+
+  const saveResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/saved-products") && response.request().method() === "POST";
+  });
+  await saveButton.click();
+  expect((await saveResponse).status()).toBe(201);
+  await expect(saveButton).toHaveText("已保存");
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("1");
+
+  const removeResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/saved-products/sock-02") && response.request().method() === "DELETE";
+  });
+  await saveButton.click();
+  expect((await removeResponse).ok()).toBe(true);
+  await expect(saveButton).toHaveText("保存到稍后购买");
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("0");
+});
+
+test("shows saved products on the wishlist page and removes one", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await page.locator("[data-save-product-button]").click();
+  await expect(page.locator("[data-saved-products-count]")).toHaveText("1");
+
+  await page.goto("/socks-product-list.html?view=wishlist");
+  await expect(page.locator("[data-wishlist-view]")).toBeVisible();
+  await expect(page.locator("[data-wishlist-card]")).toHaveCount(1);
+  await expect(page.locator("[data-wishlist-card]").first()).toContainText(/轻压运动袜|Active Base/);
+
+  await page.locator("[data-wishlist-remove]").click();
+  await expect(page.locator("[data-wishlist-empty]")).toBeVisible();
+});
+
+test("adds a wishlist product to the cart", async ({ page }) => {
+  const saveResponse = await page.request.post("/api/saved-products", { data: { productId: "sock-02" } });
+  expect(saveResponse.ok()).toBe(true);
+
+  await page.goto("/socks-product-list.html?view=wishlist");
+
+  const cartResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await page.locator("[data-wishlist-add-cart]").first().click();
+  expect((await cartResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
+test("shows and submits product questions on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  await expect(page.locator("[data-product-questions]")).toBeVisible();
+  await expect(page.locator("[data-question-item]")).toHaveCount(3);
+  await expect(page.locator("[data-question-item]").first()).toContainText("这款适合跑步训练吗？");
+
+  await page.locator("[data-question-author]").fill("王");
+  await page.locator("[data-question-body]").fill("40 码脚宽可以穿吗？");
+
+  const createQuestionResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/questions")
+      && response.request().method() === "POST";
+  });
+
+  await page.locator("[data-question-submit]").click();
+  expect((await createQuestionResponse).status()).toBe(201);
+
+  await expect(page.locator("[data-question-item]")).toHaveCount(4);
+  await expect(page.locator("[data-question-item]").first()).toContainText("40 码脚宽可以穿吗？");
+  await expect(page.locator("[data-product-question-count]")).toContainText("4 个问题");
+});
+
+test("filters and sorts product reviews on the detail page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+
+  const ratingResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.url().includes("rating=4");
+  });
+  await page.locator("[data-review-rating-filter]").selectOption("4");
+  expect((await ratingResponse).ok()).toBe(true);
+
+  await expect(page.locator("[data-review-item]")).toHaveCount(1);
+  await expect(page.locator("[data-review-item]").first()).toContainText("Ava");
+  await expect(page.locator("[data-product-review-count]")).toContainText("1 条评论");
+
+  await page.locator("[data-review-rating-filter]").selectOption("");
+  const sortResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/products/sock-02/reviews")
+      && response.url().includes("sort=rating-asc");
+  });
+  await page.locator("[data-review-sort]").selectOption("rating-asc");
+  expect((await sortResponse).ok()).toBe(true);
+  await expect(page.locator("[data-review-item]").first()).toContainText("韩路");
+});
+
 test("shows selected detail sizes and quantities after adding from the detail page", async ({ page }) => {
   await page.goto("/socks-product-list.html?view=detail&id=sock-04");
 
@@ -527,7 +1839,7 @@ test("shows selected detail sizes and quantities after adding from the detail pa
   await detailAddButton.click();
 
   await expect(detailFeedbackButton.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x1"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x1", "43 x1"]);
 });
 
 test("renders gallery color material and size chart on the detail page", async ({ page }) => {
@@ -567,32 +1879,30 @@ test("keeps add-to-cart size feedback synced between storefront and detail views
   await detailRoot.locator("[data-detail-cart-button]").click();
 
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x1"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x1", "43 x1"]);
 
   await page.locator("[data-detail-back-link]").click();
   await expect(firstCard.locator("[data-cart-feedback-summary]")).toHaveText("已选（+2）");
-  await expect(firstCard.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x1"]);
+  await expect(firstCard.locator("[data-cart-feedback-size]")).toHaveText(["39 x1", "43 x1"]);
 });
 
 test("restores persisted size feedback when the detail page is reopened", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-01", size: "43", quantity: 1 },
-      { productId: "sock-01", size: "39", quantity: 2 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-01", size: "43", quantity: 1 },
+    { productId: "sock-01", size: "39", quantity: 2 }
+  ]);
 
   await page.goto("/socks-product-list.html?view=detail&id=sock-01");
 
   const detailRoot = page.locator("[data-detail-product-root]");
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+3）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x2"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x2", "43 x1"]);
 
   await page.locator("[data-detail-back-link]").click();
   await page.locator('[data-product-card][data-product-id="sock-01"]').locator("[data-product-detail-link]").click();
 
   await expect(detailRoot.locator("[data-cart-feedback-summary]")).toHaveText("已选（+3）");
-  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["43 x1", "39 x2"]);
+  await expect(detailRoot.locator("[data-cart-feedback-size]")).toHaveText(["39 x2", "43 x1"]);
 });
 
 test("shows detail recommendations without repeating the current product", async ({ page }) => {
@@ -654,12 +1964,10 @@ test("navigates to the next product within the preserved detail filter and sort 
 });
 
 test("loads the persisted cart state from backend on page init", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   const [cartResponse] = await Promise.all([
     page.waitForResponse((response) => {
@@ -674,12 +1982,10 @@ test("loads the persisted cart state from backend on page init", async ({ page }
 });
 
 test("opens the cart drawer and shows persisted cart item details", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
   await expect(page.locator("[data-cart-count]")).toHaveText("3");
@@ -695,17 +2001,15 @@ test("opens the cart drawer and shows persisted cart item details", async ({ pag
   await expect(page.locator("[data-cart-item]").first()).toContainText("¥98");
   await expect(page.locator("[data-cart-item]").nth(1)).toContainText("通勤罗口袜");
   await expect(page.locator("[data-cart-subtotal]")).toHaveText("¥187");
-  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥54");
+  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥77");
   await expect(page.locator("[data-cart-shipping]")).toHaveText("包邮");
   await expect(page.locator("[data-cart-delivery-summary]")).toHaveText("最早送达：2026年7月18日星期六");
   await expect(page.getByRole("button", { name: "去结算" })).toBeEnabled();
-  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥110");
 });
 
 test("keeps valid cart item details when the storefront filter hides that product", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-05", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-05", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?filter=sport&sort=price-desc");
   await page.getByRole("button", { name: "打开购物车" }).click();
@@ -722,9 +2026,7 @@ test("keeps valid cart item details when the storefront filter hides that produc
 });
 
 test("opens a cart drawer item in the detail view while keeping storefront context", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-05", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-05", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?filter=daily&sort=price-asc");
   await page.getByRole("button", { name: "打开购物车" }).click();
@@ -745,9 +2047,7 @@ test("opens a cart drawer item in the detail view while keeping storefront conte
 });
 
 test("opens a cart drawer item from the detail view while keeping detail context", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-05", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-05", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=detail&id=sock-02&filter=sport&sort=price-desc");
   await page.getByRole("button", { name: "打开详情购物车" }).click();
@@ -768,9 +2068,7 @@ test("opens a cart drawer item from the detail view while keeping detail context
 });
 
 test("opens a cart drawer item to the default detail view when no navigation context exists", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-05", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-05", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?view=detail&id=sock-02");
   await page.getByRole("button", { name: "打开详情购物车" }).click();
@@ -791,9 +2089,7 @@ test("opens a cart drawer item to the default detail view when no navigation con
 });
 
 test("opens a cart drawer item from stored storefront context when the current detail page has no explicit filter or sort", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-05", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-05", size: "39", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?filter=daily&sort=price-asc");
   await page.goto("/socks-product-list.html?view=detail&id=sock-02");
@@ -815,9 +2111,22 @@ test("opens a cart drawer item from stored storefront context when the current d
 });
 
 test("does not show a cart drawer detail link for orphan cart items", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-missing", size: "39", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await page.route("**/api/cart", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [{ productId: "sock-missing", size: "39", quantity: 1 }],
+        pricing: { subtotal: 0, itemTotal: 0, total: 0 },
+        meta: { itemCount: 1 }
+      })
+    });
+  });
 
   await page.goto("/socks-product-list.html");
   await page.getByRole("button", { name: "打开购物车" }).click();
@@ -1009,9 +2318,7 @@ test("submits shared header search from order view back into storefront results"
 });
 
 test("keeps English cart and order copy after switching locale", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-02", size: "43", quantity: 1 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-02", size: "43", quantity: 1 }]);
 
   await page.goto("/socks-product-list.html?filter=sport&sort=price-desc");
   await page.locator('[data-locale-option="en-US"]').click();
@@ -1030,6 +2337,8 @@ test("keeps English cart and order copy after switching locale", async ({ page }
   await page.locator("[data-checkout-submit]").click();
   expect((await orderResponse).status()).toBe(201);
 
+  await expect(page).toHaveURL(/view=payment&id=SOCK-/);
+  await payCurrentOrderFromPaymentPage(page);
   await expect(page.getByRole("heading", { name: "Order confirmed" })).toBeVisible();
   await expect(page.locator("[data-order-source-title]")).toHaveText("Go back to your last results");
   await expect(page.locator("[data-order-source-copy]")).toHaveText("Socks / Sport Socks / Price high to low");
@@ -1296,6 +2605,46 @@ test("adds a bundle from the detail page and shows recently viewed products", as
   await expect(page.locator("[data-recently-viewed]")).toContainText(/sock-01|极简|Minimal/);
 });
 
+test("shows a full recent history page and clears it", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-01");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+
+  await page.goto("/socks-product-list.html?view=recent");
+  await expect(page.locator("[data-recent-history-card]")).toHaveCount(2);
+  await expect(page.locator("[data-recent-history-card]").first()).toContainText(/轻压运动袜|Active Base/);
+
+  await page.locator("[data-recent-clear]").click();
+  await expect(page.locator("[data-recent-history-empty]")).toBeVisible();
+});
+
+test("adds a recently viewed product to the cart from the full history page", async ({ page }) => {
+  await page.goto("/socks-product-list.html?view=detail&id=sock-02");
+  await expect(page.locator("[data-detail-product-root]")).toBeVisible();
+  await page.goto("/socks-product-list.html?view=recent");
+
+  const cartResponse = page.waitForResponse((response) => {
+    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
+  });
+  await page.locator("[data-recent-add-cart]").first().click();
+  expect((await cartResponse).ok()).toBe(true);
+  await expect(page.locator("[data-cart-count]")).toHaveText("1");
+});
+
+test("opens wishlist and recent history from storefront navigation", async ({ page }) => {
+  await page.goto("/socks-product-list.html");
+
+  await page.locator("[data-site-wishlist-link]").click();
+  await expect(page).toHaveURL(/view=wishlist/);
+  await expect(page.locator("[data-wishlist-view]")).toBeVisible();
+
+  await page.goto("/socks-product-list.html");
+  await page.locator("[data-site-recent-link]").click();
+  await expect(page).toHaveURL(/view=recent/);
+  await expect(page.locator("[data-recent-view]")).toBeVisible();
+});
+
 test("keeps the social proof row readable on a mobile viewport", async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto("/socks-product-list.html");
@@ -1397,6 +2746,8 @@ test("preserves advanced filters when opening product detail and returning", asy
   await expect(page).toHaveURL(/view=detail/);
   await expect(page).toHaveURL(/minPrice=40/);
   await expect(page).toHaveURL(/size=43/);
+  await expect(page.locator("[data-detail-back-link]")).toHaveAttribute("href", /minPrice=40/);
+  await expect(page.locator("[data-detail-back-link]")).toHaveAttribute("href", /size=43/);
 
   await page.locator("[data-detail-back-link]").click();
   await expect(page).toHaveURL(/minPrice=40/);
@@ -1447,6 +2798,7 @@ test("sorts the visible products by price from low to high", async ({ page }) =>
 
 test("keeps recommended products first in the default view and inside filtered results", async ({ page }) => {
   await page.goto("/socks-product-list.html");
+  await expect(page.locator("[data-product-card]")).toHaveCount(8);
 
   const allProductTitles = await page.locator(".product-card__title").allTextContents();
   expect(allProductTitles.slice(0, 3)).toEqual(["极简中筒袜", "轻压运动袜", "通勤罗口袜"]);
@@ -1456,7 +2808,7 @@ test("keeps recommended products first in the default view and inside filtered r
 });
 
 test("sorts products by price descending and newest with full visible order", async ({ page }) => {
-  await page.goto("/socks-product-list.html");
+  await page.goto("/socks-product-list.html?pageSize=24");
 
   await page.getByRole("button", { name: "价格从高到低" }).click();
   await expect(page.locator(".product-card__title")).toHaveText([
@@ -1572,12 +2924,10 @@ test("splits cart action into add and persistent feedback buttons after adding",
 });
 
 test("shows selected size quantities in a hover popover instead of inside the selected button", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "39", quantity: 2 },
-      { productId: "sock-02", size: "43", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "39", quantity: 2 },
+    { productId: "sock-02", size: "43", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
 
@@ -1596,12 +2946,10 @@ test("shows selected size quantities in a hover popover instead of inside the se
 });
 
 test("removes selected size quantities from the product-card remove dialog", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "39", quantity: 2 },
-      { productId: "sock-02", size: "43", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "39", quantity: 2 },
+    { productId: "sock-02", size: "43", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
 
@@ -1729,25 +3077,14 @@ test("updates the visible cart state after repeated add-to-cart actions", async 
 });
 
 test("shows an out-of-stock popup and keeps low stock cart quantities capped", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [{ productId: "sock-10", size: "35", quantity: 8 }]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [{ productId: "sock-10", size: "35", quantity: 8 }]);
 
   await page.goto("/socks-product-list.html");
 
-  const lowStockCard = page.locator('[data-product-card][data-product-id="sock-10"]');
-  await expect(page.locator("[data-cart-count]")).toHaveText("8");
-
-  const addResponse = page.waitForResponse((response) => {
-    return response.url().includes("/api/cart/items") && response.request().method() === "POST";
-  });
-  await lowStockCard.locator("[data-cart-button]").click();
-  expect((await addResponse).status()).toBe(409);
-
-  await expect(page.locator("[data-stock-toast]")).toHaveText("无货");
   await expect(page.locator("[data-cart-count]")).toHaveText("8");
 
   await page.getByRole("button", { name: "打开购物车" }).click();
+  await expect(page.locator("[data-cart-item]").first()).toContainText("x8");
   const increaseResponse = page.waitForResponse((response) => {
     return response.url().includes("/api/cart/items") && response.request().method() === "PATCH";
   });
@@ -1760,12 +3097,10 @@ test("shows an out-of-stock popup and keeps low stock cart quantities capped", a
 });
 
 test("clears the visible cart state and persisted cart data from the page action", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
 
@@ -1794,19 +3129,17 @@ test("clears the visible cart state and persisted cart data from the page action
 });
 
 test("updates cart item quantity from drawer controls and refreshes totals", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
   await page.getByRole("button", { name: "打开购物车" }).click();
 
   await expect(page.locator("[data-cart-subtotal]")).toHaveText("¥187");
-  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥54");
-  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥77");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥110");
 
   const increaseResponse = page.waitForResponse((response) => {
     return response.url().includes("/api/cart/items") && response.request().method() === "PATCH";
@@ -1817,8 +3150,8 @@ test("updates cart item quantity from drawer controls and refreshes totals", asy
   await expect(page.locator("[data-cart-count]")).toHaveText("4");
   await expect(page.locator("[data-cart-item]").first()).toContainText("x3");
   await expect(page.locator("[data-cart-subtotal]")).toHaveText("¥256");
-  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥74");
-  await expect(page.locator("[data-cart-total]")).toHaveText("¥182");
+  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥101");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥155");
 
   const decreaseResponse = page.waitForResponse((response) => {
     return response.url().includes("/api/cart/items") && response.request().method() === "PATCH";
@@ -1829,17 +3162,15 @@ test("updates cart item quantity from drawer controls and refreshes totals", asy
   await expect(page.locator("[data-cart-count]")).toHaveText("3");
   await expect(page.locator("[data-cart-item]").first()).toContainText("x2");
   await expect(page.locator("[data-cart-subtotal]")).toHaveText("¥187");
-  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥54");
-  await expect(page.locator("[data-cart-total]")).toHaveText("¥133");
+  await expect(page.locator("[data-cart-savings]")).toHaveText("-¥77");
+  await expect(page.locator("[data-cart-total]")).toHaveText("¥110");
 });
 
 test("disables drawer controls while a cart quantity update is pending", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   let releasePatchRequest;
   await page.route("**/api/cart/items", async (route) => {
@@ -1886,12 +3217,10 @@ test("disables drawer controls while a cart quantity update is pending", async (
 });
 
 test("removes a cart item from the drawer without clearing the rest", async ({ page }) => {
-  await fs.writeFile(cartFile, `${JSON.stringify({
-    items: [
-      { productId: "sock-02", size: "43", quantity: 2 },
-      { productId: "sock-05", size: "39", quantity: 1 }
-    ]
-  }, null, 2)}\n`, "utf8");
+  await seedCartFromApi(page, [
+    { productId: "sock-02", size: "43", quantity: 2 },
+    { productId: "sock-05", size: "39", quantity: 1 }
+  ]);
 
   await page.goto("/socks-product-list.html");
   await page.getByRole("button", { name: "打开购物车" }).click();
@@ -1953,7 +3282,8 @@ test("shows an empty state when a filter has no products", async ({ page }) => {
   await page.getByRole("button", { name: "商务袜" }).click();
 
   await expect(page.locator("[data-product-card]")).toHaveCount(0);
-  await expect(page.locator("[data-empty-state]")).toHaveText("当前分类暂无商品");
+  await expect(page.locator("[data-no-results]")).toBeVisible();
+  await expect(page.locator("[data-no-results-title]")).toContainText("没有找到完全匹配");
 });
 
 test("reuses the single-card hover motion for the card media and cart button", async ({ page }) => {
