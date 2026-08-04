@@ -1,10 +1,14 @@
 const { test, expect } = require("@playwright/test");
 const { EventEmitter } = require("node:events");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { createConfig } = require("../lib/config");
 const { createLogger } = require("../lib/logger");
 const { createDatabase } = require("../lib/database");
+
+const execFileAsync = promisify(execFile);
 
 function createProductionEnv(overrides = {}) {
   return {
@@ -427,4 +431,111 @@ test("creates an integrity-checked compressed SQLite backup", async ({}, testInf
   });
   await expect(fs.access(`${backupDir}/socks-store-20260804T033000Z-abc1234.db.partial`))
     .rejects.toThrow();
+});
+
+test("cleans only expired local backup bundles", async ({}, testInfo) => {
+  const { cleanupExpiredLocalBackups } = require("../lib/database-backup");
+  const backupDir = testInfo.outputPath("retention");
+  await fs.mkdir(backupDir, { recursive: true });
+  const oldArchive = path.join(backupDir, "socks-store-20260801T033000Z-abc1234.db.gz");
+  const oldChecksum = `${oldArchive}.sha256`;
+  const recentArchive = path.join(backupDir, "socks-store-20260808T033000Z-abc1234.db.gz");
+  const unrelated = path.join(backupDir, "customer-upload.db.gz");
+  await Promise.all([
+    fs.writeFile(oldArchive, "old"),
+    fs.writeFile(oldChecksum, "old-checksum"),
+    fs.writeFile(recentArchive, "recent"),
+    fs.writeFile(unrelated, "keep")
+  ]);
+  const oldDate = new Date("2026-08-01T03:30:00.000Z");
+  await Promise.all([
+    fs.utimes(oldArchive, oldDate, oldDate),
+    fs.utimes(oldChecksum, oldDate, oldDate)
+  ]);
+
+  const result = await cleanupExpiredLocalBackups({
+    backupDir,
+    retentionDays: 7,
+    now: () => new Date("2026-08-10T03:30:00.000Z")
+  });
+
+  expect(result.removed.map((item) => path.basename(item)).sort()).toEqual([
+    path.basename(oldArchive),
+    path.basename(oldChecksum)
+  ].sort());
+  await expect(fs.access(recentArchive)).resolves.toBeUndefined();
+  await expect(fs.access(unrelated)).resolves.toBeUndefined();
+});
+
+test("uploads S3 backup files serially with bounded retries", async ({}, testInfo) => {
+  const { uploadBackupBundle } = require("../lib/database-backup");
+  const archivePath = testInfo.outputPath("socks-store-20260810T033000Z-abc1234.db.gz");
+  const checksumPath = `${archivePath}.sha256`;
+  await fs.writeFile(archivePath, "archive");
+  await fs.writeFile(checksumPath, "checksum");
+  const calls = [];
+  const delays = [];
+  const client = {
+    async send(command) {
+      calls.push(command.input);
+      if (calls.length < 3) throw new Error("temporary object storage failure");
+      return {};
+    }
+  };
+
+  const result = await uploadBackupBundle({
+    client,
+    bucket: "backups",
+    archivePath,
+    checksumPath,
+    maxAttempts: 3,
+    delay: async (ms) => delays.push(ms),
+    now: () => new Date("2026-08-10T03:30:00.000Z")
+  });
+
+  expect(calls).toHaveLength(4);
+  expect(delays).toEqual([1000, 2000]);
+  expect(result.uploads.map((upload) => upload.attempts)).toEqual([3, 1]);
+  expect(calls.map((call) => call.Key)).toEqual([
+    "sqlite/2026/08/socks-store-20260810T033000Z-abc1234.db.gz",
+    "sqlite/2026/08/socks-store-20260810T033000Z-abc1234.db.gz",
+    "sqlite/2026/08/socks-store-20260810T033000Z-abc1234.db.gz",
+    "sqlite/2026/08/socks-store-20260810T033000Z-abc1234.db.gz.sha256"
+  ]);
+});
+
+test("runs one local backup from the CLI without object storage", async ({}, testInfo) => {
+  const dataDir = testInfo.outputPath("cli-data");
+  const backupDir = testInfo.outputPath("cli-backups");
+  await fs.mkdir(dataDir, { recursive: true });
+  const sourcePath = path.join(dataDir, "socks-store.test.db");
+  const db = createDatabase(sourcePath);
+  db.exec("CREATE TABLE cli_sample (value TEXT); INSERT INTO cli_sample VALUES ('kept');");
+  db.close();
+
+  const { stdout, stderr } = await execFileAsync(process.execPath, [
+    path.join(__dirname, "..", "scripts", "backup-database.js")
+  ], {
+    cwd: path.join(__dirname, ".."),
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      DATA_DIR: dataDir,
+      BACKUP_DIR: backupDir,
+      SERVICE_VERSION: "abc1234",
+      LOG_LEVEL: "silent",
+      NODE_NO_WARNINGS: "1",
+      S3_BUCKET: "",
+      SENTRY_DSN: ""
+    }
+  });
+
+  expect(stderr).toBe("");
+  const payload = JSON.parse(stdout.trim());
+  expect(payload).toEqual(expect.objectContaining({
+    ok: true,
+    uploaded: false,
+    archiveFile: expect.stringMatching(/^socks-store-\d{8}T\d{6}Z-abc1234\.db\.gz$/)
+  }));
+  await expect(fs.access(path.join(backupDir, payload.archiveFile))).resolves.toBeUndefined();
 });
