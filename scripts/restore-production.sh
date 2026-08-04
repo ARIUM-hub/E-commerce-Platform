@@ -11,6 +11,18 @@ if [[ ! "$backup_file" =~ ^socks-store-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{7,40}\.db\.gz
   echo "backup file must use the expected filename format" >&2
   exit 2
 fi
+if [[ ! -f .env.image ]]; then
+  echo ".env.image is required; complete a successful deployment first" >&2
+  exit 2
+fi
+
+source .env.image
+export APP_IMAGE
+export SERVICE_VERSION
+if [[ -z "${APP_IMAGE:-}" || ! "${SERVICE_VERSION:-}" =~ ^[a-f0-9]{7,40}$ ]]; then
+  echo "APP_IMAGE and a hexadecimal SERVICE_VERSION are required in .env.image" >&2
+  exit 2
+fi
 
 compose=(docker compose --env-file .env.production -f compose.production.yml)
 if "${compose[@]}" ps --status running --services | grep -qx app; then

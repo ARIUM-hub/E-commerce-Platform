@@ -504,6 +504,108 @@ test("uploads S3 backup files serially with bounded retries", async ({}, testInf
   ]);
 });
 
+test("backs up, uploads, and restores a business database without leaking credentials", async ({}, testInfo) => {
+  const {
+    createDatabaseBackup,
+    restoreDatabaseBackup,
+    uploadBackupBundle,
+    verifyBackupArchive
+  } = require("../lib/database-backup");
+  const sourcePath = testInfo.outputPath("operations-source.db");
+  const targetPath = testInfo.outputPath("operations-target.db");
+  const backupDir = testInfo.outputPath("operations-backups");
+  const downloadedBackupDir = testInfo.outputPath("operations-downloads");
+  const sourceDb = createDatabase(sourcePath);
+  sourceDb.exec(`
+    CREATE TABLE orders (id TEXT PRIMARY KEY, total INTEGER NOT NULL);
+    INSERT INTO orders VALUES ('ORDER-RESTORE-1', 4299);
+  `);
+  sourceDb.close();
+  const targetDb = createDatabase(targetPath);
+  targetDb.exec("CREATE TABLE orders (id TEXT PRIMARY KEY, total INTEGER NOT NULL);");
+  targetDb.close();
+
+  const backup = await createDatabaseBackup({
+    sourcePath,
+    backupDir,
+    serviceVersion: "abc1234",
+    now: () => new Date("2026-08-04T03:30:00.000Z")
+  });
+  const fakeObjects = new Map();
+  const fakeS3 = {
+    async send(command) {
+      const chunks = [];
+      for await (const chunk of command.input.Body) chunks.push(chunk);
+      fakeObjects.set(command.input.Key, Buffer.concat(chunks));
+      return {};
+    }
+  };
+  const upload = await uploadBackupBundle({
+    client: fakeS3,
+    bucket: "socks-backups",
+    archivePath: backup.archivePath,
+    checksumPath: backup.checksumPath,
+    now: () => new Date("2026-08-04T03:30:00.000Z")
+  });
+
+  await fs.mkdir(downloadedBackupDir, { recursive: true });
+  for (const uploaded of upload.uploads) {
+    await fs.writeFile(
+      path.join(downloadedBackupDir, path.basename(uploaded.key)),
+      fakeObjects.get(uploaded.key)
+    );
+  }
+  const downloadedArchivePath = path.join(
+    downloadedBackupDir,
+    path.basename(backup.archivePath)
+  );
+  const downloadedChecksumPath = `${downloadedArchivePath}.sha256`;
+  await expect(verifyBackupArchive({
+    archivePath: downloadedArchivePath,
+    checksumPath: downloadedChecksumPath,
+    workingDir: downloadedBackupDir
+  })).resolves.toMatchObject({ integrity: "ok", sha256: backup.sha256 });
+  await restoreDatabaseBackup({
+    archivePath: downloadedArchivePath,
+    backupDir: downloadedBackupDir,
+    targetPath,
+    confirmation: "RESTORE",
+    now: () => new Date("2026-08-05T04:00:00.000Z")
+  });
+
+  const restoredDb = createDatabase(targetPath);
+  expect(restoredDb.prepare("SELECT id, total FROM orders").get()).toEqual({
+    id: "ORDER-RESTORE-1",
+    total: 4299
+  });
+  restoredDb.close();
+
+  const logLines = [];
+  const logger = createLogger({
+    format: "json",
+    sink: (line) => logLines.push(line),
+    now: () => new Date("2026-08-05T04:00:00.000Z")
+  });
+  logger.info("database.recovery.drill.completed", {
+    uploadedFiles: upload.uploads.length,
+    s3: {
+      accessKeyId: "fake-access-key",
+      secretAccessKey: "fake-secret-key"
+    }
+  });
+  expect(logLines).toHaveLength(1);
+  expect(JSON.parse(logLines[0])).toMatchObject({
+    event: "database.recovery.drill.completed",
+    uploadedFiles: 2,
+    s3: {
+      accessKeyId: "[REDACTED]",
+      secretAccessKey: "[REDACTED]"
+    }
+  });
+  expect(logLines[0]).not.toContain("fake-access-key");
+  expect(logLines[0]).not.toContain("fake-secret-key");
+});
+
 test("runs one local backup from the CLI without object storage", async ({}, testInfo) => {
   const dataDir = testInfo.outputPath("cli-data");
   const backupDir = testInfo.outputPath("cli-backups");
@@ -775,4 +877,70 @@ test("requires approval and bounded rollback for production deployment", async (
   expect(script).not.toContain("restore-database.js");
   expect(script.indexOf("--profile ops run --rm backup"))
     .toBeLessThan(script.indexOf("pull app"));
+});
+
+test("persists the approved image for scheduled backup and restore operations", async () => {
+  const rootDir = path.join(__dirname, "..");
+  const deployScript = await fs.readFile(
+    path.join(rootDir, "scripts", "deploy-production.sh"),
+    "utf8"
+  );
+  const restoreScript = await fs.readFile(
+    path.join(rootDir, "scripts", "restore-production.sh"),
+    "utf8"
+  );
+  const backupService = await fs.readFile(
+    path.join(rootDir, "deploy", "systemd", "socks-backup.service"),
+    "utf8"
+  );
+  const compose = await fs.readFile(
+    path.join(rootDir, "compose.production.yml"),
+    "utf8"
+  );
+  const gitignore = await fs.readFile(path.join(rootDir, ".gitignore"), "utf8");
+
+  expect(deployScript).toContain(".env.image.tmp");
+  expect(deployScript).toContain("mv .env.image.tmp .env.image");
+  expect(deployScript).toContain("SERVICE_VERSION=%s");
+  expect(deployScript).toContain('SERVICE_VERSION="$COMMIT_SHA"');
+  expect(deployScript.indexOf("wait_until_ready")).toBeLessThan(
+    deployScript.indexOf("mv .env.image.tmp .env.image")
+  );
+  expect(restoreScript).toContain("source .env.image");
+  expect(restoreScript).toContain("export APP_IMAGE");
+  expect(restoreScript).toContain("export SERVICE_VERSION");
+  expect(backupService).toContain("EnvironmentFile=/opt/socks-store/.env.image");
+  expect(compose.match(/SERVICE_VERSION: \$\{SERVICE_VERSION:\?/g)).toHaveLength(2);
+  expect(gitignore).toContain(".env.production");
+  expect(gitignore).toContain(".env.image");
+});
+
+test("documents the complete production operations runbook", async () => {
+  const readme = await fs.readFile(path.join(__dirname, "..", "README.md"), "utf8");
+
+  for (const heading of [
+    "## 首次部署",
+    "## 常规发布",
+    "## 备份与 S3 检查",
+    "## 受控恢复",
+    "## 监控与日志",
+    "## 镜像回滚",
+    "## 密钥轮换",
+    "## 故障升级边界"
+  ]) {
+    expect(readme).toContain(heading);
+  }
+  expect(readme).toContain("systemctl status socks-backup.timer");
+  expect(readme).toContain("operations.sentry.probe");
+  expect(readme).toContain("/api/health");
+  expect(readme).toContain("/api/ready");
+});
+
+test("routes server runtime errors through the structured logger", async () => {
+  const serverSource = await fs.readFile(path.join(__dirname, "..", "server.js"), "utf8");
+
+  expect(serverSource).not.toContain("console.error");
+  expect(serverSource).not.toContain("console.log");
+  expect(serverSource).toContain('logger.error("data.directory.invalid"');
+  expect(serverSource).toContain('logger.error("order.create.failed"');
 });

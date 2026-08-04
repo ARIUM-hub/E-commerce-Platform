@@ -323,9 +323,9 @@ function validateDataDir() {
   });
 
   if (missingFiles.length > 0) {
-    console.error(
-      `DATA_DIR "${dataDir}" is missing required files: ${missingFiles.join(", ")}`
-    );
+    logger.error("data.directory.invalid", {
+      missingFiles
+    });
     process.exit(1);
   }
 }
@@ -2635,7 +2635,16 @@ async function handleHttpRequest(request, response) {
         return;
       }
 
-      console.error(error);
+      errorReporter.captureException(error, {
+        requestId: requestContext.requestId,
+        route: requestUrl.pathname
+      });
+      logger.error("order.create.failed", {
+        requestId: requestContext.requestId,
+        route: requestUrl.pathname,
+        name: error.name || "Error",
+        code: error.code || ""
+      });
       sendError(response, 500, "INTERNAL_ERROR", "Unexpected server error.");
       return;
     }

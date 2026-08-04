@@ -18,6 +18,7 @@ services:
       - .env.production
     environment:
       NODE_OPTIONS: --disable-warning=ExperimentalWarning
+      SERVICE_VERSION: ${SERVICE_VERSION:?SERVICE_VERSION is required}
     expose:
       - "4173"
     volumes: *app-volumes
@@ -59,6 +60,7 @@ services:
       - .env.production
     environment:
       NODE_OPTIONS: --disable-warning=ExperimentalWarning
+      SERVICE_VERSION: ${SERVICE_VERSION:?SERVICE_VERSION is required}
     command: ["node", "scripts/backup-database.js"]
     volumes: *app-volumes
     restart: "no"
