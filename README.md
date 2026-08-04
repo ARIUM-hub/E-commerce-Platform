@@ -41,6 +41,9 @@ SMTP_FROM
 ```powershell
 npm run test:api -- --workers=1
 npm run test:ui -- --workers=1
+npm run test:ops -- --workers=1
 ```
 
 测试固定单 worker，避免 SQLite 夹具竞争和不必要的并发请求。
+
+GitHub Actions 在 Pull Request 和目标分支推送时依次执行上述三套测试，再构建本地生产镜像并检查 `/api/ready`。PR 工作流只有仓库只读权限，不读取生产 secrets、不推送镜像，也不连接生产服务器。

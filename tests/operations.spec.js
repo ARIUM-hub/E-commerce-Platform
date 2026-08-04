@@ -723,3 +723,24 @@ test("defines a non-root production container stack", async () => {
   expect(timer).toContain("OnCalendar=*-*-* 03:30:00 Asia/Shanghai");
   expect(timer).toContain("Persistent=true");
 });
+
+test("keeps CI isolated and single-worker", async () => {
+  const workflow = await fs.readFile(
+    path.join(__dirname, "..", ".github", "workflows", "ci.yml"),
+    "utf8"
+  );
+
+  expect(workflow).toContain("pull_request:");
+  expect(workflow).toContain("push:");
+  expect(workflow).toContain("contents: read");
+  expect(workflow).toContain("node-version: 22");
+  expect(workflow).toContain("npm run test:api -- --workers=1");
+  expect(workflow).toContain("npm run test:ui -- --workers=1");
+  expect(workflow).toContain("npm run test:ops -- --workers=1");
+  expect(workflow).toContain("playwright install --with-deps chromium");
+  expect(workflow).toContain("docker build");
+  expect(workflow).toContain("seq 1 20");
+  expect(workflow).not.toContain("PRODUCTION_SSH_KEY");
+  expect(workflow).not.toContain("S3_SECRET_ACCESS_KEY: ${{ secrets");
+  expect(workflow).not.toContain("SENTRY_DSN: ${{ secrets");
+});
