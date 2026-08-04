@@ -273,3 +273,120 @@ test("keeps local error logs when the reporter fails", () => {
     }
   }]);
 });
+
+test("closes the server once on repeated SIGTERM", async () => {
+  const { registerServerLifecycle } = require("../lib/server-lifecycle");
+  const processRef = new EventEmitter();
+  processRef.exitCode = 0;
+  let closes = 0;
+  let flushes = 0;
+  const dispose = registerServerLifecycle({
+    processRef,
+    server: {
+      close: (callback) => {
+        closes += 1;
+        callback();
+      },
+      closeIdleConnections: () => {}
+    },
+    logger: { info: () => {}, error: () => {} },
+    errorReporter: {
+      captureException: () => {},
+      flush: async () => {
+        flushes += 1;
+        return true;
+      }
+    },
+    shutdownTimeoutMs: 50
+  });
+
+  processRef.emit("SIGTERM");
+  processRef.emit("SIGTERM");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  expect(closes).toBe(1);
+  expect(flushes).toBe(1);
+  expect(processRef.exitCode).toBe(0);
+  dispose();
+});
+
+test("reports uncaught exceptions before bounded shutdown", async () => {
+  const { registerServerLifecycle } = require("../lib/server-lifecycle");
+  const processRef = new EventEmitter();
+  processRef.exitCode = 0;
+  const captured = [];
+  let closes = 0;
+  const dispose = registerServerLifecycle({
+    processRef,
+    server: {
+      close: (callback) => {
+        closes += 1;
+        callback();
+      },
+      closeIdleConnections: () => {}
+    },
+    logger: { info: () => {}, error: () => {} },
+    errorReporter: {
+      captureException: (error, context) => captured.push({ error, context }),
+      flush: async () => true
+    },
+    shutdownTimeoutMs: 50
+  });
+  const error = new Error("unexpected failure");
+
+  processRef.emit("uncaughtException", error);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  expect(processRef.exitCode).toBe(1);
+  expect(closes).toBe(1);
+  expect(captured).toEqual([{
+    error,
+    context: { source: "uncaughtException" }
+  }]);
+  dispose();
+});
+
+test("contains unhandled request errors at the HTTP boundary", async () => {
+  const { createSafeRequestHandler } = require("../lib/http/request-boundary");
+  const error = new Error("database unavailable");
+  const captured = [];
+  const logged = [];
+  const responses = [];
+  const response = {
+    headersSent: false,
+    getHeader: (name) => name === "X-Request-Id" ? "request-12345678" : undefined,
+    destroy: () => { throw new Error("response should not be destroyed"); }
+  };
+  const safeHandler = createSafeRequestHandler({
+    handleRequest: async () => { throw error; },
+    sendError: (...args) => responses.push(args),
+    logger: { error: (event, context) => logged.push({ event, context }) },
+    errorReporter: {
+      captureException: (reportedError, context) => captured.push({ reportedError, context })
+    }
+  });
+
+  await safeHandler({ url: "/api/orders?token=hidden" }, response);
+
+  expect(captured).toEqual([{
+    reportedError: error,
+    context: {
+      requestId: "request-12345678",
+      route: "/api/orders"
+    }
+  }]);
+  expect(logged).toEqual([{
+    event: "http.request.unhandled",
+    context: {
+      requestId: "request-12345678",
+      route: "/api/orders",
+      name: "Error"
+    }
+  }]);
+  expect(responses).toEqual([[
+    response,
+    500,
+    "INTERNAL_ERROR",
+    "Unexpected server error."
+  ]]);
+});

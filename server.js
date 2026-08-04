@@ -10,6 +10,8 @@ const {
   createRequestContext,
   attachRequestCompletionLog
 } = require("./lib/http/request-context");
+const { createSafeRequestHandler } = require("./lib/http/request-boundary");
+const { registerServerLifecycle } = require("./lib/server-lifecycle");
 const { createCsrfService } = require("./lib/security/csrf");
 const {
   createMemoryRateLimiter,
@@ -1287,7 +1289,11 @@ function parseAdminPaymentMethodPath(pathname) {
 
 const router = createRouter();
 const supportLookupLimiter = createSupportLookupLimiter();
-registerHealthRoutes(router);
+registerHealthRoutes(router, {
+  checkReadiness() {
+    return withDatabase((db) => db.prepare("SELECT 1 AS ready").get());
+  }
+});
 registerSecurityRoutes(router, {
   csrfService,
   isProduction: config.nodeEnv === "production",
@@ -1419,7 +1425,7 @@ registerTestRoutes(router, {
   }
 });
 
-const server = http.createServer(async (request, response) => {
+async function handleHttpRequest(request, response) {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
   const requestContext = createRequestContext(request, response);
   attachRequestCompletionLog({
@@ -3394,6 +3400,18 @@ const server = http.createServer(async (request, response) => {
     sendError(response, 404, "NOT_FOUND", "Resource was not found.");
     return;
   }
+}
+
+const server = http.createServer(createSafeRequestHandler({
+  handleRequest: handleHttpRequest,
+  sendError,
+  logger,
+  errorReporter
+}));
+registerServerLifecycle({
+  server,
+  logger,
+  errorReporter
 });
 
 validateDataDir();

@@ -404,6 +404,15 @@ test("returns a validated request id for API responses", async ({ request }) => 
   expect(replaced.headers()["x-request-id"]).not.toBe("bad id");
 });
 
+test("reports database readiness without exposing storage details", async ({ request }) => {
+  const response = await request.get("/api/ready");
+  expect(response.status()).toBe(200);
+  const payload = await response.json();
+  expect(payload).toEqual({ ok: true, status: "ready" });
+  expect(JSON.stringify(payload)).not.toContain("socks-store");
+  expect(response.headers()["x-request-id"]).toMatch(/^[A-Za-z0-9._-]{8,128}$/);
+});
+
 test("serves the external storefront script", async ({ request }) => {
   const response = await request.get("/public/js/storefront-app.js");
 
