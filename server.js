@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const { createConfig } = require("./lib/config");
 const { createDatabase, initializeDatabase, resetDatabase, getDatabasePath } = require("./lib/database");
 const { createLogger } = require("./lib/logger");
+const { createErrorReporter } = require("./lib/monitoring/error-reporter");
 const {
   createRequestContext,
   attachRequestCompletionLog
@@ -209,13 +210,19 @@ const { createPricingSummary } = require("./lib/pricing");
 const { createCheckoutTotals } = require("./lib/checkout-totals");
 
 const config = createConfig(process.env);
+const errorReporter = createErrorReporter({
+  dsn: config.sentry.dsn,
+  environment: config.sentry.environment,
+  release: config.serviceVersion
+});
 const logger = createLogger({
   level: config.logLevel,
   format: config.logFormat,
   baseContext: {
     environment: config.nodeEnv,
     serviceVersion: config.serviceVersion
-  }
+  },
+  reportError: (event, context) => errorReporter.captureMessage(event, context)
 });
 const csrfService = createCsrfService({
   secret: config.csrfSecret,

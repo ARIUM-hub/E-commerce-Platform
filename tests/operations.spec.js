@@ -192,3 +192,84 @@ test("logs HTTP completion once without query parameters", () => {
     }
   }]);
 });
+
+test("reports sanitized errors and degrades without a DSN", async () => {
+  const { createErrorReporter } = require("../lib/monitoring/error-reporter");
+  const captured = [];
+  let initOptions;
+  const sdk = {
+    init: (options) => { initOptions = options; },
+    captureException: (error, options) => captured.push({ error, options }),
+    captureMessage: () => {},
+    flush: async () => true
+  };
+  const reporter = createErrorReporter({
+    dsn: "https://public@example.invalid/1",
+    environment: "production",
+    release: "abc123",
+    sdk
+  });
+
+  reporter.captureException(new Error("boom"), {
+    requestId: "req-12345678",
+    cookie: "session-secret",
+    route: "/api/orders"
+  });
+  expect(reporter.enabled).toBe(true);
+  expect(initOptions).toEqual(expect.objectContaining({
+    dsn: "https://public@example.invalid/1",
+    environment: "production",
+    release: "abc123",
+    sendDefaultPii: false,
+    tracesSampleRate: 0
+  }));
+  expect(captured[0].options.contexts.operation).toEqual({
+    requestId: "req-12345678",
+    cookie: "[REDACTED]",
+    route: "/api/orders"
+  });
+
+  const filtered = initOptions.beforeSend({
+    request: {
+      data: { password: "request-secret" },
+      headers: { authorization: "Bearer header-secret", accept: "application/json" }
+    },
+    user: { id: "user-1", email: "buyer@example.com", ip_address: "127.0.0.1" },
+    extra: { token: "raw-token", statusCode: 500 }
+  });
+  expect(filtered.request.data).toBeUndefined();
+  expect(filtered.request.headers.authorization).toBe("[REDACTED]");
+  expect(filtered.user).toEqual({ id: "user-1" });
+  expect(filtered.extra).toEqual({ token: "[REDACTED]", statusCode: 500 });
+
+  const disabled = createErrorReporter({ dsn: "" });
+  expect(disabled.enabled).toBe(false);
+  expect(() => disabled.captureException(new Error("ignored"))).not.toThrow();
+  await expect(disabled.flush(10)).resolves.toBe(true);
+});
+
+test("keeps local error logs when the reporter fails", () => {
+  const lines = [];
+  const reports = [];
+  const logger = createLogger({
+    format: "json",
+    sink: (line) => lines.push(line),
+    reportError: (event, context) => {
+      reports.push({ event, context });
+      throw new Error("monitor unavailable");
+    }
+  });
+
+  expect(() => logger.error("checkout.failed", {
+    requestId: "request-123",
+    token: "raw-secret"
+  })).not.toThrow();
+  expect(lines).toHaveLength(1);
+  expect(reports).toEqual([{
+    event: "checkout.failed",
+    context: {
+      requestId: "request-123",
+      token: "[REDACTED]"
+    }
+  }]);
+});
