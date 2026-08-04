@@ -5,12 +5,18 @@
     "dev": "node server.js",
     "test": "playwright test",
     "test:api": "playwright test tests/api.spec.js --workers=1",
-    "test:ui": "playwright test tests/socks-product-list.spec.js --workers=1"
+    "test:ui": "playwright test tests/socks-product-list.spec.js --workers=1",
+    "test:ops": "playwright test tests/operations.spec.js --workers=1",
+    "db:backup": "node scripts/backup-database.js",
+    "db:restore": "node scripts/restore-database.js",
+    "db:migrate": "node scripts/migrate-database.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1102.0",
+    "@sentry/node": "^10.69.0",
     "nodemailer": "^9.0.3"
   }
 }

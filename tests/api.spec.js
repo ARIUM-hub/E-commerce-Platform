@@ -87,7 +87,15 @@ test("requires complete production security config and exposes safe non-producti
     SMTP_SECURE: "true",
     SMTP_USER: "mailer",
     SMTP_PASSWORD: "mailer-password",
-    SMTP_FROM: "shop@example.com"
+    SMTP_FROM: "shop@example.com",
+    LOG_FORMAT: "json",
+    SERVICE_VERSION: "security-test-release",
+    PUBLIC_BASE_URL: "https://shop.example.com",
+    BACKUP_DIR: "backups",
+    S3_REGION: "auto",
+    S3_BUCKET: "socks-backups",
+    S3_ACCESS_KEY_ID: "backup-access-key",
+    S3_SECRET_ACCESS_KEY: "backup-secret-key"
   };
 
   expect(() => createConfig({ NODE_ENV: "production" }))
