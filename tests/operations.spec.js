@@ -539,3 +539,159 @@ test("runs one local backup from the CLI without object storage", async ({}, tes
   }));
   await expect(fs.access(path.join(backupDir, payload.archiveFile))).resolves.toBeUndefined();
 });
+
+test("restores only verified database backups with explicit confirmation", async ({}, testInfo) => {
+  const {
+    createDatabaseBackup,
+    restoreDatabaseBackup
+  } = require("../lib/database-backup");
+  const backupDir = testInfo.outputPath("restore-backups");
+  const replacementPath = testInfo.outputPath("replacement.db");
+  const targetPath = testInfo.outputPath("target.db");
+  const replacementDb = createDatabase(replacementPath);
+  replacementDb.exec("CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('replacement');");
+  replacementDb.close();
+  const targetDb = createDatabase(targetPath);
+  targetDb.exec("CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('current');");
+  targetDb.close();
+  const backup = await createDatabaseBackup({
+    sourcePath: replacementPath,
+    backupDir,
+    serviceVersion: "abc1234",
+    now: () => new Date("2026-08-01T03:30:00.000Z")
+  });
+
+  await expect(restoreDatabaseBackup({
+    archivePath: backup.archivePath,
+    backupDir,
+    targetPath,
+    confirmation: "wrong"
+  })).rejects.toThrow("Explicit RESTORE confirmation is required");
+  await expect(restoreDatabaseBackup({
+    archivePath: testInfo.outputPath(path.basename(backup.archivePath)),
+    backupDir,
+    targetPath,
+    confirmation: "RESTORE"
+  })).rejects.toThrow("Backup archive must be inside the configured backup directory");
+
+  const validChecksum = await fs.readFile(backup.checksumPath, "utf8");
+  await fs.writeFile(
+    backup.checksumPath,
+    `${"0".repeat(64)}  ${path.basename(backup.archivePath)}\n`
+  );
+  await expect(restoreDatabaseBackup({
+    archivePath: backup.archivePath,
+    backupDir,
+    targetPath,
+    confirmation: "RESTORE"
+  })).rejects.toThrow("Backup checksum verification failed");
+  await fs.writeFile(backup.checksumPath, validChecksum);
+
+  const result = await restoreDatabaseBackup({
+    archivePath: backup.archivePath,
+    backupDir,
+    targetPath,
+    confirmation: "RESTORE",
+    now: () => new Date("2026-08-10T04:00:00.000Z")
+  });
+  const restoredDb = createDatabase(targetPath);
+  const restoredRow = restoredDb.prepare("SELECT value FROM state").get();
+  restoredDb.close();
+
+  expect(restoredRow.value).toBe("replacement");
+  expect(path.basename(result.preRestoreArchivePath))
+    .toBe("socks-store-20260810T040000Z-abc1234.db.gz");
+  await expect(fs.access(result.preRestoreArchivePath)).resolves.toBeUndefined();
+});
+
+test("restores a verified backup from the CLI", async ({}, testInfo) => {
+  const { createDatabaseBackup } = require("../lib/database-backup");
+  const dataDir = testInfo.outputPath("restore-cli-data");
+  const backupDir = testInfo.outputPath("restore-cli-backups");
+  await fs.mkdir(dataDir, { recursive: true });
+  const targetPath = path.join(dataDir, "socks-store.test.db");
+  const replacementPath = testInfo.outputPath("restore-cli-replacement.db");
+  const targetDb = createDatabase(targetPath);
+  targetDb.exec("CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('current');");
+  targetDb.close();
+  const replacementDb = createDatabase(replacementPath);
+  replacementDb.exec("CREATE TABLE state (value TEXT); INSERT INTO state VALUES ('restored');");
+  replacementDb.close();
+  const backup = await createDatabaseBackup({
+    sourcePath: replacementPath,
+    backupDir,
+    serviceVersion: "abc1234",
+    now: () => new Date("2026-08-02T03:30:00.000Z")
+  });
+
+  const { stdout, stderr } = await execFileAsync(process.execPath, [
+    path.join(__dirname, "..", "scripts", "restore-database.js"),
+    "--file",
+    path.basename(backup.archivePath),
+    "--confirm",
+    "RESTORE"
+  ], {
+    cwd: path.join(__dirname, ".."),
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      NODE_NO_WARNINGS: "1",
+      DATA_DIR: dataDir,
+      BACKUP_DIR: backupDir,
+      SERVICE_VERSION: "abc1234",
+      LOG_LEVEL: "silent"
+    }
+  });
+
+  expect(stderr).toBe("");
+  expect(JSON.parse(stdout)).toEqual(expect.objectContaining({
+    ok: true,
+    restoredFrom: path.basename(backup.archivePath),
+    targetFile: "socks-store.test.db"
+  }));
+  const restoredDb = createDatabase(targetPath);
+  expect(restoredDb.prepare("SELECT value FROM state").get().value).toBe("restored");
+  restoredDb.close();
+});
+
+test("runs database migrations from the CLI", async ({}, testInfo) => {
+  const dataDir = testInfo.outputPath("migration-cli-data");
+  const { stdout, stderr } = await execFileAsync(process.execPath, [
+    path.join(__dirname, "..", "scripts", "migrate-database.js")
+  ], {
+    cwd: path.join(__dirname, ".."),
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      NODE_NO_WARNINGS: "1",
+      DATA_DIR: dataDir,
+      SERVICE_VERSION: "abc1234",
+      LOG_LEVEL: "silent"
+    }
+  });
+
+  expect(stderr).toBe("");
+  expect(JSON.parse(stdout)).toEqual({
+    ok: true,
+    databaseFile: "socks-store.test.db",
+    serviceVersion: "abc1234"
+  });
+  const db = createDatabase(path.join(dataDir, "socks-store.test.db"));
+  expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count)
+    .toBeGreaterThan(0);
+  db.close();
+});
+
+test("requires a stopped application before production restore", async () => {
+  const script = await fs.readFile(
+    path.join(__dirname, "..", "scripts", "restore-production.sh"),
+    "utf8"
+  );
+
+  expect(script).toContain("set -Eeuo pipefail");
+  expect(script).toContain("ps --status running --services");
+  expect(script).toContain("grep -qx app");
+  expect(script).toContain("app must be stopped before restore");
+  expect(script).toContain("node scripts/restore-database.js");
+  expect(script).toContain("--confirm RESTORE");
+});
