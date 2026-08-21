@@ -109,7 +109,7 @@ Checkout 视图采用左右布局：
   "updatedAt": "2026-07-22T10:00:00.000Z",
   "customer": {
     "name": "张三",
-    "contact": "13800000000"
+    "contact": "<example-mobile>"
   },
   "shippingAddress": {
     "address": "示例路 1 号",
